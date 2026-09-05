@@ -9,7 +9,8 @@ import { getDb, schema } from "../db";
 import { closesAtFrom, isPastDeadline, planRoundCount, resolveFinal, roundSequence, tally } from "../engine/rounds";
 import { fail } from "../flash";
 import { newId } from "../ids";
-import { closeRoundAndAdvance, lockOpenRound, logActivity, maybeCloseEarly, openRound, settleDueRounds } from "../lifecycle";
+import { applyOutcome, closeRoundAndAdvance, lockOpenRound, logActivity, maybeCloseEarly, openRound, settleDueRounds } from "../lifecycle";
+import { dateRangeTitle } from "../format";
 
 const planSchema = z.enum(["quick", "shortlist_final", "ideas_shortlist_final"]);
 
@@ -42,6 +43,26 @@ function cleanOptions(raw: FormDataEntryValue[]): string[] {
   return out;
 }
 
+const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Pairs of start/end inputs from a dates form, validated and titled. */
+function cleanDateOptions(starts: FormDataEntryValue[], ends: FormDataEntryValue[]): { title: string; startsOn: string; endsOn: string }[] | string {
+  const out: { title: string; startsOn: string; endsOn: string }[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; i < starts.length; i++) {
+    const a = String(starts[i] ?? "").trim();
+    const b = String(ends[i] ?? "").trim() || a;
+    if (!a && !String(ends[i] ?? "").trim()) continue;
+    if (!dateRe.test(a) || !dateRe.test(b)) return "One of the dates doesn't look right.";
+    if (b < a) return "An end date is before its start date.";
+    const key = a + "|" + b;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ title: dateRangeTitle(a, b), startsOn: a, endsOn: b });
+  }
+  return out;
+}
+
 function revalidateDecision(decisionId: string, eventId: string) {
   revalidatePath(`/app/decisions/${decisionId}`);
   revalidatePath(`/app/events/${eventId}`);
@@ -60,10 +81,18 @@ export async function createDecision(formData: FormData) {
   const plan = planSchema.catch("quick").parse(formData.get("plan"));
   const roundHours = z.coerce.number().int().min(1).max(24 * 30).catch(72).parse(formData.get("roundHours"));
   const anyoneCanAddOptions = formData.getAll("anyoneCanAddOptions").map(String).includes("on");
-  const optionTitles = cleanOptions(formData.getAll("options"));
+  const setsEventDates = formData.get("setsEventDates") === "on";
+  let optionRows: { title: string; startsOn: string | null; endsOn: string | null }[];
+  if (setsEventDates) {
+    const parsed = cleanDateOptions(formData.getAll("dateStart"), formData.getAll("dateEnd"));
+    if (typeof parsed === "string") fail(back, parsed);
+    optionRows = parsed;
+  } else {
+    optionRows = cleanOptions(formData.getAll("options")).map((t) => ({ title: t, startsOn: null, endsOn: null }));
+  }
 
-  if (plan === "quick" && optionTitles.length < 2) fail(back, "A quick vote needs at least 2 options, one per line.");
-  if (plan === "shortlist_final" && optionTitles.length < 3) fail(back, "A shortlist needs at least 3 options, or use a quick vote.");
+  if (plan === "quick" && optionRows.length < 2) fail(back, setsEventDates ? "A quick vote needs at least 2 date ranges." : "A quick vote needs at least 2 options, one per line.");
+  if (plan === "shortlist_final" && optionRows.length < 3) fail(back, setsEventDates ? "A shortlist needs at least 3 date ranges, or use a quick vote." : "A shortlist needs at least 3 options, or use a quick vote.");
 
   const db = getDb();
   const decisionId = newId();
@@ -71,11 +100,11 @@ export async function createDecision(formData: FormData) {
     const siblings = await tx.select({ id: schema.decisions.id }).from(schema.decisions).where(eq(schema.decisions.eventId, event.id));
     const [decision] = await tx
       .insert(schema.decisions)
-      .values({ id: decisionId, eventId: event.id, title, position: siblings.length + 1, plan, roundHours, anyoneCanAddOptions, createdByMemberId: member.id })
+      .values({ id: decisionId, eventId: event.id, title, position: siblings.length + 1, plan, roundHours, anyoneCanAddOptions, setsEventDates, createdByMemberId: member.id })
       .returning();
     const round = await openRound(tx, decision, roundSequence(plan)[0], 1, new Date());
-    if (optionTitles.length) {
-      await tx.insert(schema.options).values(optionTitles.map((t) => ({ id: newId(), decisionId, title: t, addedByMemberId: member.id, addedInRoundId: round.id })));
+    if (optionRows.length) {
+      await tx.insert(schema.options).values(optionRows.map((o) => ({ id: newId(), decisionId, title: o.title, startsOn: o.startsOn, endsOn: o.endsOn, addedByMemberId: member.id, addedInRoundId: round.id })));
     }
     const rounds = planRoundCount(plan);
     await logActivity(tx, {
@@ -95,8 +124,16 @@ export async function addOption(formData: FormData) {
   const decisionId = z.string().parse(formData.get("decisionId"));
   const back = `/app/decisions/${decisionId}`;
   const decision = await loadDecisionForFamily(decisionId, family.id);
-  const title = String(formData.get("title") ?? "").trim().slice(0, 80);
+  let title = String(formData.get("title") ?? "").trim().slice(0, 80);
+  let startsOn: string | null = null;
+  let endsOn: string | null = null;
   const note = String(formData.get("note") ?? "").trim().slice(0, 140) || null;
+  if (decision.setsEventDates) {
+    const parsed = cleanDateOptions([formData.get("dateStart") ?? ""], [formData.get("dateEnd") ?? ""]);
+    if (typeof parsed === "string") fail(back, parsed);
+    if (parsed.length === 0) fail(back, "Pick the dates first.");
+    ({ title, startsOn, endsOn } = parsed[0]);
+  }
   if (!title) fail(back, "Type the idea first.");
   if (decision.status !== "open") fail(back, "This decision is closed.");
   if (decision.event.status !== "planning") fail(back, "This event is closed.");
@@ -113,7 +150,7 @@ export async function addOption(formData: FormData) {
     if (round.kind === "ideas" && !decision.anyoneCanAddOptions && !organizer) return void (problem = "The organizer is collecting ideas for this one.");
     const existing = await tx.query.options.findMany({ where: eq(schema.options.decisionId, decision.id) });
     if (existing.some((o) => o.title.toLowerCase() === title.toLowerCase())) return void (problem = "That idea is already on the list.");
-    await tx.insert(schema.options).values({ id: newId(), decisionId: decision.id, title, note, addedByMemberId: member.id, addedInRoundId: round.id });
+    await tx.insert(schema.options).values({ id: newId(), decisionId: decision.id, title, note, startsOn, endsOn, addedByMemberId: member.id, addedInRoundId: round.id });
     await logActivity(tx, { eventId: decision.eventId, decisionId: decision.id, kind: "option_added", message: `${member.displayName} suggested "${title}".`, actorMemberId: member.id });
   });
   if (problem) fail(back, problem);
@@ -273,6 +310,7 @@ export async function pickWinner(formData: FormData) {
     await tx.update(schema.rounds).set({ tied: false }).where(and(eq(schema.rounds.decisionId, decision.id), eq(schema.rounds.tied, true)));
     await tx.update(schema.decisions).set({ status: "decided", outcomeOptionId: optionId, decidedAt: now }).where(eq(schema.decisions.id, decision.id));
     await logActivity(tx, { eventId: decision.eventId, decisionId: decision.id, kind: "decided", message: `${decision.title} decided: ${option.title}. ${member.displayName} called it.`, actorMemberId: member.id });
+    await applyOutcome(tx, decision, optionId);
   });
   if (problem) fail(back, problem);
   revalidateDecision(decision.id, decision.eventId);

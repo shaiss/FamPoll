@@ -141,6 +141,7 @@ export async function closeRoundAndAdvance(tx: Tx, roundId: string, reason: Clos
         .update(schema.decisions)
         .set({ status: "decided", outcomeOptionId: step.optionId, decidedAt: now })
         .where(eq(schema.decisions.id, decision.id));
+      await applyOutcome(tx, decision, step.optionId);
       const detail =
         round.kind === "final" && rows.length > 1
           ? ` ${titleOf(step.optionId)} won ${rows[0].count}–${rows[1].count}.`
@@ -158,6 +159,24 @@ export async function closeRoundAndAdvance(tx: Tx, roundId: string, reason: Clos
     }
   }
   return step;
+}
+
+/**
+ * What a decided outcome changes beyond the decision itself. Today: a dates
+ * decision writes the winning range onto the event.
+ */
+export async function applyOutcome(tx: Tx | Db, decision: Decision, optionId: string) {
+  if (!decision.setsEventDates) return;
+  const option = await tx.query.options.findFirst({ where: eq(schema.options.id, optionId) });
+  if (!option || !option.startsOn) return;
+  await tx.update(schema.events).set({ startsOn: option.startsOn, endsOn: option.endsOn ?? option.startsOn }).where(eq(schema.events.id, decision.eventId));
+  await tx.insert(schema.activity).values({
+    id: newId(),
+    eventId: decision.eventId,
+    decisionId: decision.id,
+    kind: "event_dates_set",
+    message: `The event's dates are now ${option.title}.`,
+  });
 }
 
 /** Number of seats that may vote in this family: every member, proxies included. */

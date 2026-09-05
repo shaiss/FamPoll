@@ -160,6 +160,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
           </SectionLabel>
           <div className="font-display text-[26px] font-extrabold tracking-[-0.02em] text-teal-ink">{outcome.title}</div>
           {outcome.note ? <div className="text-sm text-teal-deep">{outcome.note}</div> : null}
+          {decision.setsEventDates ? <div className="text-sm text-teal-deep">These are now the event’s dates.</div> : null}
           {organizer && planning ? (
             <form action={reopenRound} className="pt-1">
               <input type="hidden" name="decisionId" value={decision.id} />
@@ -207,9 +208,19 @@ export default async function DecisionPage({ params, searchParams }: { params: P
         <Card className="p-4">
           <form action={addOption} className="flex flex-col gap-3">
             <input type="hidden" name="decisionId" value={decision.id} />
-            <Field label={open?.kind === "ideas" ? "Add an idea" : "Add an option (organizer)"}>
-              <input name="title" required maxLength={80} placeholder="Beach house in Cascais" className={inputClass} />
-            </Field>
+            {decision.setsEventDates ? (
+              <div className="flex flex-col gap-2">
+                <span className="text-[13px] font-semibold text-ink-2">{open?.kind === "ideas" ? "Suggest dates" : "Add a date range (organizer)"}</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="date" name="dateStart" required aria-label="Start" className={inputClass} />
+                  <input type="date" name="dateEnd" aria-label="End" className={inputClass} />
+                </div>
+              </div>
+            ) : (
+              <Field label={open?.kind === "ideas" ? "Add an idea" : "Add an option (organizer)"}>
+                <input name="title" required maxLength={80} placeholder="Beach house in Cascais" className={inputClass} />
+              </Field>
+            )}
             <input name="note" maxLength={140} placeholder="Why? (optional)" className={`${inputClass} h-11 text-[15px] font-medium`} />
             <Button type="submit" variant="secondary">
               Add

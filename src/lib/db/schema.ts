@@ -111,6 +111,8 @@ export const decisions = pgTable(
     shortlistPicks: integer("shortlist_picks").notNull().default(2),
     /** How many options advance from a shortlist round to the final. */
     advanceCount: integer("advance_count").notNull().default(2),
+    /** When true, the winning option's date range becomes the event's dates. */
+    setsEventDates: boolean("sets_event_dates").notNull().default(false),
     outcomeOptionId: text("outcome_option_id"),
     decidedAt: timestamp("decided_at", { withTimezone: true }),
     createdByMemberId: text("created_by_member_id")
@@ -153,6 +155,9 @@ export const options = pgTable(
       .references(() => decisions.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     note: text("note"),
+    /** Set on options of a dates decision; the title is derived from them. */
+    startsOn: date("starts_on"),
+    endsOn: date("ends_on"),
     addedByMemberId: text("added_by_member_id").references(() => members.id),
     addedInRoundId: text("added_in_round_id").references(() => rounds.id),
     /** Null while the option is still alive. */

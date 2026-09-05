@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { OptionsInput } from "@/components/options-input";
 import { Button, Card, Field, inputClass, Screen, TopBar } from "@/components/ui";
 import { createDecision } from "@/lib/actions/decisions";
 import { requireMembership } from "@/lib/auth";
@@ -55,14 +56,7 @@ export default async function NewDecision({ params, searchParams }: { params: Pr
           </div>
         </div>
 
-        <Field label="Options, one per line" hint="A quick vote needs 2, a shortlist 3. Starting with ideas? Leave this empty and everyone adds their own.">
-          <textarea
-            name="options"
-            rows={5}
-            placeholder={"Apartment in Alfama\nBeach house in Cascais\nHotel near Belém"}
-            className="w-full rounded-[14px] border border-line bg-card px-4 py-3 text-[16px] font-medium text-ink outline-none placeholder:text-ink-3 focus:border-accent"
-          />
-        </Field>
+        <OptionsInput />
 
         <div className="flex flex-col gap-2">
           <span className="text-[13px] font-semibold text-ink-2">Each round closes after</span>
