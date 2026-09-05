@@ -23,3 +23,4 @@ Family voting app: decisions grouped under events, settled in rounds. Next.js 16
 - Mobile-first, one column, max width `max-w-md`. Palette and fonts are Tailwind theme tokens in `src/app/globals.css` (paper, ink, accent, teal). Orange means "needs you", teal means "decided".
 - Every seat in a family can vote, including proxy seats (`members.userId` null, `managedByUserId` set). Eligibility for early close counts all seats.
 - Never expose env values; `/setup` shows presence only.
+- The product name is a working name. Read it from `brand` in `src/lib/brand.ts` (env `NEXT_PUBLIC_BRAND_NAME`); never type it into UI copy or metadata.

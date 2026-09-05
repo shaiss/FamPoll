@@ -6,7 +6,7 @@ import { env, hasDatabase } from "../env";
 export type Db = PostgresJsDatabase<typeof schema>;
 
 declare global {
-  var __fampollDb: Db | undefined;
+  var __appDb: Db | undefined;
 }
 
 /**
@@ -17,11 +17,11 @@ export function getDb(): Db {
   if (!hasDatabase) {
     throw new Error("DATABASE_URL is not set. Open /setup for what is missing.");
   }
-  if (!globalThis.__fampollDb) {
+  if (!globalThis.__appDb) {
     const client = postgres(env.databaseUrl, { max: 5, prepare: false });
-    globalThis.__fampollDb = drizzle(client, { schema });
+    globalThis.__appDb = drizzle(client, { schema });
   }
-  return globalThis.__fampollDb;
+  return globalThis.__appDb;
 }
 
 export { schema };

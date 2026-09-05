@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Bricolage_Grotesque, Figtree } from "next/font/google";
+import { brand } from "@/lib/brand";
 import { hasClerkPublishable } from "@/lib/env";
 import "./globals.css";
 
@@ -17,8 +18,8 @@ const figtree = Figtree({
 });
 
 export const metadata: Metadata = {
-  title: { default: "FamPoll", template: "%s · FamPoll" },
-  description: "Family decisions, one round at a time.",
+  title: { default: brand.name, template: `%s · ${brand.name}` },
+  description: brand.tagline,
 };
 
 export const viewport: Viewport = {

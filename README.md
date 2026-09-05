@@ -10,7 +10,7 @@ Family decisions, one round at a time. Polls grouped around an event (a trip, a 
 | Piece | Choice |
 | --- | --- |
 | App | Next.js 16 (App Router, server actions), React 19, TypeScript |
-| Styling | Tailwind CSS 4 with the FamPoll palette in `src/app/globals.css` |
+| Styling | Tailwind CSS 4 with the palette in `src/app/globals.css` |
 | Auth | Clerk (Google, Apple, Facebook sign-in; prebuilt components) |
 | Data | Postgres via Drizzle ORM (`postgres` driver, works with Neon, Supabase, Railway, local) |
 | Hosting | Vercel, linked to this repo |
@@ -33,7 +33,8 @@ Other scripts: `npm test` (rounds engine), `npm run typecheck`, `npm run lint`, 
 1. **Clerk**: create an application at dashboard.clerk.com. Under *SSO connections* enable Google, Apple and Facebook. Copy the publishable key and secret key into Vercel (Project → Settings → Environment Variables) as `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`. For production, switch to the `pk_live_` / `sk_live_` keys and add the Vercel domain in Clerk.
 2. **Database**: in the Vercel project, *Storage → Create → Neon Postgres*. Vercel adds `DATABASE_URL` for you. Then, from a machine with that URL in `.env.local`, run `npm run db:push`.
 3. **App URL** (optional): `NEXT_PUBLIC_APP_URL=https://your-domain` so share links are stable.
-4. Redeploy. `/setup` should show every step ticked.
+4. **Brand name** (optional): `NEXT_PUBLIC_BRAND_NAME` and `NEXT_PUBLIC_BRAND_TAGLINE` rename the product everywhere it shows (`src/lib/brand.ts` holds the defaults). "FamPoll" is a working name.
+5. Redeploy. `/setup` should show every step ticked.
 
 ## How the app is organised
 

@@ -3,6 +3,7 @@ import { CopyButton } from "@/components/copy-button";
 import { ShareButton } from "@/components/share-button";
 import { Avatar, Button, Card, Field, inputClass, Pill, SectionLabel, Screen, TopBar } from "@/components/ui";
 import { addProxyMember, removeProxyMember, renameFamily } from "@/lib/actions/family";
+import { brand } from "@/lib/brand";
 import { requireMembership } from "@/lib/auth";
 import { readError } from "@/lib/flash";
 import { familyMembers } from "@/lib/queries";
@@ -28,7 +29,7 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
         <SectionLabel>Invite link</SectionLabel>
         <code className="break-all rounded-[10px] bg-sand px-3 py-2 text-[13px]">{inviteUrl}</code>
         <div className="grid grid-cols-2 gap-2">
-          <ShareButton url={inviteUrl} title={`Join ${family.name} on FamPoll`} text="Vote with us on FamPoll" />
+          <ShareButton url={inviteUrl} title={`Join ${family.name} on ${brand.name}`} text={`Vote with us on ${brand.name}`} />
           <CopyButton text={inviteUrl} />
         </div>
         <p className="text-xs text-ink-3">Anyone with the link can join after signing in.</p>

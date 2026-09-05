@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { brand } from "@/lib/brand";
 import { avatarColor, initials } from "@/lib/format";
 
 export function Avatar({ name, size = 28, ring = "#faf6f0" }: { name: string; size?: number; ring?: string }) {
@@ -147,7 +148,7 @@ export function Wordmark({ size = 22 }: { size?: number }) {
         <Icon name="poll" size={size * 0.9} stroke={2.5} />
       </span>
       <span className="font-display font-extrabold tracking-[-0.02em]" style={{ fontSize: size }}>
-        FamPoll
+        {brand.name}
       </span>
     </span>
   );

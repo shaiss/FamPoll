@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Button, Icon, LinkButton, Wordmark } from "@/components/ui";
+import { brand } from "@/lib/brand";
 import { hasClerk, hasDatabase } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +20,7 @@ export default async function Landing() {
       <div className="relative flex flex-col gap-7">
         <Wordmark />
         <div className="flex flex-col gap-3">
-          <h1 className="font-display text-[40px] font-bold leading-[1.05] tracking-[-0.025em] text-pretty">Family decisions, one round at a time.</h1>
+          <h1 className="font-display text-[40px] font-bold leading-[1.05] tracking-[-0.025em] text-pretty">{brand.tagline}</h1>
           <p className="text-[16px] leading-relaxed text-ink-2 text-pretty">
             Group the votes around the trip, the dinner, the party. Narrow it down in rounds. Keep track of what you decided.
           </p>
