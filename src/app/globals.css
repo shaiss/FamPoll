@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #faf6f0;
+  --color-card: #ffffff;
+  --color-ink: #201c18;
+  --color-ink-2: #5e564e;
+  --color-ink-3: #8a8178;
+  --color-line: #eae2d8;
+  --color-line-2: #d9cfc3;
+  --color-sand: #f4eee6;
+  --color-sand-2: #efe8df;
+  --color-accent: #e4702e;
+  --color-accent-deep: #b6551c;
+  --color-accent-tint: #fbe6d9;
+  --color-accent-line: #f3c9ae;
+  --color-teal: #1d9a85;
+  --color-teal-deep: #147a68;
+  --color-teal-tint: #dcf2ec;
+  --color-teal-ink: #0f4f42;
+  --font-display: var(--font-bricolage), "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --font-sans: var(--font-figtree), "Segoe UI", system-ui, sans-serif;
+  --radius-card: 18px;
+  --shadow-card: 0 6px 24px rgba(32, 28, 24, 0.06);
+  --shadow-accent: 0 6px 20px rgba(228, 112, 46, 0.12);
+  --shadow-button: 0 8px 20px rgba(228, 112, 46, 0.3);
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+}
+
+/* Clerk's prebuilt components: match the paper-and-orange look. */
+.cl-rootBox {
+  width: 100%;
+}
