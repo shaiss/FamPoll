@@ -51,14 +51,16 @@ function cleanDateOptions(starts: FormDataEntryValue[], ends: FormDataEntryValue
   const seen = new Set<string>();
   for (let i = 0; i < starts.length; i++) {
     const a = String(starts[i] ?? "").trim();
-    const b = String(ends[i] ?? "").trim() || a;
-    if (!a && !String(ends[i] ?? "").trim()) continue;
+    const rawEnd = String(ends[i] ?? "").trim();
+    const b = rawEnd || a;
+    if (!a && !rawEnd) continue;
     if (!dateRe.test(a) || !dateRe.test(b)) return "One of the dates doesn't look right.";
     if (b < a) return "An end date is before its start date.";
     const key = a + "|" + b;
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ title: dateRangeTitle(a, b), startsOn: a, endsOn: b });
+    // Pass null (not the start date) for a blank end so a single day titles as "Jul 11", not "Jul 11–11".
+    out.push({ title: dateRangeTitle(a, rawEnd || null), startsOn: a, endsOn: b });
   }
   return out;
 }

@@ -1,5 +1,5 @@
 /** Renders src/app/icon.svg to the PNG sizes the manifest and iOS need. Run once after changing the icon. */
-import { chromium } from "/opt/node22/lib/node_modules/playwright/index.mjs";
+import { chromium } from "playwright-core";
 import { readFileSync, writeFileSync } from "node:fs";
 
 const svg = readFileSync("src/app/icon.svg", "utf8");

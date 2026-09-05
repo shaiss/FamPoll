@@ -190,7 +190,15 @@ export async function applyOutcome(tx: Tx | Db, decision: Decision, optionId: st
   if (!decision.setsEventDates) return;
   const option = await tx.query.options.findFirst({ where: eq(schema.options.id, optionId) });
   if (!option || !option.startsOn) return;
-  await tx.update(schema.events).set({ startsOn: option.startsOn, endsOn: option.endsOn ?? option.startsOn }).where(eq(schema.events.id, decision.eventId));
+  // Only a still-planning event takes the winning dates: a stale request or a
+  // lazily-settled due round must not overwrite dates once the event is done or
+  // archived. Log only when a row actually changed.
+  const [event] = await tx
+    .update(schema.events)
+    .set({ startsOn: option.startsOn, endsOn: option.endsOn ?? option.startsOn })
+    .where(and(eq(schema.events.id, decision.eventId), eq(schema.events.status, "planning")))
+    .returning({ id: schema.events.id });
+  if (!event) return;
   await tx.insert(schema.activity).values({
     id: newId(),
     eventId: decision.eventId,

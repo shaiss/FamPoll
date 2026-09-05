@@ -183,11 +183,19 @@ export async function demoteOrganizer(formData: FormData) {
   if (member.role !== "organizer") fail("/app/family", "Only an organizer can do that.");
   const memberId = z.string().parse(formData.get("memberId"));
   const db = getDb();
-  const target = await db.query.members.findFirst({ where: and(eq(schema.members.id, memberId), eq(schema.members.familyId, family.id)) });
-  if (!target || target.role !== "organizer") fail("/app/family", "They aren't an organizer.");
-  const organizers = await db.query.members.findMany({ where: and(eq(schema.members.familyId, family.id), eq(schema.members.role, "organizer")) });
-  if (organizers.length <= 1) fail("/app/family", "Make someone else an organizer first — a family needs one.");
-  await db.update(schema.members).set({ role: "member" }).where(eq(schema.members.id, target.id));
+  await db.transaction(async (tx) => {
+    // Lock this family's organizer rows so two concurrent demotions can't both
+    // pass the count check and leave the family with nobody in charge.
+    const organizers = await tx
+      .select()
+      .from(schema.members)
+      .where(and(eq(schema.members.familyId, family.id), eq(schema.members.role, "organizer")))
+      .for("update");
+    const target = organizers.find((m) => m.id === memberId);
+    if (!target) fail("/app/family", "They aren't an organizer.");
+    if (organizers.length <= 1) fail("/app/family", "Make someone else an organizer first — a family needs one.");
+    await tx.update(schema.members).set({ role: "member" }).where(eq(schema.members.id, target.id));
+  });
   revalidatePath("/app/family");
 }
 

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { CopyText, type CopyLine } from "@/components/copy-text";
 import { ShareButton } from "@/components/share-button";
 import { LocalTime } from "@/components/time";
+import { MoveButton } from "@/components/move-button";
 import { AvatarStack, Button, Card, Icon, LinkButton, Screen, SectionLabel, TopBar } from "@/components/ui";
 import { moveDecision } from "@/lib/actions/decisions";
 import { setEventStatus } from "@/lib/actions/events";
@@ -190,16 +191,16 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                     <form action={moveDecision}>
                       <input type="hidden" name="decisionId" value={d.decision.id} />
                       <input type="hidden" name="direction" value="up" />
-                      <button type="submit" disabled={i === 0} aria-label="Move up" className="h-9 w-9 rounded-[10px] bg-sand text-ink-2 disabled:opacity-30">
+                      <MoveButton disabled={i === 0} aria-label="Move up" className="h-9 w-9 rounded-[10px] bg-sand text-ink-2 disabled:opacity-30">
                         ↑
-                      </button>
+                      </MoveButton>
                     </form>
                     <form action={moveDecision}>
                       <input type="hidden" name="decisionId" value={d.decision.id} />
                       <input type="hidden" name="direction" value="down" />
-                      <button type="submit" disabled={i === decisions.length - 1} aria-label="Move down" className="h-9 w-9 rounded-[10px] bg-sand text-ink-2 disabled:opacity-30">
+                      <MoveButton disabled={i === decisions.length - 1} aria-label="Move down" className="h-9 w-9 rounded-[10px] bg-sand text-ink-2 disabled:opacity-30">
                         ↓
-                      </button>
+                      </MoveButton>
                     </form>
                   </div>
                 ))}
