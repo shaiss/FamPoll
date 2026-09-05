@@ -131,6 +131,7 @@ CREATE INDEX "activity_event_idx" ON "activity" USING btree ("event_id");--> sta
 CREATE INDEX "decisions_event_idx" ON "decisions" USING btree ("event_id");--> statement-breakpoint
 CREATE INDEX "events_family_idx" ON "events" USING btree ("family_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "members_family_user_unique" ON "members" USING btree ("family_id","user_id") WHERE "members"."user_id" is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX "members_user_unique" ON "members" USING btree ("user_id") WHERE "members"."user_id" is not null;--> statement-breakpoint
 CREATE INDEX "members_family_idx" ON "members" USING btree ("family_id");--> statement-breakpoint
 CREATE INDEX "members_user_idx" ON "members" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "options_decision_idx" ON "options" USING btree ("decision_id");--> statement-breakpoint

@@ -1,5 +1,5 @@
 {
-  "id": "d811720d-8e68-4179-abfe-c9a8e8c44ef9",
+  "id": "26226750-cbe3-4562-8cf8-9e07d4d39c29",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -521,6 +521,22 @@
               "asc": true,
               "nulls": "last"
             },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"members\".\"user_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "members_user_unique": {
+          "name": "members_user_unique",
+          "columns": [
             {
               "expression": "user_id",
               "isExpression": false,

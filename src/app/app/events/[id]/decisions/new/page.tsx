@@ -39,10 +39,12 @@ export default async function NewDecision({ params, searchParams }: { params: Pr
           <span className="text-[13px] font-semibold text-ink-2">How do we decide?</span>
           <div className="flex flex-col gap-2">
             {PLANS.map((p, i) => (
-              <label key={p.value} className="cursor-pointer">
-                <input type="radio" name="plan" value={p.value} defaultChecked={i === 0} className="peer sr-only" />
-                <Card className="flex items-center gap-3 px-3.5 py-3 peer-checked:border-2 peer-checked:border-accent peer-checked:shadow-accent">
-                  <span className="inline-block h-[22px] w-[22px] shrink-0 rounded-full border-2 border-line-2" />
+              <label key={p.value} className="group block cursor-pointer">
+                <input type="radio" name="plan" value={p.value} defaultChecked={i === 0} className="sr-only" />
+                <Card as="span" className="flex items-center gap-3 px-3.5 py-3 group-has-checked:border-2 group-has-checked:border-accent group-has-checked:shadow-accent">
+                  <span className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border-2 border-line-2 group-has-checked:border-accent group-has-checked:bg-accent">
+                    <span className="h-2 w-2 rounded-full bg-transparent group-has-checked:bg-white" />
+                  </span>
                   <span className="flex flex-col">
                     <span className="text-[15px] font-bold">{p.title}</span>
                     <span className="text-[13px] text-ink-2">{p.body}</span>
@@ -53,23 +55,22 @@ export default async function NewDecision({ params, searchParams }: { params: Pr
           </div>
         </div>
 
-        <div className="flex flex-col gap-2">
-          <span className="text-[13px] font-semibold text-ink-2">Options</span>
-          <div className="flex flex-col gap-2">
-            {[0, 1, 2, 3].map((i) => (
-              <input key={i} name="option" maxLength={80} placeholder={["Apartment in Alfama", "Beach house in Cascais", "Hotel near Belém", "Villa outside Sintra"][i]} className={inputClass} />
-            ))}
-          </div>
-          <span className="text-xs text-ink-3">A quick vote needs 2, a shortlist 3. If you start with ideas, leave these empty and everyone adds their own.</span>
-        </div>
+        <Field label="Options, one per line" hint="A quick vote needs 2, a shortlist 3. Starting with ideas? Leave this empty and everyone adds their own.">
+          <textarea
+            name="options"
+            rows={5}
+            placeholder={"Apartment in Alfama\nBeach house in Cascais\nHotel near Belém"}
+            className="w-full rounded-[14px] border border-line bg-card px-4 py-3 text-[16px] font-medium text-ink outline-none placeholder:text-ink-3 focus:border-accent"
+          />
+        </Field>
 
         <div className="flex flex-col gap-2">
           <span className="text-[13px] font-semibold text-ink-2">Each round closes after</span>
           <div className="flex gap-1 rounded-[12px] bg-sand-2 p-1">
             {DURATIONS.map((d) => (
-              <label key={d.value} className="flex-1 cursor-pointer">
-                <input type="radio" name="roundHours" value={d.value} defaultChecked={d.value === 72} className="peer sr-only" />
-                <span className="flex h-[38px] items-center justify-center rounded-[9px] text-sm font-semibold text-ink-2 peer-checked:bg-card peer-checked:font-bold peer-checked:text-ink peer-checked:shadow-sm">{d.label}</span>
+              <label key={d.value} className="group flex-1 cursor-pointer">
+                <input type="radio" name="roundHours" value={d.value} defaultChecked={d.value === 72} className="sr-only" />
+                <span className="flex h-[38px] items-center justify-center rounded-[9px] text-sm font-semibold text-ink-2 group-has-checked:bg-card group-has-checked:font-bold group-has-checked:text-ink group-has-checked:shadow-sm">{d.label}</span>
               </label>
             ))}
           </div>
@@ -81,7 +82,6 @@ export default async function NewDecision({ params, searchParams }: { params: Pr
             <span className="text-[15px] font-bold">Anyone can add ideas</span>
             <span className="text-[13px] text-ink-2">Turn off to keep it to you</span>
           </span>
-          <input type="hidden" name="anyoneCanAddOptions" value="off" />
           <input type="checkbox" name="anyoneCanAddOptions" value="on" defaultChecked className="h-6 w-6 accent-teal" />
         </Card>
 

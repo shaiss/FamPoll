@@ -3,9 +3,12 @@ import { describe, it } from "node:test";
 import {
   closesAtFrom,
   cutAdvancing,
+  isPastDeadline,
+  isTiebreak,
   maxPicksFor,
   nextStep,
   resolveFinal,
+  roundLabel,
   roundSequence,
   shouldAutoClose,
   tally,
@@ -153,5 +156,56 @@ describe("nextStep", () => {
   it("decides or ties after a final", () => {
     assert.deepEqual(nextStep("quick", "final", ["a", "b"], 2, { winnerId: "a", tiedIds: [] }), { kind: "decided", optionId: "a" });
     assert.deepEqual(nextStep("quick", "final", ["a", "b"], 2, { winnerId: null, tiedIds: ["a", "b"] }), { kind: "tie", tiedIds: ["a", "b"] });
+  });
+});
+
+describe("roundLabel", () => {
+  it("labels a quick vote", () => {
+    assert.equal(roundLabel({ kind: "final", number: 1 }, [{ kind: "final", number: 1 }], "quick"), "Quick vote");
+  });
+  it("counts remaining rounds from the plan", () => {
+    const all = [{ kind: "ideas" as const, number: 1 }];
+    assert.equal(roundLabel(all[0], all, "ideas_shortlist_final"), "Round 1 of 3 · Ideas");
+    const two = [...all, { kind: "shortlist" as const, number: 2 }];
+    assert.equal(roundLabel(two[1], two, "ideas_shortlist_final"), "Round 2 of 3 · Shortlist");
+  });
+  it("shrinks the denominator when the shortlist was skipped", () => {
+    const all = [{ kind: "ideas" as const, number: 1 }, { kind: "final" as const, number: 2 }];
+    assert.equal(roundLabel(all[1], all, "ideas_shortlist_final"), "Round 2 of 2 · Final");
+  });
+  it("names a tiebreak", () => {
+    const all = [{ kind: "final" as const, number: 1 }, { kind: "final" as const, number: 2 }];
+    assert.equal(isTiebreak(all[1], all), true);
+    assert.equal(isTiebreak(all[0], all), false);
+    assert.equal(roundLabel(all[1], all, "quick"), "Tiebreak");
+  });
+});
+
+describe("boundaries", () => {
+  it("treats the exact deadline as past", () => {
+    const t = new Date("2026-09-05T10:00:00Z");
+    assert.equal(isPastDeadline(t, t), true);
+    assert.equal(isPastDeadline(t, new Date(t.getTime() - 1)), false);
+  });
+  it("stalls a final that closed with no result", () => {
+    assert.equal(nextStep("quick", "final", ["a"], 2).kind, "stalled");
+  });
+  it("keeps tieAtCut false when the tie sits below the cut", () => {
+    const cut = cutAdvancing(
+      [
+        { optionId: "a", count: 5 },
+        { optionId: "b", count: 4 },
+        { optionId: "c", count: 2 },
+        { optionId: "d", count: 2 },
+      ],
+      2,
+    );
+    assert.deepEqual(cut, { advancing: ["a", "b"], eliminated: ["c", "d"], tieAtCut: false });
+  });
+  it("goes to a shortlist with exactly one more idea than advance", () => {
+    assert.deepEqual(nextStep("ideas_shortlist_final", "ideas", ["a", "b", "c"], 2), { kind: "round", round: "shortlist" });
+  });
+  it("does not call a lone zero-vote option a tie worth breaking", () => {
+    assert.deepEqual(resolveFinal([{ optionId: "a", count: 0 }]), { winnerId: null, tiedIds: ["a"] });
   });
 });

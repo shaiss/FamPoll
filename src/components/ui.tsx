@@ -38,14 +38,10 @@ export function AvatarStack({ names, size = 26, max = 6, ring }: { names: string
   );
 }
 
-export function Card({ children, className = "", accent = false }: { children: ReactNode; className?: string; accent?: boolean }) {
-  return (
-    <div
-      className={`rounded-card border bg-card ${accent ? "border-accent-line shadow-accent" : "border-line"} ${className}`}
-    >
-      {children}
-    </div>
-  );
+export function Card({ children, className = "", accent = false, as = "div" }: { children: ReactNode; className?: string; accent?: boolean; as?: "div" | "span" }) {
+  const cls = `rounded-card border bg-card ${accent ? "border-accent-line shadow-accent" : "border-line"} ${className}`;
+  if (as === "span") return <span className={`block ${cls}`}>{children}</span>;
+  return <div className={cls}>{children}</div>;
 }
 
 export function SectionLabel({ children, right, tone = "muted" }: { children: ReactNode; right?: ReactNode; tone?: "muted" | "accent" | "teal" }) {
@@ -141,8 +137,8 @@ export function Screen({ children, className = "" }: { children: ReactNode; clas
   return <main className={`mx-auto flex w-full max-w-md flex-col gap-6 px-5 pb-16 pt-6 ${className}`}>{children}</main>;
 }
 
-export function Wordmark({ size = 22 }: { size?: number }) {
-  return (
+export function Wordmark({ size = 22, href }: { size?: number; href?: string }) {
+  const inner = (
     <span className="inline-flex items-center gap-2.5">
       <span className="inline-flex items-center justify-center rounded-[10px] bg-accent text-white" style={{ width: size * 1.55, height: size * 1.55 }}>
         <Icon name="poll" size={size * 0.9} stroke={2.5} />
@@ -152,6 +148,7 @@ export function Wordmark({ size = 22 }: { size?: number }) {
       </span>
     </span>
   );
+  return href ? <Link href={href}>{inner}</Link> : inner;
 }
 
 const paths: Record<string, ReactNode> = {

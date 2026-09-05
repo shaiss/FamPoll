@@ -41,7 +41,7 @@ export default async function NewEvent({ searchParams }: { searchParams: Promise
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Starts" hint="Optional. You can vote on the dates later.">
+            <Field label="Starts" hint="Optional. Leave blank if the dates are still up in the air.">
               <input type="date" name="startsOn" className={inputClass} />
             </Field>
             <Field label="Ends">

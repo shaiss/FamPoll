@@ -1,11 +1,20 @@
 import Link from "next/link";
+import { LocalTime } from "@/components/time";
 import { AvatarStack, Card, Icon, LinkButton, Pill, Progress, SectionLabel, Screen } from "@/components/ui";
 import { requireMembership } from "@/lib/auth";
-import { roundTitle } from "@/lib/engine/rounds";
-import { closesLabel, formatDate, formatDateRange, plural } from "@/lib/format";
+import { roundLabel } from "@/lib/engine/rounds";
+import { closesRelative, formatDate, formatDateRange, plural } from "@/lib/format";
 import { homeData } from "@/lib/queries";
 
 const KIND_LABEL: Record<string, string> = { trip: "Trip", outing: "Outing", meal: "Meal", party: "Party", other: "Event" };
+
+function openLabel(c: { openVotingRounds: number; openIdeasRounds: number; open: number }): string {
+  const parts: string[] = [];
+  if (c.openVotingRounds) parts.push(plural(c.openVotingRounds, "round") + " open");
+  if (c.openIdeasRounds) parts.push("gathering ideas");
+  if (parts.length) return parts.join(" · ");
+  return c.open ? plural(c.open, "decision") + " waiting" : "all settled";
+}
 
 export default async function Home() {
   const { user, family } = await requireMembership();
@@ -13,12 +22,15 @@ export default async function Home() {
   const live = events.filter((e) => e.event.status === "planning");
   const past = events.filter((e) => e.event.status !== "planning");
   const firstName = user.name.split(" ")[0];
+  const now = new Date();
 
   return (
     <Screen className="relative pt-8">
       <div className="flex items-end justify-between">
         <div className="flex flex-col gap-0.5">
-          <div className="text-sm font-medium text-ink-2">{formatDate(new Date(), { weekday: "long", month: "short", day: "numeric" })}</div>
+          <div className="text-sm font-medium text-ink-2">
+            <LocalTime iso={now.toISOString()} mode="weekday" fallback={formatDate(now, { month: "short", day: "numeric" })} />
+          </div>
           <h1 className="font-display text-[30px] font-bold leading-[1.05] tracking-[-0.02em]">Hi, {firstName}</h1>
         </div>
         <Link href="/app/family" aria-label={family.name} className="flex items-center">
@@ -28,19 +40,20 @@ export default async function Home() {
 
       <section className="flex flex-col gap-2.5">
         <SectionLabel tone="accent" right={needsVote.length ? `${needsVote.length} open` : undefined}>
-          Needs your vote
+          Needs you
         </SectionLabel>
         {needsVote.length === 0 ? (
-          <Card className="p-4 text-sm text-ink-2">Nothing waiting on you. Nice.</Card>
+          <Card className="p-4 text-sm text-ink-2">Nothing waiting on you right now.</Card>
         ) : (
           needsVote.map((n) => {
             const proxies = n.pendingSeats.filter((s) => s.userId !== user.id);
+            const ideas = n.kind === "ideas";
             return (
               <Card key={n.decision.id + n.round.id} accent className="flex flex-col gap-3 p-4">
                 <div className="flex items-center justify-between">
                   <Pill tone="accent">
                     <Icon name="clock" size={12} stroke={2.5} />
-                    {roundTitle(n.round.kind, n.round.number, n.decision.plan)} · {closesLabel(n.round.closesAt)}
+                    {ideas ? "Ideas wanted" : roundLabel(n.round, n.rounds, n.decision.plan)} · <LocalTime iso={n.round.closesAt.toISOString()} mode="closes" fallback={closesRelative(n.round.closesAt, now)} />
                   </Pill>
                   <Icon name="chevron-right" size={18} stroke={2.25} className="text-ink-3" />
                 </div>
@@ -48,7 +61,7 @@ export default async function Home() {
                   <div className="font-display text-xl font-bold tracking-[-0.01em]">{n.decision.title}</div>
                   <div className="text-[13px] text-ink-2">
                     {n.event.title}
-                    {n.round.maxPicks > 1 ? ` · pick up to ${n.round.maxPicks}` : ""}
+                    {!ideas && n.round.maxPicks > 1 ? ` · pick up to ${n.round.maxPicks}` : ""}
                     {proxies.length ? ` · also for ${proxies.map((p) => p.displayName).join(", ")}` : ""}
                   </div>
                 </div>
@@ -56,11 +69,11 @@ export default async function Home() {
                   <div className="flex items-center gap-2">
                     <AvatarStack names={n.votedNames} size={24} max={4} ring="#ffffff" />
                     <span className="text-xs text-ink-2">
-                      {n.votedNames.length} of {n.totalSeats} voted
+                      {n.votedNames.length} of {n.totalSeats} {ideas ? "added ideas" : "voted"}
                     </span>
                   </div>
                   <LinkButton href={`/app/decisions/${n.decision.id}`} size="sm">
-                    Vote
+                    {ideas ? "Add idea" : "Vote"}
                   </LinkButton>
                 </div>
               </Card>
@@ -80,16 +93,14 @@ export default async function Home() {
         {live.map((c) => (
           <Link key={c.event.id} href={`/app/events/${c.event.id}`} className="block">
             <Card className="flex flex-col gap-3 p-4 transition hover:border-line-2">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex flex-col gap-0.5">
-                  <div className="font-display text-[19px] font-bold tracking-[-0.01em]">{c.event.title}</div>
-                  <div className="flex items-center gap-1.5 text-[13px] text-ink-2">
-                    <Icon name={c.event.kind === "trip" ? "pin" : "calendar"} size={14} />
-                    <span>
-                      {KIND_LABEL[c.event.kind]}
-                      {c.event.startsOn ? ` · ${formatDateRange(c.event.startsOn, c.event.endsOn)}` : ""}
-                    </span>
-                  </div>
+              <div className="flex flex-col gap-0.5">
+                <div className="font-display text-[19px] font-bold tracking-[-0.01em]">{c.event.title}</div>
+                <div className="flex items-center gap-1.5 text-[13px] text-ink-2">
+                  <Icon name={c.event.kind === "trip" ? "pin" : "calendar"} size={14} />
+                  <span>
+                    {KIND_LABEL[c.event.kind]}
+                    {c.event.startsOn ? ` · ${formatDateRange(c.event.startsOn, c.event.endsOn)}` : ""}
+                  </span>
                 </div>
               </div>
               {c.total > 0 ? (
@@ -98,7 +109,7 @@ export default async function Home() {
                     <span className="text-teal-deep">
                       {c.decided} of {c.total} decided
                     </span>
-                    <span className={c.openRoundLabel ? "text-accent-deep" : "text-ink-2"}>{c.openRoundLabel ?? (c.open ? plural(c.open, "decision") + " waiting" : "all settled")}</span>
+                    <span className={c.openVotingRounds || c.openIdeasRounds ? "text-accent-deep" : "text-ink-2"}>{openLabel(c)}</span>
                   </div>
                   <Progress decided={c.decided} open={c.open} total={c.total} />
                 </div>

@@ -45,7 +45,13 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" className={`${bricolage.variable} ${figtree.variable}`}>
       <body className="min-h-dvh">
-        {hasClerkPublishable ? <ClerkProvider appearance={clerkAppearance}>{children}</ClerkProvider> : children}
+        {hasClerkPublishable ? (
+          <ClerkProvider appearance={clerkAppearance} signInUrl="/sign-in" signUpUrl="/sign-up" signInFallbackRedirectUrl="/app" signUpFallbackRedirectUrl="/app">
+            {children}
+          </ClerkProvider>
+        ) : (
+          children
+        )}
       </body>
     </html>
   );

@@ -153,13 +153,6 @@ export function nextStep(plan: Plan, closed: RoundKind, alive: string[], advance
   return { kind: "round", round: next };
 }
 
-/** "Round 2 of 3 · Shortlist" */
-export function roundTitle(kind: RoundKind, number: number, plan: Plan): string {
-  const total = planRoundCount(plan);
-  if (total === 1) return "Quick vote";
-  return `Round ${number} of ${total} · ${ROUND_LABEL[kind]}`;
-}
-
 /** The instruction line under a round title. */
 export function roundInstruction(kind: RoundKind, maxPicks: number, advanceCount: number): string {
   if (kind === "ideas") return "Add ideas. Nobody votes yet.";
@@ -168,4 +161,25 @@ export function roundInstruction(kind: RoundKind, maxPicks: number, advanceCount
     return `${picks} The top ${advanceCount} go to the final.`;
   }
   return "Pick one. The most votes wins.";
+}
+
+export type RoundRef = { kind: RoundKind; number: number };
+
+/** A tiebreak is a final that follows another final of the same decision. */
+export function isTiebreak(round: RoundRef, all: RoundRef[]): boolean {
+  if (round.kind !== "final") return false;
+  return all.some((r) => r.number < round.number && r.kind === "final");
+}
+
+/**
+ * "Round 2 of 3 · Shortlist", "Quick vote", "Tiebreak". The denominator is the
+ * rounds actually played so far plus what the plan still has left, so a skipped
+ * shortlist or a tiebreak never reads "Round 2 of 3" or "Round 4 of 3".
+ */
+export function roundLabel(round: RoundRef, all: RoundRef[], plan: Plan): string {
+  if (isTiebreak(round, all)) return "Tiebreak";
+  const seq = roundSequence(plan);
+  if (seq.length === 1 && round.number === 1) return "Quick vote";
+  const remaining = round.kind === "final" ? 0 : seq.slice(seq.indexOf(round.kind) + 1).length;
+  return `Round ${round.number} of ${round.number + remaining} · ${ROUND_LABEL[round.kind]}`;
 }

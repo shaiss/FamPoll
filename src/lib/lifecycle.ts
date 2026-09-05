@@ -1,8 +1,9 @@
-import { and, asc, eq, inArray, isNull, lte } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { getDb, schema, type Db } from "./db";
 import {
   closesAtFrom,
   cutAdvancing,
+  isPastDeadline,
   maxPicksFor,
   nextStep,
   resolveFinal,
@@ -15,8 +16,7 @@ import {
 import { newId } from "./ids";
 import type { Decision, Round } from "./db/schema";
 
-type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
-
+export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 export type CloseReason = "deadline" | "everyone_voted" | "organizer";
 
 export async function logActivity(
@@ -33,8 +33,31 @@ export async function logActivity(
   });
 }
 
-/** Opens the next round for a decision. */
-export async function openRound(tx: Tx | Db, decision: Decision, kind: RoundKind, number: number, now: Date, onlyOptionIds?: string[]) {
+/**
+ * Lock a round row for the rest of the transaction and return it only if it is
+ * still open. Every path that closes a round, counts votes to close it early,
+ * or writes votes into it goes through this lock, so two requests can never
+ * settle the same round twice or miss an "everyone voted" close.
+ */
+export async function lockOpenRound(tx: Tx, roundId: string): Promise<Round | null> {
+  const [round] = await tx.select().from(schema.rounds).where(eq(schema.rounds.id, roundId)).for("update");
+  if (!round || round.status !== "open") return null;
+  return round;
+}
+
+/**
+ * Opens the next round. For a tiebreak, `only` restricts the ballot to the tied
+ * options; the others are stamped as eliminated in `stampRoundId` (the round
+ * that tied), so a later reopen of that round brings them back correctly.
+ */
+export async function openRound(
+  tx: Tx | Db,
+  decision: Decision,
+  kind: RoundKind,
+  number: number,
+  now: Date,
+  only?: { optionIds: string[]; stampRoundId: string },
+) {
   const [round] = await tx
     .insert(schema.rounds)
     .values({
@@ -48,26 +71,24 @@ export async function openRound(tx: Tx | Db, decision: Decision, kind: RoundKind
       closesAt: closesAtFrom(now, decision.roundHours),
     })
     .returning();
-  if (onlyOptionIds) {
-    // A tiebreak final: everything outside the tie is out.
+  if (only) {
     await tx
       .update(schema.options)
-      .set({ eliminatedInRoundId: round.id })
-      .where(and(eq(schema.options.decisionId, decision.id), isNull(schema.options.eliminatedInRoundId)))
-      .then(async () => {
-        await tx.update(schema.options).set({ eliminatedInRoundId: null }).where(inArray(schema.options.id, onlyOptionIds));
-      });
+      .set({ eliminatedInRoundId: only.stampRoundId })
+      .where(and(eq(schema.options.decisionId, decision.id), isNull(schema.options.eliminatedInRoundId)));
+    await tx.update(schema.options).set({ eliminatedInRoundId: null }).where(inArray(schema.options.id, only.optionIds));
   }
   return round;
 }
 
 /**
  * Closes a round and applies what follows: eliminate, advance, decide, or tie.
- * Safe to call from a deadline check, an "everyone voted" check, or the organizer.
- * Returns the resulting step so callers can phrase a message.
+ * Takes the round id and locks it itself, so it is safe from any caller.
+ * Returns null when the round was already closed by someone else.
  */
-export async function closeRoundAndAdvance(tx: Tx, round: Round, reason: CloseReason, now: Date): Promise<NextStep> {
-  if (round.status !== "open") return { kind: "stalled", reason: "Round already closed." };
+export async function closeRoundAndAdvance(tx: Tx, roundId: string, reason: CloseReason, now: Date): Promise<NextStep | null> {
+  const round = await lockOpenRound(tx, roundId);
+  if (!round) return null;
   const decision = await tx.query.decisions.findFirst({ where: eq(schema.decisions.id, round.decisionId) });
   if (!decision) throw new Error("Decision not found");
 
@@ -103,6 +124,8 @@ export async function closeRoundAndAdvance(tx: Tx, round: Round, reason: CloseRe
 
   const titleOf = (id: string) => alive.find((o) => o.id === id)?.title ?? "an option";
   const why = reason === "everyone_voted" ? "everyone voted" : reason === "deadline" ? "time was up" : "the organizer closed it";
+  const log = (kind: string, message: string) =>
+    tx.insert(schema.activity).values({ id: newId(), eventId: decision.eventId, decisionId: decision.id, kind, message });
 
   switch (step.kind) {
     case "round": {
@@ -110,13 +133,7 @@ export async function closeRoundAndAdvance(tx: Tx, round: Round, reason: CloseRe
       const seq = roundSequence(decision.plan);
       const label = step.round === "final" ? "the final" : step.round === "shortlist" ? "the shortlist" : "ideas";
       const skipped = round.kind === "ideas" && step.round === "final" && seq.includes("shortlist") ? " Few enough ideas, so the shortlist was skipped." : "";
-      await tx.insert(schema.activity).values({
-        id: newId(),
-        eventId: decision.eventId,
-        decisionId: decision.id,
-        kind: "round_advanced",
-        message: `Round ${round.number} closed because ${why}. On to ${label}.${skipped}`,
-      });
+      await log("round_advanced", `Round ${round.number} closed because ${why}. On to ${label}.${skipped}`);
       break;
     }
     case "decided": {
@@ -128,33 +145,15 @@ export async function closeRoundAndAdvance(tx: Tx, round: Round, reason: CloseRe
         round.kind === "final" && rows.length > 1
           ? ` ${titleOf(step.optionId)} won ${rows[0].count}–${rows[1].count}.`
           : ` ${titleOf(step.optionId)} was the only idea left.`;
-      await tx.insert(schema.activity).values({
-        id: newId(),
-        eventId: decision.eventId,
-        decisionId: decision.id,
-        kind: "decided",
-        message: `${decision.title} decided: ${titleOf(step.optionId)}.${detail}`,
-      });
+      await log("decided", `${decision.title} decided: ${titleOf(step.optionId)}.${detail}`);
       break;
     }
     case "tie": {
-      await tx.insert(schema.activity).values({
-        id: newId(),
-        eventId: decision.eventId,
-        decisionId: decision.id,
-        kind: "tie",
-        message: `${decision.title}: the final tied between ${step.tiedIds.map(titleOf).join(" and ")}. The organizer breaks the tie.`,
-      });
+      await log("tie", `${decision.title}: the final tied between ${step.tiedIds.map(titleOf).join(" and ")}. The organizer breaks the tie.`);
       break;
     }
     case "stalled": {
-      await tx.insert(schema.activity).values({
-        id: newId(),
-        eventId: decision.eventId,
-        decisionId: decision.id,
-        kind: "stalled",
-        message: `${decision.title}: round ${round.number} closed but nothing could advance. ${step.reason}`,
-      });
+      await log("stalled", `${decision.title}: round ${round.number} closed but nothing could advance. ${step.reason}`);
       break;
     }
   }
@@ -168,38 +167,42 @@ export async function eligibleSeatCount(tx: Tx | Db, familyId: string): Promise<
 }
 
 /**
- * Closes any open round whose deadline passed. Runs lazily on page loads, so the
- * app needs no scheduler. Idempotent: a round can only close once.
+ * Closes any open round whose deadline passed, and repairs a missed
+ * "everyone voted" close. Runs lazily on page loads, so the app needs no
+ * scheduler. Idempotent: the row lock means a round closes exactly once.
  */
 export async function settleDueRounds(familyId: string, now = new Date()): Promise<number> {
   const db = getDb();
-  const due = await db
+  const open = await db
     .select({ round: schema.rounds })
     .from(schema.rounds)
     .innerJoin(schema.decisions, eq(schema.decisions.id, schema.rounds.decisionId))
     .innerJoin(schema.events, eq(schema.events.id, schema.decisions.eventId))
-    .where(and(eq(schema.events.familyId, familyId), eq(schema.rounds.status, "open"), lte(schema.rounds.closesAt, now)));
+    .where(and(eq(schema.events.familyId, familyId), eq(schema.rounds.status, "open"), eq(schema.decisions.status, "open")));
   let closed = 0;
-  for (const { round } of due) {
+  for (const { round } of open) {
+    const due = isPastDeadline(round.closesAt, now);
     await db.transaction(async (tx) => {
-      const fresh = await tx.query.rounds.findFirst({ where: eq(schema.rounds.id, round.id) });
-      if (fresh && fresh.status === "open") {
-        await closeRoundAndAdvance(tx, fresh, "deadline", now);
-        closed++;
+      const fresh = await lockOpenRound(tx, round.id);
+      if (!fresh) return;
+      if (due) {
+        if (await closeRoundAndAdvance(tx, fresh.id, "deadline", now)) closed++;
+        return;
       }
+      if (await maybeCloseEarly(tx, fresh, familyId, now)) closed++;
     });
   }
   return closed;
 }
 
-/** After a vote lands: close the round early when every seat has voted. */
+/** With the round locked: close it early when every seat has voted. */
 export async function maybeCloseEarly(tx: Tx, round: Round, familyId: string, now: Date): Promise<boolean> {
   const votes = await tx.select({ memberId: schema.votes.memberId }).from(schema.votes).where(eq(schema.votes.roundId, round.id));
   const distinct = new Set(votes.map((v) => v.memberId)).size;
   const eligible = await eligibleSeatCount(tx, familyId);
   if (shouldAutoClose(round.kind, distinct, eligible)) {
-    await closeRoundAndAdvance(tx, round, "everyone_voted", now);
-    return true;
+    return (await closeRoundAndAdvance(tx, round.id, "everyone_voted", now)) !== null;
   }
   return false;
 }
+

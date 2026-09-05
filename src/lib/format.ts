@@ -65,3 +65,12 @@ export function avatarColor(seed: string): string {
 export function plural(n: number, one: string, many = one + "s"): string {
   return `${n} ${n === 1 ? one : many}`;
 }
+
+/** Time-zone-free version for server rendering: "closes in 3h", "closes in 2 days". */
+export function closesRelative(closesAt: Date, now = new Date()): string {
+  const diff = closesAt.getTime() - now.getTime();
+  if (diff <= 0) return "closing now";
+  if (diff < 60 * 60 * 1000) return `closes in ${Math.max(1, Math.round(diff / 60000))} min`;
+  if (diff < 36 * 60 * 60 * 1000) return `closes in ${Math.round(diff / 3600000)}h`;
+  return `closes in ${Math.round(diff / day)} days`;
+}

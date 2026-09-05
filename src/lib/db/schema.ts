@@ -62,6 +62,11 @@ export const members = pgTable(
     uniqueIndex("members_family_user_unique")
       .on(t.familyId, t.userId)
       .where(sql`${t.userId} is not null`),
+    // One family per signed-in person for now; the database enforces it so two
+    // concurrent joins cannot both succeed.
+    uniqueIndex("members_user_unique")
+      .on(t.userId)
+      .where(sql`${t.userId} is not null`),
     index("members_family_idx").on(t.familyId),
     index("members_user_idx").on(t.userId),
   ],

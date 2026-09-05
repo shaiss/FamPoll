@@ -2,13 +2,17 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse, type NextRequest } from "next/server";
 import { hasClerk } from "@/lib/env";
 
-const isProtectedRoute = createRouteMatcher(["/app(.*)", "/join(.*)"]);
+/** /join stays public so an invitee sees who invited them before signing in. */
+const isProtectedRoute = createRouteMatcher(["/app(.*)"]);
 
-const withClerk = clerkMiddleware(async (auth, req) => {
-  if (isProtectedRoute(req)) {
-    await auth.protect();
-  }
-});
+const withClerk = clerkMiddleware(
+  async (auth, req) => {
+    if (isProtectedRoute(req)) {
+      await auth.protect();
+    }
+  },
+  { signInUrl: "/sign-in", signUpUrl: "/sign-up" },
+);
 
 /**
  * Next.js 16 proxy (the file that replaced middleware.ts). When Clerk is not

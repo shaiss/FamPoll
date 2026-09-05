@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Card, Icon, Screen, Wordmark } from "@/components/ui";
-import { setupStatus } from "@/lib/env";
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
+import { isConfigured, setupStatus } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +29,12 @@ const STEPS: { key: keyof ReturnType<typeof setupStatus>; label: string; how: st
   },
 ];
 
-export default function SetupPage() {
+export default async function SetupPage() {
+  if (isConfigured) {
+    // Once everything is connected this page is for the owner only.
+    const { userId } = await auth();
+    if (!userId) redirect("/sign-in?redirect_url=/setup");
+  }
   const status = setupStatus();
   const ready = status.clerkPublishableKey && status.clerkSecretKey && status.databaseUrl;
   return (

@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Card, Icon, Wordmark } from "@/components/ui";
+import { LocalTime } from "@/components/time";
+import { Card, Icon, LinkButton, Wordmark } from "@/components/ui";
 import { hasDatabase } from "@/lib/env";
-import { roundTitle } from "@/lib/engine/rounds";
-import { closesLabel, formatDate, formatDateRange, nightsBetween, plural, relativeTime } from "@/lib/format";
+import { roundLabel } from "@/lib/engine/rounds";
+import { closesRelative, formatDate, formatDateRange, nightsBetween, plural, relativeTime } from "@/lib/format";
 import { summaryByToken } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -14,8 +16,11 @@ export default async function PublicSummary({ params }: { params: Promise<{ toke
   if (!data) {
     return (
       <main className="mx-auto flex w-full max-w-md flex-col gap-4 px-5 pt-14">
-        <Wordmark />
+        <Wordmark href="/" />
         <p className="text-ink-2">This link doesn’t point to anything any more.</p>
+        <LinkButton href="/" variant="secondary">
+          Home
+        </LinkButton>
       </main>
     );
   }
@@ -27,7 +32,7 @@ export default async function PublicSummary({ params }: { params: Promise<{ toke
   return (
     <main className="mx-auto flex w-full max-w-md flex-col gap-5 px-5 pb-16 pt-10">
       <div className="flex items-center justify-between">
-        <Wordmark size={18} />
+        <Wordmark size={18} href="/" />
         <div className="text-[13px] text-ink-3">Updated {relativeTime(updated)}</div>
       </div>
       <div className="flex flex-col gap-1">
@@ -51,11 +56,12 @@ export default async function PublicSummary({ params }: { params: Promise<{ toke
           {decisions.map((d, i) => {
             const isDecided = d.decision.status === "decided";
             const r = d.currentRound;
-            return (
-              <div key={d.decision.id} className={`flex items-center gap-3 py-3 ${i < decisions.length - 1 ? "border-b border-sand" : ""}`}>
+            const open = r?.status === "open" && d.decision.status === "open";
+            const row = (
+              <div className={`flex items-center gap-3 py-3 ${i < decisions.length - 1 ? "border-b border-sand" : ""}`}>
                 <span
                   className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-extrabold ${
-                    isDecided ? "bg-teal text-white" : r?.status === "open" ? "bg-accent-tint text-accent-deep" : "border-2 border-dashed border-line-2 text-ink-3"
+                    isDecided ? "bg-teal text-white" : open ? "bg-accent-tint text-accent-deep" : "border-2 border-dashed border-line-2 text-ink-3"
                   }`}
                 >
                   {isDecided ? <Icon name="check" size={13} stroke={3} /> : i + 1}
@@ -66,15 +72,22 @@ export default async function PublicSummary({ params }: { params: Promise<{ toke
                     d.outcome?.title
                   ) : d.decision.status === "skipped" ? (
                     <span className="text-[13px] text-ink-3">Set aside</span>
-                  ) : r?.status === "open" ? (
+                  ) : open && r ? (
                     <span className="text-[13px] text-accent-deep">
-                      {r.kind === "ideas" ? "Gathering ideas" : roundTitle(r.kind, r.number, d.decision.plan)} · {closesLabel(r.closesAt)}
+                      {r.kind === "ideas" ? "Gathering ideas" : roundLabel(r, d.rounds, d.decision.plan)} · <LocalTime iso={r.closesAt.toISOString()} mode="closes" fallback={closesRelative(r.closesAt)} />
                     </span>
                   ) : (
                     <span className="text-[13px] text-ink-3">Waiting on the organizer</span>
                   )}
                 </div>
               </div>
+            );
+            return open ? (
+              <Link key={d.decision.id} href={`/app/decisions/${d.decision.id}`} className="block hover:bg-sand/50">
+                {row}
+              </Link>
+            ) : (
+              <div key={d.decision.id}>{row}</div>
             );
           })}
         </div>
@@ -86,12 +99,16 @@ export default async function PublicSummary({ params }: { params: Promise<{ toke
         </div>
       </Card>
 
+      <LinkButton href={`/app/events/${event.id}`}>In the family? Open it and vote</LinkButton>
+
       {log.length ? (
         <section className="flex flex-col gap-2">
           <div className="text-xs font-bold uppercase tracking-[0.08em] text-ink-2">How we got here</div>
           {log.map((a) => (
             <div key={a.id} className="flex gap-3 py-1.5">
-              <div className="w-12 shrink-0 pt-0.5 text-xs font-semibold text-ink-3">{formatDate(a.createdAt)}</div>
+              <div className="w-12 shrink-0 pt-0.5 text-xs font-semibold text-ink-3">
+                <LocalTime iso={a.createdAt.toISOString()} mode="date" fallback={formatDate(a.createdAt)} />
+              </div>
               <div className="text-sm leading-snug">{a.message}</div>
             </div>
           ))}
