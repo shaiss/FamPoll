@@ -2,7 +2,7 @@
 
 Family decisions, one round at a time. Polls grouped around an event (a trip, a birthday, Friday dinner), narrowed down in rounds, with a running record of what was decided and one link to share back into the family chat.
 
-- Product brief and brainstorm: [`docs/BRAINSTORM.md`](docs/BRAINSTORM.md)
+- Product brief: [`docs/BRAINSTORM.md`](docs/BRAINSTORM.md) (concepts, critiques and landscape scan in [`docs/BRAINSTORM-APPENDIX.md`](docs/BRAINSTORM-APPENDIX.md))
 - Screen designs (source for the design canvas): [`design/`](design/)
 
 ## Stack
