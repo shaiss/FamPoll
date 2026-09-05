@@ -7,7 +7,7 @@ Family voting app: decisions grouped under events, settled in rounds. Next.js 16
 - `npm run dev` / `npm run build` / `npm start`
 - `npm test` runs the rounds engine tests (`src/lib/engine/rounds.test.ts`)
 - `npm run typecheck`, `npm run lint`
-- `npm run db:push` applies the schema to `DATABASE_URL`; `npm run db:generate` writes SQL to `drizzle/` after a schema change
+- `npm run db:generate` writes SQL to `drizzle/` after a schema change; `npm run build` (and Vercel) applies pending migrations first via `scripts/migrate.mjs`, skipping when `DATABASE_URL` is unset. Because migrations run at build time, every migration must be backward-compatible with the previous deployment (add columns as nullable or with defaults, never drop or rename in the same release), so a rollback or an in-flight request keeps working. The runner holds a Postgres advisory lock, so concurrent builds serialize.
 
 ## Where things live
 
@@ -21,6 +21,6 @@ Family voting app: decisions grouped under events, settled in rounds. Next.js 16
 ## Conventions
 
 - Mobile-first, one column, max width `max-w-md`. Palette and fonts are Tailwind theme tokens in `src/app/globals.css` (paper, ink, accent, teal). Orange means "needs you", teal means "decided".
-- Every seat in a family can vote, including proxy seats (`members.userId` null, `managedByUserId` set). Eligibility for early close counts all seats.
+- Every seat in a family can vote, including proxy seats (`members.userId` null, `managedByUserId` set). Only organizers create proxy seats; organizer is the app's adult role. Eligibility for early close counts all seats.
 - Never expose env values; `/setup` shows presence only.
 - The product name is a working name. Read it from `brand` in `src/lib/brand.ts` (env `NEXT_PUBLIC_BRAND_NAME`); never type it into UI copy or metadata.

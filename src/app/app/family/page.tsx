@@ -2,7 +2,7 @@ import { UserButton } from "@clerk/nextjs";
 import { CopyButton } from "@/components/copy-button";
 import { ShareButton } from "@/components/share-button";
 import { Avatar, Button, Card, Field, inputClass, Pill, SectionLabel, Screen, TopBar } from "@/components/ui";
-import { addProxyMember, removeMember, removeProxyMember, renameFamily, rotateInviteCode } from "@/lib/actions/family";
+import { addProxyMember, makeOrganizer, removeMember, removeProxyMember, renameFamily, rotateInviteCode } from "@/lib/actions/family";
 import { brand } from "@/lib/brand";
 import { requireMembership } from "@/lib/auth";
 import { readError } from "@/lib/flash";
@@ -59,31 +59,45 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
                 </div>
                 <div className="text-xs text-ink-2">{m.role === "organizer" ? "Organizer" : proxy ? "No account · someone votes for them" : "Member"}</div>
               </div>
-              {canRemove ? (
-                <form action={proxy ? removeProxyMember : removeMember}>
-                  <input type="hidden" name="memberId" value={m.id} />
-                  <Button type="submit" variant="ghost" size="sm">
-                    Remove
-                  </Button>
-                </form>
-              ) : proxy ? (
-                <Pill>proxy</Pill>
-              ) : null}
+              <div className="flex shrink-0 items-center gap-1.5">
+                {organizer && !proxy && m.role !== "organizer" ? (
+                  <form action={makeOrganizer}>
+                    <input type="hidden" name="memberId" value={m.id} />
+                    <Button type="submit" variant="ghost" size="sm">
+                      Make organizer
+                    </Button>
+                  </form>
+                ) : null}
+                {canRemove ? (
+                  <form action={proxy ? removeProxyMember : removeMember}>
+                    <input type="hidden" name="memberId" value={m.id} />
+                    <Button type="submit" variant="ghost" size="sm">
+                      Remove
+                    </Button>
+                  </form>
+                ) : proxy && !organizer ? (
+                  <Pill>proxy</Pill>
+                ) : null}
+              </div>
             </Card>
           );
         })}
       </section>
 
-      <Card className="p-4">
-        <form action={addProxyMember} className="flex flex-col gap-3">
-          <Field label="Add someone without a phone" hint="A kid or a grandparent. You cast their vote from your screen, and it counts like everyone else’s. Up to four per adult.">
-            <input name="displayName" required maxLength={60} placeholder="Ruby" className={inputClass} />
-          </Field>
-          <Button type="submit" variant="secondary">
-            Add a seat
-          </Button>
-        </form>
-      </Card>
+      {organizer ? (
+        <Card className="p-4">
+          <form action={addProxyMember} className="flex flex-col gap-3">
+            <Field label="Add someone without a phone" hint="A kid or a grandparent. You cast their vote from your screen, and it counts like everyone else’s. Up to four per organizer.">
+              <input name="displayName" required maxLength={60} placeholder="Ruby" className={inputClass} />
+            </Field>
+            <Button type="submit" variant="secondary">
+              Add a seat
+            </Button>
+          </form>
+        </Card>
+      ) : (
+        <p className="text-xs text-ink-3">Organizers add seats for kids and relatives without accounts, and can make another adult an organizer.</p>
+      )}
 
       {organizer ? (
         <Card className="p-4">

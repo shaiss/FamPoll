@@ -50,9 +50,14 @@ export async function joinFamily(formData: FormData) {
   redirect("/app");
 }
 
-/** Add a seat for someone without an account (a kid, a grandparent). The adult who adds them votes for them. */
+/**
+ * Add a seat for someone without an account (a kid, a grandparent). The adult
+ * who adds them votes for them. Organizers only: a signed-in kid must not be
+ * able to mint extra votes, and organizer is the app's "adult" role.
+ */
 export async function addProxyMember(formData: FormData) {
-  const { user, family } = await requireMembership();
+  const { user, family, member } = await requireMembership();
+  if (member.role !== "organizer") fail("/app/family", "Only an organizer can add a seat for someone. Ask them to make you an organizer.");
   const displayName = cleanName(formData.get("displayName"));
   if (!displayName) fail("/app/family", "Give them a name.");
   const db = getDb();
@@ -89,6 +94,18 @@ export async function removeMember(formData: FormData) {
     if (target.userId) await tx.delete(schema.members).where(and(eq(schema.members.familyId, family.id), eq(schema.members.managedByUserId, target.userId)));
     await tx.delete(schema.members).where(eq(schema.members.id, target.id));
   });
+  revalidatePath("/app/family");
+}
+
+/** Organizer only: make another signed-in adult an organizer too (the co-parent case). */
+export async function makeOrganizer(formData: FormData) {
+  const { family, member } = await requireMembership();
+  if (member.role !== "organizer") fail("/app/family", "Only an organizer can do that.");
+  const memberId = z.string().parse(formData.get("memberId"));
+  const db = getDb();
+  const target = await db.query.members.findFirst({ where: and(eq(schema.members.id, memberId), eq(schema.members.familyId, family.id)) });
+  if (!target || !target.userId) fail("/app/family", "Only someone with an account can be an organizer.");
+  await db.update(schema.members).set({ role: "organizer" }).where(eq(schema.members.id, target.id));
   revalidatePath("/app/family");
 }
 

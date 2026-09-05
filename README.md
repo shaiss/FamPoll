@@ -22,16 +22,16 @@ The app deploys green with **no secrets set**: every protected route redirects t
 ```bash
 npm install
 cp .env.example .env.local   # fill in Clerk keys and a DATABASE_URL
-npm run db:push              # creates the tables
+npm run db:migrate           # creates the tables (the build does this too)
 npm run dev                  # http://localhost:3000
 ```
 
-Other scripts: `npm test` (rounds engine), `npm run typecheck`, `npm run lint`, `npm run db:generate` (writes SQL to `drizzle/` after a schema change), `npm run db:studio`.
+Other scripts: `npm test` (rounds engine), `npm run typecheck`, `npm run lint`, `npm run db:generate` (writes SQL to `drizzle/` after a schema change; the next build applies it), `npm run db:studio`.
 
 ## Connect the integrations (once)
 
-1. **Clerk**: create an application at dashboard.clerk.com. Under *SSO connections* enable Google, Apple and Facebook. Copy the publishable key and secret key into Vercel (Project → Settings → Environment Variables) as `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`. For production, switch to the `pk_live_` / `sk_live_` keys and add the Vercel domain in Clerk.
-2. **Database**: in the Vercel project, *Storage → Create → Neon Postgres*. Vercel adds `DATABASE_URL` for you. Then, from a machine with that URL in `.env.local`, run `npm run db:push`.
+1. **Clerk** (sign-in): in the Vercel project, *Integrations → Browse Marketplace → Clerk → Install*, which creates the Clerk application and adds `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` for you. (Without the marketplace: create an app at dashboard.clerk.com and paste those two keys under *Settings → Environment Variables*.) Then in the Clerk dashboard, *SSO connections → Add connection*, pick Google, Apple and Facebook. In a development instance all three work immediately on Clerk's shared credentials; nobody needs a Google Cloud, Apple Developer or Meta account to try the app. Going to production later means a `pk_live_` / `sk_live_` instance with your own provider credentials (Apple needs an Apple Developer membership, Facebook needs a Meta app switched to Live).
+2. **Database**: in the Vercel project, *Storage → Create → Neon Postgres*. Vercel adds `DATABASE_URL` for you. The build runs pending migrations itself (`scripts/migrate.mjs`), so there is nothing to run by hand. Keep migrations backward-compatible with the previous deployment (see `CLAUDE.md`).
 3. **App URL** (optional): `NEXT_PUBLIC_APP_URL=https://your-domain` so share links are stable.
 4. **Brand name** (optional): `NEXT_PUBLIC_BRAND_NAME` and `NEXT_PUBLIC_BRAND_TAGLINE` rename the product everywhere it shows (`src/lib/brand.ts` holds the defaults). "FamPoll" is a working name.
 5. Redeploy. `/setup` should show every step ticked.
