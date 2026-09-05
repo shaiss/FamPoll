@@ -4,7 +4,9 @@ import { redirect } from "next/navigation";
 import { LocalTime } from "@/components/time";
 import { Card, Icon, LinkButton, Wordmark } from "@/components/ui";
 import { brand } from "@/lib/brand";
-import { hasDatabase } from "@/lib/env";
+import { hasClerk, hasDatabase } from "@/lib/env";
+import { auth } from "@clerk/nextjs/server";
+import { getMembership } from "@/lib/auth";
 import { roundLabel } from "@/lib/engine/rounds";
 import { closesRelative, formatDate, formatDateRange, nightsBetween, plural, relativeTime } from "@/lib/format";
 import { summaryByToken } from "@/lib/queries";
@@ -42,6 +44,9 @@ export default async function PublicSummary({ params }: { params: Promise<{ toke
     );
   }
   const { event, decisions, log, members } = data;
+  const { userId } = hasClerk ? await auth() : { userId: null };
+  const membership = userId ? await getMembership(userId) : null;
+  const isMember = membership?.family.id === event.familyId;
   const decided = decisions.filter((d) => d.decision.status === "decided").length;
   const nights = nightsBetween(event.startsOn, event.endsOn);
   const updated = log[0]?.createdAt ?? event.createdAt;
@@ -116,7 +121,11 @@ export default async function PublicSummary({ params }: { params: Promise<{ toke
         </div>
       </Card>
 
-      <LinkButton href={`/app/events/${event.id}`}>In the family? Open it and vote</LinkButton>
+      {isMember ? (
+        <LinkButton href={`/app/events/${event.id}`}>Open it and vote</LinkButton>
+      ) : (
+        <LinkButton href={`/join/${event.family.inviteCode}`}>Join {event.family.name} to vote</LinkButton>
+      )}
 
       {log.length ? (
         <section className="flex flex-col gap-2">

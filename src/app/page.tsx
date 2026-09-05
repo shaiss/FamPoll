@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { Button, Icon, LinkButton, Wordmark } from "@/components/ui";
 import { brand } from "@/lib/brand";
 import { hasClerk, hasDatabase } from "@/lib/env";
+import { isInAppBrowser } from "@/lib/ua";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,7 @@ export default async function Landing() {
     const { userId } = await auth();
     if (userId && hasDatabase) redirect("/app");
   }
+  const inApp = await isInAppBrowser();
   return (
     <main className="relative mx-auto flex min-h-dvh w-full max-w-md flex-col justify-between overflow-hidden px-6 pb-10 pt-20">
       <div className="pointer-events-none absolute -right-36 -top-32 h-80 w-80 rounded-full bg-accent-tint" />
@@ -32,6 +34,9 @@ export default async function Landing() {
         </ul>
       </div>
       <div className="relative flex flex-col gap-3">
+        {inApp ? (
+          <p className="rounded-[12px] bg-accent-tint px-3 py-2 text-sm font-semibold text-accent-deep">Sign-in works best in your browser. Tap the menu and choose “Open in browser”, then come back to this link.</p>
+        ) : null}
         {hasClerk ? (
           <>
             <SignInButton mode="modal">

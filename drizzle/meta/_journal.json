@@ -15,6 +15,13 @@
       "when": 1788643979082,
       "tag": "0001_dates_decisions",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788644530242,
+      "tag": "0002_skip_ballots",
+      "breakpoints": true
     }
   ]
 }

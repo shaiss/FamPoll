@@ -2,7 +2,7 @@ import { UserButton } from "@clerk/nextjs";
 import { CopyButton } from "@/components/copy-button";
 import { ShareButton } from "@/components/share-button";
 import { Avatar, Button, Card, Field, inputClass, Pill, SectionLabel, Screen, TopBar } from "@/components/ui";
-import { addProxyMember, leaveFamily, makeOrganizer, removeMember, removeProxyMember, renameFamily, rotateInviteCode } from "@/lib/actions/family";
+import { addProxyMember, deleteFamily, demoteOrganizer, leaveFamily, makeOrganizer, reassignProxy, removeMember, renameMember, removeProxyMember, renameFamily, rotateInviteCode } from "@/lib/actions/family";
 import { brand } from "@/lib/brand";
 import { requireMembership } from "@/lib/auth";
 import { readError } from "@/lib/flash";
@@ -15,6 +15,8 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
   const [members, base] = await Promise.all([familyMembers(family.id), baseUrl()]);
   const inviteUrl = `${base}/join/${family.inviteCode}`;
   const organizer = member.role === "organizer";
+  const organizers = members.filter((m) => m.role === "organizer" && m.userId !== null);
+  const canDemote = organizer && organizers.length > 1;
 
   return (
     <Screen>
@@ -49,8 +51,10 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
           const mine = m.userId === user.id;
           const managedByMe = m.managedByUserId === user.id;
           const canRemove = proxy ? managedByMe || organizer : organizer && !mine && m.role !== "organizer";
+          const canRename = mine || organizer;
           return (
-            <Card key={m.id} className="flex items-center gap-3 p-3">
+            <Card key={m.id} className="flex flex-col gap-2 p-3">
+            <div className="flex items-center gap-3">
               <Avatar name={m.displayName} size={36} ring="#ffffff" />
               <div className="flex min-w-0 flex-1 flex-col">
                 <div className="truncate font-semibold">
@@ -68,6 +72,14 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
                     </Button>
                   </form>
                 ) : null}
+                {canDemote && !proxy && m.role === "organizer" ? (
+                  <form action={demoteOrganizer}>
+                    <input type="hidden" name="memberId" value={m.id} />
+                    <Button type="submit" variant="ghost" size="sm">
+                      Make member
+                    </Button>
+                  </form>
+                ) : null}
                 {canRemove ? (
                   <form action={proxy ? removeProxyMember : removeMember}>
                     <input type="hidden" name="memberId" value={m.id} />
@@ -79,6 +91,38 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
                   <Pill>proxy</Pill>
                 ) : null}
               </div>
+            </div>
+            {canRename ? (
+              <details>
+                <summary className="cursor-pointer list-none text-xs font-semibold text-ink-3 [&::-webkit-details-marker]:hidden">Rename</summary>
+                <form action={renameMember} className="mt-2 flex gap-2">
+                  <input type="hidden" name="memberId" value={m.id} />
+                  <input name="displayName" defaultValue={m.displayName} required maxLength={60} className={`${inputClass} h-10 text-[15px]`} aria-label="Name" />
+                  <Button type="submit" variant="ghost" size="sm">
+                    Save
+                  </Button>
+                </form>
+              </details>
+            ) : null}
+            {organizer && proxy && organizers.length > 1 ? (
+              <details>
+                <summary className="cursor-pointer list-none text-xs font-semibold text-ink-3 [&::-webkit-details-marker]:hidden">Who votes for them</summary>
+                <form action={reassignProxy} className="mt-2 flex gap-2">
+                  <input type="hidden" name="memberId" value={m.id} />
+                  <select name="toMemberId" aria-label="Hand to" className={`${inputClass} h-10 flex-1 text-[15px]`} defaultValue={organizers.find((o) => o.userId === m.managedByUserId)?.id ?? organizers[0].id}>
+                    {organizers.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.displayName}
+                        {o.userId === user.id ? " (you)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <Button type="submit" variant="ghost" size="sm">
+                    Hand over
+                  </Button>
+                </form>
+              </details>
+            ) : null}
             </Card>
           );
         })}
@@ -116,6 +160,20 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
             </Button>
           </form>
         </Card>
+      ) : null}
+
+      {organizer ? (
+        <details className="rounded-card border border-line bg-card p-4">
+          <summary className="cursor-pointer list-none text-xs font-semibold text-ink-3 [&::-webkit-details-marker]:hidden">Delete this family…</summary>
+          <form action={deleteFamily} className="mt-3 flex flex-col gap-3">
+            <label className="flex items-center gap-2 text-sm text-ink-2">
+              <input type="checkbox" name="confirm" /> Delete {family.name} and every event, decision and vote in it. This can’t be undone.
+            </label>
+            <Button type="submit" variant="danger" size="sm">
+              Delete the whole family
+            </Button>
+          </form>
+        </details>
       ) : null}
     </Screen>
   );

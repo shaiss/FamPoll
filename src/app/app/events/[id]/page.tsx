@@ -21,13 +21,17 @@ export default async function EventPage({ params, searchParams }: { params: Prom
   if (!data) notFound();
   const { event, decisions, members, log } = data;
   const base = await baseUrl();
-  const shareUrl = `${base}/s/${event.shareToken}`;
+  // The version tag makes Messenger fetch a fresh preview instead of its cached one.
+  const shareUrl = `${base}/s/${event.shareToken}?v=${(log[0]?.createdAt ?? event.createdAt).getTime()}`;
   const memberName = new Map(members.map((m) => [m.id, m.displayName]));
   const decided = decisions.filter((d) => d.decision.status === "decided");
   const nights = nightsBetween(event.startsOn, event.endsOn);
   const organizer = member.role === "organizer" || event.createdByMemberId === member.id;
   const mySeatIds = new Set(members.filter((m) => m.userId === user.id || m.managedByUserId === user.id).map((m) => m.id));
   const planning = event.status === "planning";
+  const shareText = decided.length
+    ? decided.map((d) => `${d.decision.title}: ${d.outcome?.title ?? "decided"}`).join("; ")
+    : `Help us decide: ${event.title}`;
   const summaryLines: CopyLine[] = [
     { text: `${event.title}${event.startsOn ? ` (${formatDateRange(event.startsOn, event.endsOn)})` : ""}` },
     ...decisions.map((d) => {
@@ -52,7 +56,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                 Edit
               </LinkButton>
             ) : null}
-            <ShareButton url={shareUrl} title={`${event.title} · what we’ve decided`} />
+            <ShareButton url={shareUrl} title={`${event.title} · what we’ve decided`} text={shareText} />
           </div>
         }
       />
@@ -111,7 +115,9 @@ export default async function EventPage({ params, searchParams }: { params: Prom
             const skipped = d.decision.status === "skipped";
             const open = planning && d.decision.status === "open" && r?.status === "open";
             const done = r?.kind === "ideas" ? d.contributedMemberIds : d.votedMemberIds;
-            const iAmDone = r ? [...mySeatIds].every((sid) => done.includes(sid)) : false;
+            // Proxy seats never add ideas, so only judge my own seats' contribution in an ideas round.
+            const mySeatsHere = r?.kind === "ideas" ? [...mySeatIds].filter((sid) => members.find((m) => m.id === sid)?.userId != null) : [...mySeatIds];
+            const iAmDone = r ? mySeatsHere.every((sid) => done.includes(sid)) : false;
             if (open && r && r.kind !== "ideas") {
               return (
                 <Card key={d.decision.id} accent className="flex flex-col gap-3 p-3.5">
@@ -216,7 +222,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
 
       {log.length ? (
         <section className="flex flex-col gap-2">
-          <SectionLabel>How we got here</SectionLabel>
+          <SectionLabel right={log.length > 8 ? <Link href={`/app/events/${event.id}/log`}>See all</Link> : undefined}>How we got here</SectionLabel>
           {log.slice(0, 8).map((a) => (
             <div key={a.id} className="flex gap-3 py-1">
               <div className="w-12 shrink-0 pt-0.5 text-xs font-semibold text-ink-3">

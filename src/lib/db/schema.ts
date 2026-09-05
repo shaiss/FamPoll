@@ -174,9 +174,8 @@ export const votes = pgTable(
     roundId: text("round_id")
       .notNull()
       .references(() => rounds.id, { onDelete: "cascade" }),
-    optionId: text("option_id")
-      .notNull()
-      .references(() => options.id, { onDelete: "cascade" }),
+    /** Null means the seat skipped: "whatever you all pick". Counts as taking part. */
+    optionId: text("option_id").references(() => options.id, { onDelete: "cascade" }),
     memberId: text("member_id")
       .notNull()
       .references(() => members.id, { onDelete: "cascade" }),

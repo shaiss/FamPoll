@@ -54,7 +54,7 @@
       "x": 2820,
       "y": 0,
       "w": 390,
-      "h": 844
+      "h": 930
     },
     {
       "file": "DirectionScoreboard.dc.html",
@@ -69,6 +69,22 @@
       "title": "Direction C · Postcard (low-fi)",
       "x": 470,
       "y": 1180,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "People.dc.html",
+      "title": "8 · People",
+      "x": 3290,
+      "y": 0,
+      "w": 390,
+      "h": 1000
+    },
+    {
+      "file": "EditEvent.dc.html",
+      "title": "9 · Edit event",
+      "x": 3760,
+      "y": 0,
       "w": 390,
       "h": 844
     }
@@ -86,7 +102,7 @@
       "x": 480,
       "y": -200,
       "w": 520,
-      "text": "Flow: 1 Sign in from an invite link → 2 Home shows what needs your vote and every event in flight → 3 A trip groups its decisions in order, with a running “decided so far” → 4 Vote in round 2 of 3 (shortlist, pick up to 2) → 5 Round 2 closes and the final opens by itself; the organizer can reopen or just call it → 6 The shareable summary that goes back to Messenger.\n7 is the sheet for starting a new decision and choosing how many rounds."
+      "text": "Flow: 1 Sign in from an invite link → 2 Home shows what needs your vote and every event in flight → 3 A trip groups its decisions in order, with a running “decided so far” → 4 Vote in round 2 of 3 (shortlist, pick up to 2) → 5 Round 2 closes and the final opens by itself; the organizer can reopen or just call it → 6 The shareable summary that goes back to Messenger.\n7 is the sheet for starting a new decision and choosing how many rounds.\n8 is the family roster (invite link, organizers, proxy seats). 9 edits or deletes an event. Screen 7 gained a “We’re choosing dates” toggle: options become date ranges and the winner sets the trip dates."
     },
     {
       "id": "alternates",

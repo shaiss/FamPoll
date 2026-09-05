@@ -21,7 +21,9 @@ export type DecisionCard = {
 export type EventCard = { event: Event; decided: number; open: number; total: number; openVotingRounds: number; openIdeasRounds: number };
 
 export type NeedsVote = {
-  kind: "vote" | "ideas";
+  kind: "vote" | "ideas" | "organizer";
+  /** For organizer items: why it needs them. */
+  reason?: "tie" | "no_quorum" | "stalled";
   decision: Decision;
   event: Event;
   round: Round;
@@ -90,12 +92,33 @@ export async function homeData(familyId: string, userId: string) {
     let openIdeasRounds = 0;
     for (const c of list) {
       const r = c.currentRound;
+      if (c.decision.status === "open" && r && r.status === "closed" && event.status === "planning") {
+        // Nothing is open: a tie, a low-turnout deadline, or an empty ideas round waits on the organizer.
+        const mine = seats.find((s) => s.userId === userId);
+        const canAct = mine && (mine.role === "organizer" || c.decision.createdByMemberId === mine.id);
+        if (canAct) {
+          needsVote.push({
+            kind: "organizer",
+            reason: r.tied ? "tie" : r.closeReason === "no_quorum" ? "no_quorum" : "stalled",
+            decision: c.decision,
+            event,
+            round: r,
+            rounds: c.rounds,
+            pendingSeats: [],
+            votedNames: c.votedMemberIds.map((id) => memberName.get(id) ?? "?"),
+            totalSeats: members.length,
+          });
+        }
+        continue;
+      }
       if (c.decision.status !== "open" || !r || r.status !== "open") continue;
       if (r.kind === "ideas") openIdeasRounds++;
       else openVotingRounds++;
       if (event.status !== "planning") continue;
       const done = r.kind === "ideas" ? c.contributedMemberIds : c.votedMemberIds;
-      const pendingSeats = seats.filter((s) => !done.includes(s.id));
+      // Proxy seats can't add ideas, so they never "owe" one — don't nag their manager for them.
+      const eligibleSeats = r.kind === "ideas" ? seats.filter((s) => s.userId !== null) : seats;
+      const pendingSeats = eligibleSeats.filter((s) => !done.includes(s.id));
       if (pendingSeats.length > 0) {
         needsVote.push({
           kind: r.kind === "ideas" ? "ideas" : "vote",
@@ -105,13 +128,14 @@ export async function homeData(familyId: string, userId: string) {
           rounds: c.rounds,
           pendingSeats,
           votedNames: done.map((id) => memberName.get(id) ?? "?"),
-          totalSeats: members.length,
+          totalSeats: r.kind === "ideas" ? members.filter((m) => m.userId !== null).length : members.length,
         });
       }
     }
     eventCards.push({ event, decided, open, total: list.length, openVotingRounds, openIdeasRounds });
   }
-  needsVote.sort((a, b) => (a.kind === b.kind ? a.round.closesAt.getTime() - b.round.closesAt.getTime() : a.kind === "vote" ? -1 : 1));
+  const order = { organizer: 0, vote: 1, ideas: 2 };
+  needsVote.sort((a, b) => (a.kind === b.kind ? a.round.closesAt.getTime() - b.round.closesAt.getTime() : order[a.kind] - order[b.kind]));
   return { needsVote, events: eventCards, members, seats };
 }
 
@@ -142,7 +166,11 @@ export async function decisionData(decisionId: string, familyId: string, userId:
   ]);
   if (!decision) return null;
   const currentRound = rounds[rounds.length - 1] ?? null;
-  return { decision, event: found.event, rounds, currentRound, options, members, seats };
+  // Who physically cast each proxy vote, for "Eli (via Shai)".
+  const casterIds = [...new Set(rounds.flatMap((r) => r.votes.map((v) => v.castByUserId)))];
+  const casters = casterIds.length ? await db.query.users.findMany({ where: inArray(schema.users.id, casterIds), columns: { id: true, name: true } }) : [];
+  const casterName = new Map(casters.map((u) => [u.id, u.name.split(" ")[0]]));
+  return { decision, event: found.event, rounds, currentRound, options, members, seats, casterName };
 }
 
 /**
@@ -151,7 +179,7 @@ export async function decisionData(decisionId: string, familyId: string, userId:
  */
 export const summaryByToken = cache(async function summaryByToken(token: string) {
   const db = getDb();
-  const event = await db.query.events.findFirst({ where: eq(schema.events.shareToken, token), with: { family: { columns: { name: true } } } });
+  const event = await db.query.events.findFirst({ where: eq(schema.events.shareToken, token), with: { family: { columns: { name: true, inviteCode: true } } } });
   if (!event) return null;
   await settleDueRounds(event.familyId);
   const [cards, log, members] = await Promise.all([
