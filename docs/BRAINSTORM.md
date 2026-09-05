@@ -17,7 +17,7 @@ skeptic and an engineering-feasibility skeptic; the strongest spine was synthesi
 
 ## Vision
 
-FamPoll is one link per trip, pasted into the Messenger thread the family already has. The link opens an event (a trip, a weekend, Friday dinner) that holds every question about it, lets everyone vote by tapping their own name instead of signing in, narrows a crowded field with a second round when the first does not settle it, and keeps a "decided so far" list that goes back into the chat as text. The arguing stays in Messenger; the tally and the record move out. Spine: seats, not accounts (the only identity that survives Messenger's in-app browser); two round kinds; one log.
+FamPoll is one link per trip, pasted into the Messenger thread the family already has. The link opens an event (a trip, a weekend, Friday dinner) that holds every question about it, lets everyone vote after one social sign-in, narrows a crowded field with a second round when the first does not settle it, and keeps a "decided so far" list that goes back into the chat as text. The arguing stays in Messenger; the tally and the record move out. Spine: accountable seats (everyone signs in once; kids get proxy seats an adult votes from); two round kinds; one log.
 
 1. FamPoll: "Family votes, round by round." Ship under it.
 2. Show of Hands: "Ask the family. Settle it. Remember it." The pick if renaming.
@@ -29,15 +29,15 @@ The founder's family: two parents, kids of mixed ages, relatives in one Messenge
 
 - Shai, organizer parent: creates the event, pastes the link, runs rounds. Needs 30-second setup, who has not voted at a glance, one tap to move on.
 - Co-parent, co-organizer: closes or decides when Shai is busy.
-- Kid with a device (about 11): own seat via a personal link, adds "what about sushi".
+- Kid with a device (about 11): signs in with their own Google or Apple account, adds "what about sushi".
 - Kid without a device (about 8): a parent votes for them, recorded under the kid's name, "helped by".
-- Grandparent on Messenger: taps the link, taps "I'm Nana", votes. No login, no install.
-- Occasional relative: taps "I'm someone else", types a name, votes in this event only.
+- Grandparent on Messenger: taps the invite link, signs in with Facebook once, votes. No install, no password.
+- Occasional relative: gets the invite link, signs in, votes; an organizer removes them afterwards.
 
 ## The core loop
 
 1. Shai creates "Fall break 2026" (title, optional dates, who counts here), taps Share, and the event link fampoll.app/e/<token> lands in Messenger with a text preview: the only link the family ever sees.
-2. A fresh browser sees roster tiles; one tap on "I'm Nana" (or "I'm someone else" plus a name) lands on the first open question. A browser holding a seat lands on the event.
+2. A new person taps the invite link, sees who invited them, signs in with Google, Apple or Facebook, and joins in one tap. Anyone already signed in lands on the event.
 3. Shai asks a question: title, options one per line, deadline chip, plan (Quick vote or Narrow down, then final).
 4. Everyone taps an option; the card shows live counts, avatars, "4 of 6 in, waiting on Nana, Eli", and a New option badge when a kid adds sushi. A parent flips "Also vote for Eli" and taps again.
 5. The round closes when everyone has voted, at the deadline, or on Close now. A majority with half the roster in decides itself; otherwise the organizer gets one tap: Final round with the top 2, Go with the leader, or on a tie Tiebreak or Decide it.
@@ -97,8 +97,8 @@ stateDiagram-v2
 
 MVP (four weekends, with the v1 cuts):
 
-- Organizer sign-in with Google or an emailed 6-digit code: requirement 4 for the one person who needs an account.
-- Roster of seats, per-person links, tap-your-name join with a seat cookie, "I'm someone else" guest seats (a family_id-null member scoped to one event).
+- Sign-in with Google, Apple or Facebook for everyone (Clerk): requirement 4, and every vote is accountable to a person.
+- Family roster with one invite link that can be rotated; proxy seats for kids and relatives without accounts, created by organizers and voted from an adult's screen.
 - Event with title, dates, time zone, pinned roster, ordered decisions, one share link; Ask sheet with title, options, deadline chip, plan toggle: requirement 1.
 - Pick-one and pick-up-to-2 rounds, changeable votes, Skip, add and remove option: requirement 3.
 - Close on everyone-voted, deadline, or Close now; auto-decide on majority above quorum.
@@ -117,21 +117,19 @@ v1 (cut from MVP to make four weekends honest):
 
 Later:
 
-- Facebook Login: Live mode, data-deletion callback, likely business verification, zero gain.
-- Sign in with Apple: mandatory alongside Google the day a native wrapper is submitted; an email code does not satisfy guideline 4.8.
+- Facebook Login in production: Live mode, a data-deletion callback and possibly business verification. A Clerk development instance needs none of that.
+- Sign in with Apple in production: needs an Apple Developer membership and custom credentials; the development instance uses Clerk's shared ones.
 - Web push; ranked-choice finals; Messenger bot; native wrappers.
 
 ## Login and onboarding
 
-Only organizers sign in. Google first (brand verification so the consent screen says FamPoll), emailed 6-digit code second (not a magic link; those open in a different browser on mobile). Apple is irrelevant to a web app (guideline 4.8 binds native apps) and required only with a wrapper.
+Everyone signs in, once, with Google, Apple or Facebook through Clerk. That is the founder's requirement and it is what makes every vote accountable to a person. In a Clerk development instance all three providers work on Clerk's shared credentials, so nobody needs a Google Cloud, Apple Developer or Meta account to try the app; production needs the family's own provider credentials. No passwords, no magic links, no PINs.
 
-Everyone else is a seat. The organizer builds the roster once (first name, emoji) and shares the event link; a tap on "I'm Nana" sets a long-lived HttpOnly cookie binding that browser to the seat (one seat_session per device), reused across events. Personal links (/p/<token>) are the fallback the organizer DMs to one person: the page's client script auto-submits the claim POST, with a visible "I'm Nana" button for no-JS. GET on any link is side-effect free so Messenger's crawler cannot claim a seat. A leaked link means soft-delete and re-add the seat; rotation is v1.
+The organizer creates the family and shares one invite link. A person who taps it sees who invited them and how many people are in, signs in, and joins in one tap. Organizers can rotate the link (the old one stops working) and remove people; one family per account for now.
 
-Identity in every action: a seat may be cast by itself, its helper, or an event organizer. The actor resolves as the Clerk user's seat first, the cookie seat second; when both exist and differ, the ballot shows "Voting as Shai. Not you?". Kids are seats with a first name and an emoji, no account or email; the helper parent sees "Also vote for Eli" on their ballot, stored member = Eli, cast_by = parent; a kid with a device gets a personal link. No PINs.
+Kids and relatives without an account are proxy seats: a first name, created by an organizer, voted from that adult's screen ("Voting for Eli"), stored as member = Eli with cast_by = the adult, and counted like everyone else. Up to four per organizer, unique names, so a seat can never quietly become a second vote.
 
-Messenger's in-app browser: the voter path needs no OAuth, so it works as-is. The organizer sign-in page detects FBAN, FBAV, FB_IAB, Messenger, and Instagram user agents and shows one line: "Google sign-in may not work here; use the email code or open in your browser".
-
-Errors are plain: "This closed at 8pm", "This link is no longer valid".
+Messenger's in-app browser can break Google or Facebook OAuth. The sign-in page detects the FBAN, FBAV, FB_IAB, Messenger and Instagram user agents and shows one line, "Sign-in works best in your browser", with an Open in browser action; the invite link survives that round trip. Errors are plain: "This closed at 8pm", "This link is no longer valid, ask for a new one".
 
 ## Keeping track along the way
 
@@ -154,8 +152,7 @@ erDiagram
     USER ||--o{ MEMBER : "organizers"
     FAMILY ||--o{ MEMBER : "roster of seats"
     FAMILY ||--o{ EVENT : "has"
-    MEMBER ||--o{ SEAT_SESSION : "devices"
-    MEMBER ||--o{ MEMBER : "helps (proxy for kid)"
+    MEMBER ||--o{ MEMBER : "votes for (proxy seat)"
     EVENT ||--o{ EVENT_MEMBER : "who counts here"
     MEMBER ||--o{ EVENT_MEMBER : "joins"
     EVENT ||--o{ DECISION : "ordered questions"
@@ -173,11 +170,9 @@ erDiagram
         int ledger_seq
     }
     MEMBER {
-        text family_id FK "null for guests"
-        text event_id FK "guests only"
-        text user_id FK "null for seats"
+        text family_id FK
+        text user_id FK "null for proxy seats"
         text helped_by_member_id FK
-        text personal_token
         timestamp deleted_at
     }
     DECISION {
@@ -212,13 +207,13 @@ erDiagram
 
 ## Screen inventory
 
-Mobile-first at 390px, paper ground (#FAF6F0), Figtree at a 20px base in rem, orange (#E4702E) for "needs you", teal (#1D9A85) for "decided", 64px targets. The design canvas holds Login, Home, Main, Vote, RoundResults, NewDecision, and Summary (screens 2 to 8), drawn for the scaffold's every-voter-has-an-account model; Login, Main, and Vote need redrawing; screens 1, 9, and 10 are undesigned.
+Mobile-first at 390px, paper ground (#FAF6F0), Figtree at a 20px base in rem, orange (#E4702E) for "needs you", teal (#1D9A85) for "decided", 64px targets. The design canvas holds Login, Home, Main, Vote, RoundResults, NewDecision, and Summary (screens 2 to 8), drawn for the sign-in model that was chosen; screens 9 and 10 are undesigned.
 
-1. Event landing (unclaimed browser). "Shai invited you to Fall break 2026, 6 people, 2 questions open"; roster as large avatar tiles ("I'm Nana"); "I'm someone else" with a name field; "No passwords. We only keep first names"; "Sign in".
+1. Invite landing and sign-in. "Dana invited you to Summer '27 Trip, 5 people in"; Continue with Google, Apple, Facebook; "No passwords. We only keep your name and photo so the family knows who voted"; the in-app-browser hint.
 
-2. Organizer sign-in. Continue with Google; "Email me a code"; the in-app-browser hint.
+2. Sign-in without an invite. The same three buttons for someone who arrives at the front door; then "Start a family" or "Have an invite code?".
 
-3. Home (organizers). Needs your vote list; event cards ("3 of 5 decided, 1 open"); New event; People; past events.
+3. Home. Needs your vote list; event cards ("3 of 5 decided, 1 open"); New event; People; past events.
 
 4. Event page. Title, dates, "6 people" chip opening screen 10; receipt header; Share; Open now: question cards with round badge, options with counts and avatars, New option badge, "4 of 6 in, waiting on Nana, Eli", an organizer row Close now / Remove option / Dismiss while open, the close actions when closed; Decided: one line per question, losers struck through, Undo for ten minutes; floating Ask; Refresh.
 
@@ -230,23 +225,22 @@ Mobile-first at 390px, paper ground (#FAF6F0), Figtree at a 20px base in rem, or
 
 8. Event link preview and text summary. og:title and og:description from the ledger with ?v=; Copy as text.
 
-9. People (roster sheet). Seats with emoji and role chips (organizer, helper for Eli); add a seat; personal link per seat; remove seat (soft delete).
+9. People (roster sheet). Everyone with a role chip (organizer, proxy voted by Shai); the invite link with Share, Copy and Make a new link; add a proxy seat; Make organizer; remove.
 
-10. New / edit event (sheet). Title; optional dates; "Who counts here" toggles over the roster, all on by default, guests appended as they join; Create, then Share.
+10. New / edit event (sheet). Title; optional dates; "Who counts here" toggles over the roster, all on by default; Create, then Share.
 
 ## Recommended stack
 
-Keep the scaffold's frame: Next.js 16 App Router, TypeScript, Server Actions on Vercel Hobby; Clerk 7 for organizer auth; Postgres on Neon via Drizzle and the postgres.js driver over the pooled endpoint in the Node runtime, because the vote write needs a row lock and neon-http has no transactions; Tailwind 4; the pure engine in src/lib/engine/rounds.ts with the tests above; lazy settlement in lifecycle.ts; refetch on focus plus Refresh, no polling, no realtime, no cron.
+Keep the scaffold's frame: Next.js 16 App Router, TypeScript, Server Actions on Vercel Hobby; Clerk 7 for everyone's sign-in; Postgres on Neon via Drizzle and the postgres.js driver over the pooled endpoint in the Node runtime, because the vote write needs a row lock and neon-http has no transactions; Tailwind 4; the pure engine in src/lib/engine/rounds.ts with the tests above; lazy settlement in lifecycle.ts; refetch on focus plus Refresh, no polling, no realtime, no cron.
 
-Replace the scaffold's identity and engine, not just its schema. The scaffold makes every voter a Clerk user (proxy.ts protects /join, castVote calls requireMembership, votes.cast_by_user_id is NOT NULL to users) and its engine has ideas/shortlist/final rounds, plurality-wins finals, and a reopenRound that deletes later rounds. The delta: rewrite auth.ts, proxy.ts, the three action files, queries.ts, lifecycle.ts, rounds.ts and its tests; redraw four of nine screens and add two; add seat cookies, personal links with auto-claim, the OG text route, and the guest flow. Schema: add seat_sessions, event_members, round_options, ledger_entries (replacing activity); events.share_token, time_zone, ledger_seq; members.personal_token, emoji, event_id, helped_by_member_id, deleted_at, user_id nullable; decisions.decided_at, decided_by_member_id, decided_how; rounds.origin, close_reason, result; votes.cast_by_member_id replacing cast_by_user_id, option_id nullable with the NULLS NOT DISTINCT index; rewrite the three enums; drop options.eliminated_in_round_id. Four weekends with the v1 cuts held; six without.
+Keep the scaffold's identity as built: every voter is a Clerk user, organizers create proxy seats, one invite link per family. The delta from the scaffold is the engine and its vocabulary: two round kinds instead of ideas, shortlist and final; Skip ballots; quorum before any automatic outcome; an append-only ledger with sequence numbers for the share preview; per-event rosters; event time zones. Schema: add event_members, round_options and ledger_entries (replacing activity); events.time_zone and ledger_seq; decisions.decided_by_member_id and decided_how; rounds.origin and result; votes.option_id nullable for Skip. That is three to four weekends on the scaffold.
 
 Cost: $0 a month; a domain at about $12 a year; Apple Developer $99 a year only if a wrapper ships. Neon suspends after five idle minutes; a skeleton ballot covers the first tap.
 
 ## Risks and mitigations
 
 - Messenger gravity: if the link is not pasted into the thread within a week, the product is not working. Copy for Messenger is the primary action everywhere.
-- Cookie jars (webview, browser, home screen) forget the seat: the event link re-shows the roster; personal links re-claim.
-- Forwarded seat links let one sibling vote as another: ballots by name, "Not you?", soft-delete and re-add.
+- Messenger's in-app browser can break OAuth: the sign-in page detects it and offers Open in browser, and the invite link survives the round trip. A forwarded invite link only ever creates a named, removable member, never a second vote for someone.
 - Tiny electorates tie constantly: zero-vote options drop first, ties at the cut advance, one tiebreak then a human tap.
 - Wrong outcomes on the ledger: quorum before any automatic outcome, Undo for ten minutes, outcomes superseded not mutated, no ballot copying on Reopen.
 - Two parents proxy the same kid: last write wins, both logged; the conflict prompt is v1.
@@ -256,7 +250,7 @@ Cost: $0 a month; a domain at about $12 a year; Apple Developer $99 a year only 
 ## Open questions for the founder
 
 1. The real roster: who has Google, who is iPhone-only without Gmail, which kids have devices.
-2. Voters never sign in; only organizers use Google or an email code. Is that what you meant by "easy login with socials", and do you personally need Facebook Login?
+2. Resolved 5 Sep 2026: everyone signs in with a social account. Still open: is anyone in the family without all three of Google, Apple and Facebook? They would need a proxy seat.
 3. Do both parents organize? Confirms co-organizers in MVP.
 4. Live votes by name, as in Messenger, or hidden until close as the default?
 5. Should "pick up to 2" be round 1 whenever there are four or more options, or on demand only?
@@ -274,6 +268,6 @@ Cost: $0 a month; a domain at about $12 a year; Apple Developer $99 a year only 
 - Ranked choice, score voting, vetoes, vote weights; the only override is a logged Decide it.
 - Dependencies that lock questions; roles beyond organizer and voter.
 - Notifications to family members, per-vote pings, web push, SMS.
-- Facebook Login, Sign in with Apple before a wrapper, magic links, passkeys, kid PINs.
+- A no-account voting path (tap-your-name seats, guest seats, personal links), magic links, passkeys, kid PINs.
 - Realtime infrastructure, polling, cron, native apps, a Messenger bot, calendar export.
 - Anonymous-by-default voting, recap photos, templates, streak counters.
