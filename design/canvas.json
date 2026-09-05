@@ -1,19 +1,109 @@
 {
   "artboards": [
-    { "file": "Login.dc.html", "title": "1 · Sign in", "x": 0, "y": 0, "w": 390, "h": 844 },
-    { "file": "Home.dc.html", "title": "2 · Home", "x": 470, "y": 0, "w": 390, "h": 844 },
-    { "file": "Main.dc.html", "title": "3 · Trip", "x": 940, "y": 0, "w": 390, "h": 900 },
-    { "file": "Vote.dc.html", "title": "4 · Vote (round 2)", "x": 1410, "y": 0, "w": 390, "h": 844 },
-    { "file": "RoundResults.dc.html", "title": "5 · Round closed, final open", "x": 1880, "y": 0, "w": 390, "h": 930 },
-    { "file": "Summary.dc.html", "title": "6 · What we decided", "x": 2350, "y": 0, "w": 390, "h": 1020 },
-    { "file": "NewDecision.dc.html", "title": "7 · New decision", "x": 2820, "y": 0, "w": 390, "h": 844 },
-    { "file": "DirectionScoreboard.dc.html", "title": "Direction B · Scoreboard (low-fi)", "x": 0, "y": 1180, "w": 390, "h": 844 },
-    { "file": "DirectionPostcard.dc.html", "title": "Direction C · Postcard (low-fi)", "x": 470, "y": 1180, "w": 390, "h": 844 }
+    {
+      "file": "Login.dc.html",
+      "title": "1 · Sign in",
+      "x": 0,
+      "y": 0,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "Home.dc.html",
+      "title": "2 · Home",
+      "x": 470,
+      "y": 0,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "Main.dc.html",
+      "title": "3 · Trip",
+      "x": 940,
+      "y": 0,
+      "w": 390,
+      "h": 900
+    },
+    {
+      "file": "Vote.dc.html",
+      "title": "4 · Vote (round 2)",
+      "x": 1410,
+      "y": 0,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "RoundResults.dc.html",
+      "title": "5 · Round closed, final open",
+      "x": 1880,
+      "y": 0,
+      "w": 390,
+      "h": 930
+    },
+    {
+      "file": "Summary.dc.html",
+      "title": "6 · What we decided",
+      "x": 2350,
+      "y": 0,
+      "w": 390,
+      "h": 1020
+    },
+    {
+      "file": "NewDecision.dc.html",
+      "title": "7 · New decision",
+      "x": 2820,
+      "y": 0,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "DirectionScoreboard.dc.html",
+      "title": "Direction B · Scoreboard (low-fi)",
+      "x": 0,
+      "y": 1180,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "DirectionPostcard.dc.html",
+      "title": "Direction C · Postcard (low-fi)",
+      "x": 470,
+      "y": 1180,
+      "w": 390,
+      "h": 844
+    }
   ],
   "annotations": [
-    { "id": "direction", "x": 0, "y": -200, "w": 420, "text": "Direction A, “Kitchen table” (built out above): warm paper, Bricolage Grotesque + Figtree, one orange for “needs you”, teal for “decided”.\nStatic mockups, not clickable. Provider logos on the sign-in screen are placeholders." },
-    { "id": "flow", "x": 480, "y": -200, "w": 520, "text": "Flow: 1 Sign in from an invite link → 2 Home shows what needs your vote and every event in flight → 3 A trip groups its decisions in order, with a running “decided so far” → 4 Vote in round 2 of 3 (shortlist, pick up to 2) → 5 Round 2 closes and the final opens by itself; the organizer can reopen or just call it → 6 The shareable summary that goes back to Messenger.\n7 is the sheet for starting a new decision and choosing how many rounds." },
-    { "id": "alternates", "x": 0, "y": 1030, "w": 860, "text": "Two other directions, sketched low-fi on the trip screen only. B “Scoreboard”: dark, game-like, big tallies and a countdown; makes voting feel like sport, risks feeling competitive inside a family. C “Postcard”: editorial travel journal, serif, photo-led; beautiful for trips, weaker for Friday dinner. Say the word and I will build either out." }
+    {
+      "id": "direction",
+      "x": 0,
+      "y": -200,
+      "w": 420,
+      "text": "Direction A, “Kitchen table” (built out above): warm paper, Bricolage Grotesque + Figtree, one orange for “needs you”, teal for “decided”.\nStatic mockups, not clickable. Provider logos on the sign-in screen are placeholders."
+    },
+    {
+      "id": "flow",
+      "x": 480,
+      "y": -200,
+      "w": 520,
+      "text": "Flow: 1 Sign in from an invite link → 2 Home shows what needs your vote and every event in flight → 3 A trip groups its decisions in order, with a running “decided so far” → 4 Vote in round 2 of 3 (shortlist, pick up to 2) → 5 Round 2 closes and the final opens by itself; the organizer can reopen or just call it → 6 The shareable summary that goes back to Messenger.\n7 is the sheet for starting a new decision and choosing how many rounds."
+    },
+    {
+      "id": "alternates",
+      "x": 0,
+      "y": 1030,
+      "w": 860,
+      "text": "Two other directions, sketched low-fi on the trip screen only. B “Scoreboard”: dark, game-like, big tallies and a countdown; makes voting feel like sport, risks feeling competitive inside a family. C “Postcard”: editorial travel journal, serif, photo-led; beautiful for trips, weaker for Friday dinner. Say the word and I will build either out."
+    },
+    {
+      "id": "identity",
+      "x": 1040,
+      "y": -200,
+      "w": 520,
+      "text": "Open decision from the brief: these screens assume everyone signs in with Google, Apple or Facebook (the founder’s words). The brief argues voters should instead tap their own name from a roster with no sign-in, because Messenger’s in-app browser breaks OAuth, and only organizers sign in. Choosing that changes 1 Sign in, 3 Trip and 4 Vote, and adds an event-landing roster screen."
+    }
   ],
-  "launch": { "view": "canvas" }
+  "launch": {
+    "view": "canvas"
+  }
 }
