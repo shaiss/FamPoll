@@ -20,7 +20,7 @@ const STEPS: { key: keyof ReturnType<typeof setupStatus>; label: string; how: st
   {
     key: "databaseUrl",
     label: "DATABASE_URL",
-    how: "Any Postgres. On Vercel: Storage tab, create a Neon database, and the variable is added for you. Then run `npm run db:push` once against it.",
+    how: "Any Postgres. On Vercel: Storage tab, create a Neon database, and the variable is added for you. The next build creates the tables.",
   },
   {
     key: "appUrl",

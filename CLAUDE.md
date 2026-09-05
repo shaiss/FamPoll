@@ -7,7 +7,7 @@ Family voting app: decisions grouped under events, settled in rounds. Next.js 16
 - `npm run dev` / `npm run build` / `npm start`
 - `npm test` runs the rounds engine tests (`src/lib/engine/rounds.test.ts`)
 - `npm run typecheck`, `npm run lint`
-- `npm run db:push` applies the schema to `DATABASE_URL`; `npm run db:generate` writes SQL to `drizzle/` after a schema change
+- `npm run db:generate` writes SQL to `drizzle/` after a schema change; `npm run build` (and Vercel) applies pending migrations first via `scripts/migrate.mjs`, skipping when `DATABASE_URL` is unset
 
 ## Where things live
 
