@@ -4,12 +4,14 @@ container) plus a landscape scan of existing tools; each concept was critiqued b
 skeptic and an engineering-feasibility skeptic; the strongest spine was synthesized, gap-checked
 (18 gaps), and revised. Supporting material is in BRAINSTORM-APPENDIX.md. -->
 
-> **How this relates to the code in this repo.** The app scaffold was built from the founder's
-> literal requirements: everyone signs in with Google, Apple or Facebook, and kids get proxy seats.
-> This brief argues for a different identity model (voters tap their own name from a roster with no
-> sign-in; only organizers sign in), because Messenger's in-app browser breaks OAuth flows. That is
-> open question 2 below and is the founder's call. Everything else here (events, rounds, the record,
-> sharing back to Messenger) is consistent with the scaffold and refines it.
+> **How this relates to the code in this repo.** The app follows the founder's requirement that
+> everyone signs in with Google, Apple or Facebook, so every vote is accountable to a person; kids
+> and relatives without accounts get proxy seats an adult votes from. This brief argued for a
+> different identity model (voters tap their name from a roster with no sign-in) because Messenger's
+> in-app browser can break OAuth flows. **Decision, 5 Sep 2026: sign-in stays required.** The
+> Messenger-webview risk is real and is handled in the sign-in page copy instead. Everything else
+> here (events, rounds, the record, sharing back to Messenger) is consistent with the app and
+> refines it.
 
 # FamPoll product brief
 
