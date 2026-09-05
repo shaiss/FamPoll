@@ -2,7 +2,7 @@ import { UserButton } from "@clerk/nextjs";
 import { CopyButton } from "@/components/copy-button";
 import { ShareButton } from "@/components/share-button";
 import { Avatar, Button, Card, Field, inputClass, Pill, SectionLabel, Screen, TopBar } from "@/components/ui";
-import { addProxyMember, makeOrganizer, removeMember, removeProxyMember, renameFamily, rotateInviteCode } from "@/lib/actions/family";
+import { addProxyMember, leaveFamily, makeOrganizer, removeMember, removeProxyMember, renameFamily, rotateInviteCode } from "@/lib/actions/family";
 import { brand } from "@/lib/brand";
 import { requireMembership } from "@/lib/auth";
 import { readError } from "@/lib/flash";
@@ -98,6 +98,12 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
       ) : (
         <p className="text-xs text-ink-3">Organizers add seats for kids and relatives without accounts, and can make another adult an organizer.</p>
       )}
+
+      <form action={leaveFamily} className="flex justify-center">
+        <Button type="submit" variant="ghost" size="sm">
+          Leave this family
+        </Button>
+      </form>
 
       {organizer ? (
         <Card className="p-4">

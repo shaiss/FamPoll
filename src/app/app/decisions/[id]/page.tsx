@@ -2,7 +2,9 @@ import { notFound } from "next/navigation";
 import { LocalTime } from "@/components/time";
 import { Avatar, AvatarStack, Button, Card, Field, Icon, inputClass, Pill, Screen, SectionLabel, TopBar } from "@/components/ui";
 import { VoteForm } from "@/components/vote-form";
-import { addOption, closeRoundNow, extendRound, pickWinner, reopenRound, skipDecision, tiebreak } from "@/lib/actions/decisions";
+import { addOption, closeRoundNow, extendRound, pickWinner, removeOption, renameDecision, reopenRound, skipDecision, tiebreak } from "@/lib/actions/decisions";
+import { CopyText } from "@/components/copy-text";
+import { baseUrl } from "@/lib/url";
 import { requireMembership } from "@/lib/auth";
 import type { Member, Option, Round, Vote } from "@/lib/db/schema";
 import { ROUND_LABEL, isTiebreak, roundInstruction, roundLabel, roundSequence, tally, type RoundKind } from "@/lib/engine/rounds";
@@ -95,6 +97,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
   const data = await decisionData(id, family.id, user.id);
   if (!data) notFound();
   const { decision, event, rounds, currentRound, options, members, seats } = data;
+  const base = await baseUrl();
   const memberName = new Map(members.map((m) => [m.id, m.displayName]));
   const organizer = member.role === "organizer" || decision.createdByMemberId === member.id;
   const planning = event.status === "planning";
@@ -265,6 +268,13 @@ export default async function DecisionPage({ params, searchParams }: { params: P
             <LocalTime iso={open.closesAt.toISOString()} mode="closes" fallback={closesRelative(open.closesAt)} />
             {open.kind !== "ideas" ? ", or as soon as everyone has voted." : "."}
           </p>
+          <CopyText
+            lines={[
+              { text: `${decision.title} (${event.title})` },
+              { text: open.kind === "ideas" ? "Add your ideas, {closes}:" : `${roundLabel(open, rounds, decision.plan)}. Vote, {closes}:`, closesAtIso: open.closesAt.toISOString() },
+              { text: `${base}/app/decisions/${decision.id}` },
+            ]}
+          />
         </div>
       ) : null}
 
@@ -378,6 +388,32 @@ export default async function DecisionPage({ params, searchParams }: { params: P
               </form>
             ) : null}
           </div>
+          <form action={renameDecision} className="flex flex-col gap-2">
+            <input type="hidden" name="decisionId" value={decision.id} />
+            <Field label="Rename">
+              <input name="title" defaultValue={decision.title} required maxLength={100} className={`${inputClass} h-11 text-[15px]`} />
+            </Field>
+            <Button type="submit" variant="ghost" size="sm">
+              Save title
+            </Button>
+          </form>
+          {open && open.kind !== "final" && alive.length ? (
+            <div className="flex flex-col gap-2">
+              <span className="text-[13px] font-semibold text-ink-2">Remove an option</span>
+              <div className="flex flex-col gap-1.5">
+                {alive.map((o) => (
+                  <form key={o.id} action={removeOption} className="flex items-center justify-between gap-2 rounded-[10px] bg-sand px-3 py-1.5">
+                    <input type="hidden" name="decisionId" value={decision.id} />
+                    <input type="hidden" name="optionId" value={o.id} />
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold">{o.title}</span>
+                    <Button type="submit" variant="ghost" size="sm">
+                      Remove
+                    </Button>
+                  </form>
+                ))}
+              </div>
+            </div>
+          ) : null}
           {!decided && alive.length ? (
             <form action={pickWinner} className="flex flex-col gap-2">
               <input type="hidden" name="decisionId" value={decision.id} />

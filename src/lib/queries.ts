@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { cache } from "react";
 import { seatsForUser } from "./auth";
 import { getDb, schema } from "./db";
 import type { Decision, Event, Member, Option, Round } from "./db/schema";
@@ -148,7 +149,7 @@ export async function decisionData(decisionId: string, familyId: string, userId:
  * The only query behind an unauthenticated route. It selects just what the
  * public page shows: titles, outcomes, first names, and the plain-words log.
  */
-export async function summaryByToken(token: string) {
+export const summaryByToken = cache(async function summaryByToken(token: string) {
   const db = getDb();
   const event = await db.query.events.findFirst({ where: eq(schema.events.shareToken, token), with: { family: { columns: { name: true } } } });
   if (!event) return null;
@@ -160,12 +161,12 @@ export async function summaryByToken(token: string) {
   ]);
   const decisions = (cards.get(event.id) ?? []).map((c) => ({ decision: c.decision, rounds: c.rounds, currentRound: c.currentRound, outcome: c.outcome }));
   return { event, decisions, log, members };
-}
+});
 
-export async function familyByCode(code: string) {
+export const familyByCode = cache(async function familyByCode(code: string) {
   return getDb().query.families.findFirst({
     where: eq(schema.families.inviteCode, code),
     columns: { id: true, name: true, inviteCode: true },
     with: { members: { columns: { id: true, displayName: true, userId: true } } },
   });
-}
+});

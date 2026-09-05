@@ -330,3 +330,65 @@ export async function skipDecision(formData: FormData) {
   revalidateDecision(decision.id, decision.eventId);
   redirect(`/app/events/${decision.eventId}`);
 }
+
+/** Organizer only: drop an option (and its votes) while ideas or a shortlist are open. */
+export async function removeOption(formData: FormData) {
+  const decisionId = z.string().parse(formData.get("decisionId"));
+  const optionId = z.string().parse(formData.get("optionId"));
+  const { decision, member } = await requireOrganizer(decisionId);
+  const back = `/app/decisions/${decisionId}`;
+  if (decision.status !== "open") fail(back, "This decision is already settled.");
+  const db = getDb();
+  let problem: string | null = null;
+  await db.transaction(async (tx) => {
+    const open = await tx.query.rounds.findFirst({ where: and(eq(schema.rounds.decisionId, decision.id), eq(schema.rounds.status, "open")) });
+    const round = open ? await lockOpenRound(tx, open.id) : null;
+    if (!round) return void (problem = "Options can only be removed while a round is open.");
+    if (round.kind === "final") return void (problem = "Options can't be removed during the final. Reopen the previous round instead.");
+    const option = await tx.query.options.findFirst({ where: and(eq(schema.options.id, optionId), eq(schema.options.decisionId, decision.id), isNull(schema.options.eliminatedInRoundId)) });
+    if (!option) return void (problem = "That option isn't in the running.");
+    await tx.delete(schema.options).where(eq(schema.options.id, option.id));
+    await logActivity(tx, { eventId: decision.eventId, decisionId: decision.id, kind: "option_removed", message: `${member.displayName} removed "${option.title}".`, actorMemberId: member.id });
+  });
+  if (problem) fail(back, problem);
+  revalidateDecision(decision.id, decision.eventId);
+  redirect(back);
+}
+
+export async function renameDecision(formData: FormData) {
+  const decisionId = z.string().parse(formData.get("decisionId"));
+  const { decision, member } = await requireOrganizer(decisionId);
+  const back = `/app/decisions/${decisionId}`;
+  const title = String(formData.get("title") ?? "").trim().slice(0, 100);
+  if (!title) fail(back, "Give it a title.");
+  const db = getDb();
+  await db.transaction(async (tx) => {
+    await tx.update(schema.decisions).set({ title }).where(eq(schema.decisions.id, decision.id));
+    if (title !== decision.title) await logActivity(tx, { eventId: decision.eventId, decisionId: decision.id, kind: "decision_renamed", message: `${member.displayName} renamed "${decision.title}" to "${title}".`, actorMemberId: member.id });
+  });
+  revalidateDecision(decision.id, decision.eventId);
+  redirect(back);
+}
+
+/** Move a decision one step up or down in its event's order. */
+export async function moveDecision(formData: FormData) {
+  const decisionId = z.string().parse(formData.get("decisionId"));
+  const direction = formData.get("direction") === "up" ? -1 : 1;
+  const { decision } = await requireOrganizer(decisionId);
+  const db = getDb();
+  await db.transaction(async (tx) => {
+    const siblings = await tx.select().from(schema.decisions).where(eq(schema.decisions.eventId, decision.eventId)).orderBy(asc(schema.decisions.position), asc(schema.decisions.createdAt)).for("update");
+    const i = siblings.findIndex((d) => d.id === decision.id);
+    const j = i + direction;
+    if (i < 0 || j < 0 || j >= siblings.length) return;
+    // Renumber the whole list so positions are always distinct and gapless.
+    const order = siblings.map((d) => d.id);
+    [order[i], order[j]] = [order[j], order[i]];
+    for (let k = 0; k < order.length; k++) {
+      await tx.update(schema.decisions).set({ position: k + 1 }).where(eq(schema.decisions.id, order[k]));
+    }
+  });
+  revalidatePath(`/app/events/${decision.eventId}`);
+  redirect(`/app/events/${decision.eventId}`);
+}
+

@@ -126,3 +126,18 @@ export async function renameFamily(formData: FormData) {
   revalidatePath("/app");
   revalidatePath("/app/family");
 }
+
+/** Leave the family. An organizer can leave only if another organizer remains. */
+export async function leaveFamily() {
+  const { user, family, member } = await requireMembership();
+  const db = getDb();
+  if (member.role === "organizer") {
+    const others = await db.query.members.findMany({ where: and(eq(schema.members.familyId, family.id), eq(schema.members.role, "organizer")) });
+    if (others.filter((m) => m.id !== member.id).length === 0) fail("/app/family", "Make someone else an organizer before you leave.");
+  }
+  await db.transaction(async (tx) => {
+    await tx.delete(schema.members).where(and(eq(schema.members.familyId, family.id), eq(schema.members.managedByUserId, user.id)));
+    await tx.delete(schema.members).where(eq(schema.members.id, member.id));
+  });
+  redirect("/app/family/new");
+}

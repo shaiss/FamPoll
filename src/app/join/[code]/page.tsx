@@ -1,15 +1,26 @@
+import type { Metadata } from "next";
 import { SignInButton, SignUpButton } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { AvatarStack, Button, Card, LinkButton, Screen, Wordmark } from "@/components/ui";
 import { joinFamily } from "@/lib/actions/family";
 import { getMembership, requireUser } from "@/lib/auth";
+import { brand } from "@/lib/brand";
 import { hasClerk, hasDatabase } from "@/lib/env";
 import { readError } from "@/lib/flash";
 import { plural } from "@/lib/format";
 import { familyByCode } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({ params }: { params: Promise<{ code: string }> }): Promise<Metadata> {
+  if (!hasDatabase) return { title: "Invite" };
+  const { code } = await params;
+  const family = await familyByCode(code.toLowerCase());
+  const title = family ? `Join ${family.name} on ${brand.name}` : `Invite · ${brand.name}`;
+  const description = family ? `${plural(family.members.length, "person", "people")} in. Sign in with Google, Apple or Facebook to vote with them.` : "This invite link is no longer valid.";
+  return { title, description, robots: { index: false }, openGraph: { title, description, siteName: brand.name, type: "website" } };
+}
 
 export default async function JoinPage({ params, searchParams }: { params: Promise<{ code: string }>; searchParams: Promise<{ error?: string }> }) {
   const { code } = await params;
