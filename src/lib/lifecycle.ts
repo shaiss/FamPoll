@@ -3,6 +3,7 @@ import { getDb, schema, type Db } from "./db";
 import {
   closesAtFrom,
   cutAdvancing,
+  hasQuorum,
   isPastDeadline,
   maxPicksFor,
   nextStep,
@@ -17,7 +18,7 @@ import { newId } from "./ids";
 import type { Decision, Round } from "./db/schema";
 
 export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
-export type CloseReason = "deadline" | "everyone_voted" | "organizer";
+export type CloseReason = "deadline" | "everyone_voted" | "organizer" | "no_quorum";
 
 export async function logActivity(
   tx: Tx | Db,
@@ -57,6 +58,7 @@ export async function openRound(
   number: number,
   now: Date,
   only?: { optionIds: string[]; stampRoundId: string },
+  closesAt?: Date,
 ) {
   const [round] = await tx
     .insert(schema.rounds)
@@ -68,7 +70,7 @@ export async function openRound(
       status: "open",
       maxPicks: maxPicksFor(kind, decision.shortlistPicks),
       openedAt: now,
-      closesAt: closesAtFrom(now, decision.roundHours),
+      closesAt: closesAt ?? closesAtFrom(now, decision.roundHours),
     })
     .returning();
   if (only) {
@@ -97,10 +99,29 @@ export async function closeRoundAndAdvance(tx: Tx, roundId: string, reason: Clos
     orderBy: [asc(schema.options.createdAt)],
   });
   const votes = await tx.query.votes.findMany({ where: eq(schema.votes.roundId, round.id) });
+  const picks = votes.filter((v): v is typeof v & { optionId: string } => v.optionId !== null);
   const rows = tally(
     alive.map((o) => o.id),
-    votes.map((v) => ({ optionId: v.optionId })),
+    picks.map((v) => ({ optionId: v.optionId })),
   );
+
+  // A deadline with too few seats heard from does not decide anything.
+  if (reason === "deadline" && round.kind !== "ideas") {
+    const distinct = new Set(votes.map((v) => v.memberId)).size;
+    const event = await tx.query.events.findFirst({ where: eq(schema.events.id, decision.eventId), columns: { familyId: true } });
+    const eligible = event ? await eligibleSeatCount(tx, event.familyId) : 0;
+    if (!hasQuorum(distinct, eligible)) {
+      await tx.update(schema.rounds).set({ status: "closed", closedAt: now, closeReason: "no_quorum", tied: false }).where(eq(schema.rounds.id, round.id));
+      await tx.insert(schema.activity).values({
+        id: newId(),
+        eventId: decision.eventId,
+        decisionId: decision.id,
+        kind: "no_quorum",
+        message: `${decision.title}: time ran out with only ${distinct} of ${eligible} voting, so nothing was decided. The organizer can give it more time or call it.`,
+      });
+      return { kind: "stalled", reason: "Not enough people voted." };
+    }
+  }
 
   let aliveIds = alive.map((o) => o.id);
   let finalResult: ReturnType<typeof resolveFinal> | undefined;
@@ -123,7 +144,7 @@ export async function closeRoundAndAdvance(tx: Tx, roundId: string, reason: Clos
     .where(eq(schema.rounds.id, round.id));
 
   const titleOf = (id: string) => alive.find((o) => o.id === id)?.title ?? "an option";
-  const why = reason === "everyone_voted" ? "everyone voted" : reason === "deadline" ? "time was up" : "the organizer closed it";
+  const why = reason === "everyone_voted" ? "everyone voted" : reason === "deadline" ? "time was up" : reason === "no_quorum" ? "time was up" : "the organizer closed it";
   const log = (kind: string, message: string) =>
     tx.insert(schema.activity).values({ id: newId(), eventId: decision.eventId, decisionId: decision.id, kind, message });
 
@@ -141,6 +162,7 @@ export async function closeRoundAndAdvance(tx: Tx, roundId: string, reason: Clos
         .update(schema.decisions)
         .set({ status: "decided", outcomeOptionId: step.optionId, decidedAt: now })
         .where(eq(schema.decisions.id, decision.id));
+      await applyOutcome(tx, decision, step.optionId);
       const detail =
         round.kind === "final" && rows.length > 1
           ? ` ${titleOf(step.optionId)} won ${rows[0].count}–${rows[1].count}.`
@@ -158,6 +180,32 @@ export async function closeRoundAndAdvance(tx: Tx, roundId: string, reason: Clos
     }
   }
   return step;
+}
+
+/**
+ * What a decided outcome changes beyond the decision itself. Today: a dates
+ * decision writes the winning range onto the event.
+ */
+export async function applyOutcome(tx: Tx | Db, decision: Decision, optionId: string) {
+  if (!decision.setsEventDates) return;
+  const option = await tx.query.options.findFirst({ where: eq(schema.options.id, optionId) });
+  if (!option || !option.startsOn) return;
+  // Only a still-planning event takes the winning dates: a stale request or a
+  // lazily-settled due round must not overwrite dates once the event is done or
+  // archived. Log only when a row actually changed.
+  const [event] = await tx
+    .update(schema.events)
+    .set({ startsOn: option.startsOn, endsOn: option.endsOn ?? option.startsOn })
+    .where(and(eq(schema.events.id, decision.eventId), eq(schema.events.status, "planning")))
+    .returning({ id: schema.events.id });
+  if (!event) return;
+  await tx.insert(schema.activity).values({
+    id: newId(),
+    eventId: decision.eventId,
+    decisionId: decision.id,
+    kind: "event_dates_set",
+    message: `The event's dates are now ${option.title}.`,
+  });
 }
 
 /** Number of seats that may vote in this family: every member, proxies included. */

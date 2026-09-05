@@ -46,3 +46,44 @@ export async function setEventStatus(formData: FormData) {
   revalidatePath(back);
   revalidatePath("/app");
 }
+
+export async function updateEvent(formData: FormData) {
+  const { family, member } = await requireMembership();
+  const eventId = z.string().parse(formData.get("eventId"));
+  const back = `/app/events/${eventId}/edit`;
+  const db = getDb();
+  const event = await db.query.events.findFirst({ where: and(eq(schema.events.id, eventId), eq(schema.events.familyId, family.id)) });
+  if (!event) fail("/app", "That event is gone.");
+  if (member.role !== "organizer" && event.createdByMemberId !== member.id) fail(`/app/events/${eventId}`, "Only the organizer can edit this.");
+  const title = String(formData.get("title") ?? "").trim().slice(0, 80);
+  if (!title) fail(back, "Give the event a name.");
+  const kind = z.enum(kinds).catch(event.kind).parse(formData.get("kind"));
+  const startsOn = String(formData.get("startsOn") ?? "").trim() || null;
+  const endsOn = String(formData.get("endsOn") ?? "").trim() || null;
+  if ((startsOn && !dateRe.test(startsOn)) || (endsOn && !dateRe.test(endsOn))) fail(back, "That date doesn't look right.");
+  if (startsOn && endsOn && endsOn < startsOn) fail(back, "The end date is before the start date.");
+  await db.transaction(async (tx) => {
+    await tx.update(schema.events).set({ title, kind, startsOn, endsOn }).where(eq(schema.events.id, eventId));
+    const changes: string[] = [];
+    if (title !== event.title) changes.push(`renamed it to "${title}"`);
+    if (startsOn !== event.startsOn || endsOn !== event.endsOn) changes.push(startsOn ? `set the dates to ${startsOn}${endsOn ? ` to ${endsOn}` : ""}` : "cleared the dates");
+    if (changes.length) await logActivity(tx, { eventId, kind: "event_updated", message: `${member.displayName} ${changes.join(" and ")}.`, actorMemberId: member.id });
+  });
+  revalidatePath(`/app/events/${eventId}`);
+  revalidatePath("/app");
+  redirect(`/app/events/${eventId}`);
+}
+
+/** Organizer only. Removes the event and everything under it. */
+export async function deleteEvent(formData: FormData) {
+  const { family, member } = await requireMembership();
+  const eventId = z.string().parse(formData.get("eventId"));
+  if (member.role !== "organizer") fail(`/app/events/${eventId}`, "Only an organizer can delete an event.");
+  if (formData.get("confirm") !== "on") fail(`/app/events/${eventId}/edit`, "Tick the box to confirm you want to delete it.");
+  const db = getDb();
+  const event = await db.query.events.findFirst({ where: and(eq(schema.events.id, eventId), eq(schema.events.familyId, family.id)) });
+  if (!event) fail("/app", "That event is gone.");
+  await db.delete(schema.events).where(eq(schema.events.id, eventId));
+  revalidatePath("/app");
+  redirect("/app");
+}

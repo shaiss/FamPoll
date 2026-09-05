@@ -1,4 +1,5 @@
-import { Button, Card, Field, inputClass, Screen, TopBar } from "@/components/ui";
+import { Card, Field, inputClass, Screen, TopBar } from "@/components/ui";
+import { SubmitButton } from "@/components/submit-button";
 import { createEvent } from "@/lib/actions/events";
 import { requireMembership } from "@/lib/auth";
 import { readError } from "@/lib/flash";
@@ -48,7 +49,7 @@ export default async function NewEvent({ searchParams }: { searchParams: Promise
               <input type="date" name="endsOn" className={inputClass} />
             </Field>
           </div>
-          <Button type="submit">Create event</Button>
+          <SubmitButton pendingLabel="Creating…">Create event</SubmitButton>
         </form>
       </Card>
     </Screen>

@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { CopyText, type CopyLine } from "@/components/copy-text";
 import { ShareButton } from "@/components/share-button";
 import { LocalTime } from "@/components/time";
+import { MoveButton } from "@/components/move-button";
 import { AvatarStack, Button, Card, Icon, LinkButton, Screen, SectionLabel, TopBar } from "@/components/ui";
+import { moveDecision } from "@/lib/actions/decisions";
 import { setEventStatus } from "@/lib/actions/events";
 import { requireMembership } from "@/lib/auth";
 import { roundLabel } from "@/lib/engine/rounds";
@@ -19,17 +22,45 @@ export default async function EventPage({ params, searchParams }: { params: Prom
   if (!data) notFound();
   const { event, decisions, members, log } = data;
   const base = await baseUrl();
-  const shareUrl = `${base}/s/${event.shareToken}`;
+  // The version tag makes Messenger fetch a fresh preview instead of its cached one.
+  const shareUrl = `${base}/s/${event.shareToken}?v=${(log[0]?.createdAt ?? event.createdAt).getTime()}`;
   const memberName = new Map(members.map((m) => [m.id, m.displayName]));
   const decided = decisions.filter((d) => d.decision.status === "decided");
   const nights = nightsBetween(event.startsOn, event.endsOn);
   const organizer = member.role === "organizer" || event.createdByMemberId === member.id;
   const mySeatIds = new Set(members.filter((m) => m.userId === user.id || m.managedByUserId === user.id).map((m) => m.id));
   const planning = event.status === "planning";
+  const shareText = decided.length
+    ? decided.map((d) => `${d.decision.title}: ${d.outcome?.title ?? "decided"}`).join("; ")
+    : `Help us decide: ${event.title}`;
+  const summaryLines: CopyLine[] = [
+    { text: `${event.title}${event.startsOn ? ` (${formatDateRange(event.startsOn, event.endsOn)})` : ""}` },
+    ...decisions.map((d) => {
+      const r = d.currentRound;
+      if (d.decision.status === "decided") return { text: `• ${d.decision.title}: ${d.outcome?.title ?? "decided"}` };
+      if (d.decision.status === "skipped") return { text: `• ${d.decision.title}: set aside` };
+      if (r && r.status === "open") return { text: `• ${d.decision.title}: ${r.kind === "ideas" ? "gathering ideas" : roundLabel(r, d.rounds, d.decision.plan).toLowerCase()}, {closes}`, closesAtIso: r.closesAt.toISOString() };
+      return { text: `• ${d.decision.title}: waiting on the organizer` };
+    }),
+    { text: `See it all: ${shareUrl}` },
+  ];
 
   return (
     <Screen>
-      <TopBar back="/app" backLabel="Home" right={<ShareButton url={shareUrl} title={`${event.title} · what we’ve decided`} />} />
+      <TopBar
+        back="/app"
+        backLabel="Home"
+        right={
+          <div className="flex items-center gap-2">
+            {organizer ? (
+              <LinkButton href={`/app/events/${event.id}/edit`} variant="secondary" size="sm">
+                Edit
+              </LinkButton>
+            ) : null}
+            <ShareButton url={shareUrl} title={`${event.title} · what we’ve decided`} text={shareText} />
+          </div>
+        }
+      />
 
       <div className="flex flex-col gap-2">
         <h1 className="font-display text-[32px] font-bold leading-[1.05] tracking-[-0.025em]">{event.title}</h1>
@@ -74,6 +105,8 @@ export default async function EventPage({ params, searchParams }: { params: Prom
         )}
       </div>
 
+      <CopyText lines={summaryLines} label="Copy summary for Messenger" />
+
       <section className="flex flex-col gap-2.5">
         <SectionLabel right="In order">Decisions</SectionLabel>
         <div className="flex flex-col gap-2">
@@ -83,7 +116,9 @@ export default async function EventPage({ params, searchParams }: { params: Prom
             const skipped = d.decision.status === "skipped";
             const open = planning && d.decision.status === "open" && r?.status === "open";
             const done = r?.kind === "ideas" ? d.contributedMemberIds : d.votedMemberIds;
-            const iAmDone = r ? [...mySeatIds].every((sid) => done.includes(sid)) : false;
+            // Proxy seats never add ideas, so only judge my own seats' contribution in an ideas round.
+            const mySeatsHere = r?.kind === "ideas" ? [...mySeatIds].filter((sid) => members.find((m) => m.id === sid)?.userId != null) : [...mySeatIds];
+            const iAmDone = r ? mySeatsHere.every((sid) => done.includes(sid)) : false;
             if (open && r && r.kind !== "ideas") {
               return (
                 <Card key={d.decision.id} accent className="flex flex-col gap-3 p-3.5">
@@ -145,6 +180,33 @@ export default async function EventPage({ params, searchParams }: { params: Prom
               </Link>
             );
           })}
+          {organizer && planning && decisions.length > 1 ? (
+            <details className="rounded-card border border-line bg-card">
+              <summary className="cursor-pointer list-none px-4 py-3 text-sm font-bold text-ink-2 [&::-webkit-details-marker]:hidden">Reorder decisions</summary>
+              <div className="flex flex-col gap-1 border-t border-line p-2">
+                {decisions.map((d, i) => (
+                  <div key={d.decision.id} className="flex items-center gap-2 px-2 py-1">
+                    <span className="w-5 text-xs font-bold text-ink-3">{i + 1}</span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold">{d.decision.title}</span>
+                    <form action={moveDecision}>
+                      <input type="hidden" name="decisionId" value={d.decision.id} />
+                      <input type="hidden" name="direction" value="up" />
+                      <MoveButton disabled={i === 0} aria-label="Move up" className="h-9 w-9 rounded-[10px] bg-sand text-ink-2 disabled:opacity-30">
+                        ↑
+                      </MoveButton>
+                    </form>
+                    <form action={moveDecision}>
+                      <input type="hidden" name="decisionId" value={d.decision.id} />
+                      <input type="hidden" name="direction" value="down" />
+                      <MoveButton disabled={i === decisions.length - 1} aria-label="Move down" className="h-9 w-9 rounded-[10px] bg-sand text-ink-2 disabled:opacity-30">
+                        ↓
+                      </MoveButton>
+                    </form>
+                  </div>
+                ))}
+              </div>
+            </details>
+          ) : null}
           {planning ? (
             <Link
               href={`/app/events/${event.id}/decisions/new`}
@@ -161,7 +223,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
 
       {log.length ? (
         <section className="flex flex-col gap-2">
-          <SectionLabel>How we got here</SectionLabel>
+          <SectionLabel right={log.length > 8 ? <Link href={`/app/events/${event.id}/log`}>See all</Link> : undefined}>How we got here</SectionLabel>
           {log.slice(0, 8).map((a) => (
             <div key={a.id} className="flex gap-3 py-1">
               <div className="w-12 shrink-0 pt-0.5 text-xs font-semibold text-ink-3">

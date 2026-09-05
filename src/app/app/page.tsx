@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { LocalTime } from "@/components/time";
 import { AvatarStack, Card, Icon, LinkButton, Pill, Progress, SectionLabel, Screen } from "@/components/ui";
+import { ShareButton } from "@/components/share-button";
+import { CopyButton } from "@/components/copy-button";
+import { brand } from "@/lib/brand";
+import { baseUrl } from "@/lib/url";
 import { requireMembership } from "@/lib/auth";
 import { roundLabel } from "@/lib/engine/rounds";
 import { closesRelative, formatDate, formatDateRange, plural } from "@/lib/format";
@@ -19,6 +23,9 @@ function openLabel(c: { openVotingRounds: number; openIdeasRounds: number; open:
 export default async function Home() {
   const { user, family } = await requireMembership();
   const { needsVote, events, members, seats } = await homeData(family.id, user.id);
+  const base = await baseUrl();
+  const inviteUrl = `${base}/join/${family.inviteCode}`;
+  const soloOrganizer = members.filter((m) => m.userId !== null).length === 1;
   const live = events.filter((e) => e.event.status === "planning");
   const past = events.filter((e) => e.event.status !== "planning");
   const firstName = user.name.split(" ")[0];
@@ -33,8 +40,9 @@ export default async function Home() {
           </div>
           <h1 className="font-display text-[30px] font-bold leading-[1.05] tracking-[-0.02em]">Hi, {firstName}</h1>
         </div>
-        <Link href="/app/family" aria-label={family.name} className="flex items-center">
+        <Link href="/app/family" aria-label={family.name} className="flex items-center gap-2">
           <AvatarStack names={members.map((m) => m.displayName)} size={30} max={4} />
+          <span className="text-[13px] font-semibold text-ink-2">People</span>
         </Link>
       </div>
 
@@ -48,6 +56,23 @@ export default async function Home() {
           needsVote.map((n) => {
             const proxies = n.pendingSeats.filter((s) => s.userId !== user.id);
             const ideas = n.kind === "ideas";
+            if (n.kind === "organizer") {
+              const why = n.reason === "tie" ? "ended in a tie" : n.reason === "no_quorum" ? "closed with too few votes" : "closed with nothing to decide";
+              return (
+                <Card key={n.decision.id + n.round.id} className="flex flex-col gap-3 border-ink bg-ink p-4 text-white">
+                  <Pill tone="accent">On you</Pill>
+                  <div className="flex flex-col gap-0.5">
+                    <div className="font-display text-xl font-bold tracking-[-0.01em]">{n.decision.title}</div>
+                    <div className="text-[13px] text-line">
+                      {n.event.title} · {why}
+                    </div>
+                  </div>
+                  <LinkButton href={`/app/decisions/${n.decision.id}`} size="sm">
+                    Sort it out
+                  </LinkButton>
+                </Card>
+              );
+            }
             return (
               <Card key={n.decision.id + n.round.id} accent className="flex flex-col gap-3 p-4">
                 <div className="flex items-center justify-between">
@@ -81,6 +106,19 @@ export default async function Home() {
           })
         )}
       </section>
+
+      {soloOrganizer ? (
+        <Card accent className="flex flex-col gap-3 p-4">
+          <div className="flex flex-col gap-0.5">
+            <div className="font-display text-lg font-bold">It’s just you so far</div>
+            <p className="text-sm text-ink-2">Send the invite link so the family can vote too. You can also add a seat for a kid or grandparent on the People page.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <ShareButton url={inviteUrl} title={`Join ${family.name} on ${brand.name}`} text={`Vote with us on ${brand.name}`} />
+            <CopyButton text={inviteUrl} />
+          </div>
+        </Card>
+      ) : null}
 
       <section className="flex flex-col gap-2.5">
         <SectionLabel right={past.length ? <Link href="#past">See past</Link> : undefined}>Events</SectionLabel>

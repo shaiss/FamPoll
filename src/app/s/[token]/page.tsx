@@ -1,13 +1,32 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LocalTime } from "@/components/time";
 import { Card, Icon, LinkButton, Wordmark } from "@/components/ui";
-import { hasDatabase } from "@/lib/env";
+import { brand } from "@/lib/brand";
+import { hasClerk, hasDatabase } from "@/lib/env";
+import { auth } from "@clerk/nextjs/server";
+import { getMembership } from "@/lib/auth";
 import { roundLabel } from "@/lib/engine/rounds";
 import { closesRelative, formatDate, formatDateRange, nightsBetween, plural, relativeTime } from "@/lib/format";
 import { summaryByToken } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
+
+/** Text-only link preview for the family chat. Names and votes stay off it. */
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  if (!hasDatabase) return { title: "Summary" };
+  const { token } = await params;
+  const data = await summaryByToken(token);
+  if (!data) return { title: "Summary", robots: { index: false } };
+  const decided = data.decisions.filter((d) => d.decision.status === "decided");
+  const open = data.decisions.filter((d) => d.decision.status === "open" && d.currentRound?.status === "open");
+  const parts = [`${decided.length} of ${data.decisions.length} decided`];
+  if (open.length) parts.push(`${open.length === 1 ? open[0].decision.title : `${open.length} open`}${open.length === 1 && open[0].currentRound ? " · " + closesRelative(open[0].currentRound.closesAt) : ""}`);
+  const title = `${data.event.title} · what we’ve decided`;
+  const description = parts.join(" · ");
+  return { title, description, robots: { index: false }, openGraph: { title, description, siteName: brand.name, type: "website" } };
+}
 
 export default async function PublicSummary({ params }: { params: Promise<{ token: string }> }) {
   if (!hasDatabase) redirect("/setup");
@@ -25,6 +44,9 @@ export default async function PublicSummary({ params }: { params: Promise<{ toke
     );
   }
   const { event, decisions, log, members } = data;
+  const { userId } = hasClerk ? await auth() : { userId: null };
+  const membership = userId ? await getMembership(userId) : null;
+  const isMember = membership?.family.id === event.familyId;
   const decided = decisions.filter((d) => d.decision.status === "decided").length;
   const nights = nightsBetween(event.startsOn, event.endsOn);
   const updated = log[0]?.createdAt ?? event.createdAt;
@@ -99,7 +121,11 @@ export default async function PublicSummary({ params }: { params: Promise<{ toke
         </div>
       </Card>
 
-      <LinkButton href={`/app/events/${event.id}`}>In the family? Open it and vote</LinkButton>
+      {isMember ? (
+        <LinkButton href={`/app/events/${event.id}`}>Open it and vote</LinkButton>
+      ) : (
+        <LinkButton href={`/join/${event.family.inviteCode}`}>Join {event.family.name} to vote</LinkButton>
+      )}
 
       {log.length ? (
         <section className="flex flex-col gap-2">

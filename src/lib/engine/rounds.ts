@@ -183,3 +183,13 @@ export function roundLabel(round: RoundRef, all: RoundRef[], plan: Plan): string
   const remaining = round.kind === "final" ? 0 : seq.slice(seq.indexOf(round.kind) + 1).length;
   return `Round ${round.number} of ${round.number + remaining} · ${ROUND_LABEL[round.kind]}`;
 }
+
+/**
+ * Quorum for an automatic outcome at a deadline: at least half the seats
+ * took part (a Skip counts as taking part). Below it the round closes and
+ * waits for the organizer instead of deciding on a handful of votes.
+ */
+export function hasQuorum(distinctVoters: number, eligibleSeats: number): boolean {
+  if (eligibleSeats <= 0) return false;
+  return distinctVoters * 2 >= eligibleSeats;
+}

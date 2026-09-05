@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   closesAtFrom,
   cutAdvancing,
+  hasQuorum,
   isPastDeadline,
   isTiebreak,
   maxPicksFor,
@@ -207,5 +208,15 @@ describe("boundaries", () => {
   });
   it("does not call a lone zero-vote option a tie worth breaking", () => {
     assert.deepEqual(resolveFinal([{ optionId: "a", count: 0 }]), { winnerId: null, tiedIds: ["a"] });
+  });
+});
+
+describe("hasQuorum", () => {
+  it("needs half the seats, skips included", () => {
+    assert.equal(hasQuorum(1, 6), false);
+    assert.equal(hasQuorum(3, 6), true);
+    assert.equal(hasQuorum(2, 3), true);
+    assert.equal(hasQuorum(1, 3), false);
+    assert.equal(hasQuorum(0, 0), false);
   });
 });

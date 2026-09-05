@@ -74,3 +74,10 @@ export function closesRelative(closesAt: Date, now = new Date()): string {
   if (diff < 36 * 60 * 60 * 1000) return `closes in ${Math.round(diff / 3600000)}h`;
   return `closes in ${Math.round(diff / day)} days`;
 }
+
+/** "Jul 11–18 · 7 nights" for a date-range option. */
+export function dateRangeTitle(start: string, end: string | null): string {
+  const range = formatDateRange(start, end);
+  const n = nightsBetween(start, end ?? start);
+  return n ? `${range} · ${plural(n, "night")}` : range;
+}

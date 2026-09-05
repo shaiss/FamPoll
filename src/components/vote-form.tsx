@@ -10,7 +10,7 @@ export type VoteOption = { id: string; title: string; byline: string; voters: st
  * One ballot for one seat. Options are toggle buttons; the picks travel as
  * hidden inputs, so the pick limit is enforced before the form ever submits.
  */
-export function VoteForm({ roundId, memberId, maxPicks, options, initial, changed }: { roundId: string; memberId: string; maxPicks: number; options: VoteOption[]; initial: string[]; changed: boolean }) {
+export function VoteForm({ roundId, memberId, maxPicks, options, initial, changed, skipped }: { roundId: string; memberId: string; maxPicks: number; options: VoteOption[]; initial: string[]; changed: boolean; skipped: boolean }) {
   const [picked, setPicked] = useState<string[]>(initial);
   const single = maxPicks === 1;
   const toggle = (id: string) =>
@@ -22,6 +22,7 @@ export function VoteForm({ roundId, memberId, maxPicks, options, initial, change
   const label = picked.length === 0 ? (single ? "Pick one" : `Pick up to ${maxPicks}`) : changed ? `Change my vote · ${picked.length} picked` : `Cast my vote · ${picked.length} picked`;
 
   return (
+    <div className="flex flex-col gap-2">
     <form action={castVote} className="flex flex-col gap-2.5">
       <input type="hidden" name="roundId" value={roundId} />
       <input type="hidden" name="memberId" value={memberId} />
@@ -55,5 +56,14 @@ export function VoteForm({ roundId, memberId, maxPicks, options, initial, change
         {label}
       </Button>
     </form>
+    <form action={castVote} className="flex justify-center">
+      <input type="hidden" name="roundId" value={roundId} />
+      <input type="hidden" name="memberId" value={memberId} />
+      <input type="hidden" name="skip" value="1" />
+      <button type="submit" className="h-9 rounded-[10px] px-3 text-sm font-semibold text-ink-2 hover:bg-sand">
+        {skipped ? "Skipped · whatever you all pick" : "Skip this one · whatever you all pick"}
+      </button>
+    </form>
+    </div>
   );
 }
