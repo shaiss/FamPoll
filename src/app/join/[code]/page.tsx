@@ -7,7 +7,8 @@ import { Wordmark } from "@/components/wordmark";
 import { SubmitButton } from "@/components/submit-button";
 import { joinFamily } from "@/lib/actions/family";
 import { getMembership, requireUser } from "@/lib/auth";
-import { brand } from "@/lib/brand";
+import { brandFor } from "@/lib/brand";
+import { getLocale } from "@/lib/locale";
 import { hasClerk, hasDatabase } from "@/lib/env";
 import { readError } from "@/lib/flash";
 import { plural } from "@/lib/format";
@@ -17,12 +18,13 @@ import { isInAppBrowser } from "@/lib/ua";
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ code: string }> }): Promise<Metadata> {
+  const b = brandFor(await getLocale());
   if (!hasDatabase) return { title: "Invite" };
   const { code } = await params;
   const family = await familyByCode(code.toLowerCase());
-  const title = family ? `Join ${family.name} on ${brand.name}` : `Invite · ${brand.name}`;
+  const title = family ? `Join ${family.name} on ${b.name}` : `Invite · ${b.name}`;
   const description = family ? `${plural(family.members.length, "person", "people")} in. Sign in with Google, Apple or Facebook to vote with them.` : "This invite link is no longer valid.";
-  return { title, description, robots: { index: false }, openGraph: { title, description, siteName: brand.name, type: "website" } };
+  return { title, description, robots: { index: false }, openGraph: { title, description, siteName: b.name, type: "website" } };
 }
 
 export default async function JoinPage({ params, searchParams }: { params: Promise<{ code: string }>; searchParams: Promise<{ error?: string }> }) {

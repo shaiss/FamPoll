@@ -17,9 +17,10 @@ export default async function Landing() {
     if (userId && hasDatabase) redirect("/app");
   }
   const inApp = await isInAppBrowser();
-  const t = messages(await getLocale());
+  const locale = await getLocale();
+  const t = messages(locale);
   return (
-    <main className="relative mx-auto flex min-h-dvh w-full max-w-md flex-col justify-between overflow-hidden px-6 pb-10 pt-20">
+    <main lang={locale} className="relative mx-auto flex min-h-dvh w-full max-w-md flex-col justify-between overflow-hidden px-6 pb-10 pt-20">
       <div className="pointer-events-none absolute -right-36 -top-32 h-80 w-80 rounded-full bg-accent-tint" />
       <div className="pointer-events-none absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-teal-tint" />
       <div className="relative flex flex-col gap-7">
@@ -56,7 +57,7 @@ export default async function Landing() {
           </>
         )}
         <Link href="/setup" className="sr-only">
-          Setup
+          {t.finishSetup}
         </Link>
       </div>
     </main>
