@@ -308,8 +308,6 @@ export type Messages = {
   pubContinueSocial: string;
   pubImNewHere: string;
   pubNoPasswords: string;
-  pubAlreadyInFamily: string;
-  pubGoToNamedFamily: string;
   pubJoiningPending: string;
   pubJoinAsName: string;
   pubMetaSummaryTitle: string;
@@ -412,7 +410,6 @@ export type Messages = {
   errFamnameFamilyRequired: string;
   errFaminviteCodeInvalid: string;
   errFaminviteLinkExpired: string;
-  errFamalreadyInFamily: string;
   errFamorganizerOnlyAddSeat: string;
   errFamnamePersonRequired: string;
   errFamduplicateNameAddInitial: string;
@@ -874,8 +871,6 @@ const en: Messages = {
   pubContinueSocial: "Continue with Google, Apple or Facebook",
   pubImNewHere: "I’m new here",
   pubNoPasswords: "No passwords. We only keep your name and photo so the family knows who voted.",
-  pubAlreadyInFamily: "You’re already in {family}. One family per person for now.",
-  pubGoToNamedFamily: "Go to {family}",
   pubJoiningPending: "Joining…",
   pubJoinAsName: "Join as {name}",
   pubMetaSummaryTitle: "Summary",
@@ -978,7 +973,6 @@ const en: Messages = {
   errFamnameFamilyRequired: "Give the group a name.",
   errFaminviteCodeInvalid: "That invite code doesn't look right.",
   errFaminviteLinkExpired: "That invite link is not valid any more. Ask for a fresh one.",
-  errFamalreadyInFamily: "You're already in {family}. One family per person for now.",
   errFamorganizerOnlyAddSeat: "Only an organizer can add a seat for someone. Ask them to make you an organizer.",
   errFamnamePersonRequired: "Give them a name.",
   errFamduplicateNameAddInitial: "There is already a {name} here. Add a last initial.",
@@ -1440,8 +1434,6 @@ const es: Messages = {
   pubContinueSocial: "Continuar con Google, Apple o Facebook",
   pubImNewHere: "Soy nuevo aquí",
   pubNoPasswords: "Sin contraseñas. Solo guardamos tu nombre y foto para que la familia sepa quién votó.",
-  pubAlreadyInFamily: "Ya estás en {family}. Por ahora, una familia por persona.",
-  pubGoToNamedFamily: "Ir a {family}",
   pubJoiningPending: "Uniéndote…",
   pubJoinAsName: "Unirte como {name}",
   pubMetaSummaryTitle: "Resumen",
@@ -1544,7 +1536,6 @@ const es: Messages = {
   errFamnameFamilyRequired: "Ponle un nombre al grupo.",
   errFaminviteCodeInvalid: "Ese código de invitación no parece correcto.",
   errFaminviteLinkExpired: "Ese enlace de invitación ya no es válido. Pide uno nuevo.",
-  errFamalreadyInFamily: "Ya estás en {family}. Por ahora, una familia por persona.",
   errFamorganizerOnlyAddSeat: "Solo un organizador puede agregar un lugar para alguien. Pídele que te haga organizador.",
   errFamnamePersonRequired: "Ponle un nombre.",
   errFamduplicateNameAddInitial: "Ya hay un {name} aquí. Agrega la inicial del apellido.",
@@ -2006,8 +1997,6 @@ const ptBR: Messages = {
   pubContinueSocial: "Continuar com Google, Apple ou Facebook",
   pubImNewHere: "Sou novo por aqui",
   pubNoPasswords: "Sem senhas. Guardamos apenas seu nome e foto para a família saber quem votou.",
-  pubAlreadyInFamily: "Você já está em {family}. Por enquanto, uma família por pessoa.",
-  pubGoToNamedFamily: "Ir para {family}",
   pubJoiningPending: "Entrando…",
   pubJoinAsName: "Entrar como {name}",
   pubMetaSummaryTitle: "Resumo",
@@ -2110,7 +2099,6 @@ const ptBR: Messages = {
   errFamnameFamilyRequired: "Dê um nome ao grupo.",
   errFaminviteCodeInvalid: "Esse código de convite não parece certo.",
   errFaminviteLinkExpired: "Esse link de convite não é mais válido. Peça um novo.",
-  errFamalreadyInFamily: "Você já está em {family}. Por enquanto, uma família por pessoa.",
   errFamorganizerOnlyAddSeat: "Só um organizador pode adicionar um lugar para alguém. Peça para te tornarem organizador.",
   errFamnamePersonRequired: "Dê um nome a essa pessoa.",
   errFamduplicateNameAddInitial: "Já tem um {name} aqui. Adicione a inicial do sobrenome.",
