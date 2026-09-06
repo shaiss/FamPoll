@@ -240,3 +240,20 @@ export async function renameMember(formData: FormData) {
   revalidatePath("/app");
 }
 
+
+/**
+ * "Hide my votes by default": every ballot this seat casts starts hidden. Your
+ * own seat, or a proxy seat you vote for. Privacy is personal, so an organizer
+ * cannot flip it for anyone else.
+ */
+export async function setVotePrivacy(formData: FormData) {
+  const { user, family } = await requireMembership();
+  const memberId = z.string().parse(formData.get("memberId"));
+  const votesHidden = formData.get("votesHidden") === "1";
+  const db = getDb();
+  const target = await db.query.members.findFirst({ where: and(eq(schema.members.id, memberId), eq(schema.members.familyId, family.id)) });
+  if (!target) fail("/app/family", "That person is not in this family.");
+  if (target.userId !== user.id && target.managedByUserId !== user.id) fail("/app/family", "Only that person, or whoever votes for them, can change this.");
+  await db.update(schema.members).set({ votesHidden }).where(eq(schema.members.id, target.id));
+  revalidatePath("/app/family");
+}

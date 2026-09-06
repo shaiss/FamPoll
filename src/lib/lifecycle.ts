@@ -5,8 +5,8 @@ import {
   cutAdvancing,
   hasQuorum,
   isPastDeadline,
-  maxPicksFor,
   nextStep,
+  nominalPicks,
   resolveFinal,
   roundSequence,
   shouldAutoClose,
@@ -14,6 +14,7 @@ import {
   type NextStep,
   type RoundKind,
 } from "./engine/rounds";
+import { clipTitle } from "./format";
 import { newId } from "./ids";
 import type { Decision, Round } from "./db/schema";
 
@@ -50,6 +51,7 @@ export async function lockOpenRound(tx: Tx, roundId: string): Promise<Round | nu
  * Opens the next round. For a tiebreak, `only` restricts the ballot to the tied
  * options; the others are stamped as eliminated in `stampRoundId` (the round
  * that tied), so a later reopen of that round brings them back correctly.
+ * The round stores the decision's nominal picks; the live cap is effectivePicks().
  */
 export async function openRound(
   tx: Tx | Db,
@@ -68,7 +70,7 @@ export async function openRound(
       number,
       kind,
       status: "open",
-      maxPicks: maxPicksFor(kind, decision.shortlistPicks),
+      maxPicks: nominalPicks(kind, decision.voteType, decision.picks),
       openedAt: now,
       closesAt: closesAt ?? closesAtFrom(now, decision.roundHours),
     })
@@ -143,7 +145,7 @@ export async function closeRoundAndAdvance(tx: Tx, roundId: string, reason: Clos
     .set({ status: "closed", closedAt: now, closeReason: reason, tied: step.kind === "tie" })
     .where(eq(schema.rounds.id, round.id));
 
-  const titleOf = (id: string) => alive.find((o) => o.id === id)?.title ?? "an option";
+  const titleOf = (id: string) => clipTitle(alive.find((o) => o.id === id)?.title ?? "an option", decision.format);
   const why = reason === "everyone_voted" ? "everyone voted" : reason === "deadline" ? "time was up" : reason === "no_quorum" ? "time was up" : "the organizer closed it";
   const log = (kind: string, message: string) =>
     tx.insert(schema.activity).values({ id: newId(), eventId: decision.eventId, decisionId: decision.id, kind, message });

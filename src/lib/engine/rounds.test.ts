@@ -3,12 +3,17 @@ import { describe, it } from "node:test";
 import {
   closesAtFrom,
   cutAdvancing,
+  effectivePicks,
   hasQuorum,
   isPastDeadline,
   isTiebreak,
-  maxPicksFor,
   nextStep,
+  nominalPicks,
+  optionCountRule,
+  optionTitleLimit,
+  plansFor,
   resolveFinal,
+  roundInstruction,
   roundLabel,
   roundSequence,
   shouldAutoClose,
@@ -23,12 +28,79 @@ describe("roundSequence", () => {
   });
 });
 
-describe("maxPicksFor", () => {
-  it("gives no picks in ideas, N in shortlist, one in final", () => {
-    assert.equal(maxPicksFor("ideas", 2), 0);
-    assert.equal(maxPicksFor("shortlist", 2), 2);
-    assert.equal(maxPicksFor("shortlist", 0), 1);
-    assert.equal(maxPicksFor("final", 2), 1);
+describe("plansFor", () => {
+  it("settles A or B in one round and leaves the rest open", () => {
+    assert.deepEqual(plansFor("ab"), ["quick"]);
+    assert.deepEqual(plansFor("single"), ["quick", "shortlist_final", "ideas_shortlist_final"]);
+    assert.deepEqual(plansFor("multi"), ["quick", "shortlist_final", "ideas_shortlist_final"]);
+  });
+});
+
+describe("nominalPicks", () => {
+  it("follows the vote type, not the round kind", () => {
+    assert.equal(nominalPicks("ideas", "multi", 3), 0);
+    assert.equal(nominalPicks("shortlist", "ab", 3), 1);
+    assert.equal(nominalPicks("shortlist", "single", 3), 1);
+    assert.equal(nominalPicks("final", "single", 3), 1);
+    assert.equal(nominalPicks("shortlist", "multi", 3), 3);
+    assert.equal(nominalPicks("final", "multi", 3), 3);
+  });
+  it("never lets pick several mean pick one", () => {
+    assert.equal(nominalPicks("final", "multi", 1), 2);
+    assert.equal(nominalPicks("final", "multi", 0), 2);
+  });
+});
+
+describe("effectivePicks", () => {
+  it("caps at one fewer than the options on the ballot", () => {
+    assert.equal(effectivePicks(2, 5), 2);
+    assert.equal(effectivePicks(3, 3), 2);
+    assert.equal(effectivePicks(2, 2), 1);
+    assert.equal(effectivePicks(1, 5), 1);
+  });
+  it("keeps an ideas round at zero and a voting round at least one", () => {
+    assert.equal(effectivePicks(0, 5), 0);
+    assert.equal(effectivePicks(2, 1), 1);
+    assert.equal(effectivePicks(2, 0), 1);
+  });
+  it("pins the legacy mapping: a migrated pick-several final is pick-one between two, pick-two among three", () => {
+    assert.equal(effectivePicks(nominalPicks("final", "multi", 2), 2), 1);
+    assert.equal(effectivePicks(nominalPicks("final", "multi", 2), 3), 2);
+    assert.equal(effectivePicks(nominalPicks("shortlist", "multi", 2), 5), 2);
+  });
+});
+
+describe("optionCountRule", () => {
+  it("wants exactly two for A or B whatever the plan", () => {
+    assert.deepEqual(optionCountRule("ab", "quick"), { min: 2, max: 2 });
+    assert.deepEqual(optionCountRule("ab", "ideas_shortlist_final"), { min: 2, max: 2 });
+  });
+  it("needs two for a quick pick-one, three when people pick several or a shortlist follows", () => {
+    assert.deepEqual(optionCountRule("single", "quick"), { min: 2, max: null });
+    assert.deepEqual(optionCountRule("multi", "quick"), { min: 3, max: null });
+    assert.deepEqual(optionCountRule("single", "shortlist_final"), { min: 3, max: null });
+    assert.deepEqual(optionCountRule("multi", "shortlist_final"), { min: 3, max: null });
+  });
+  it("lets an ideas round start empty", () => {
+    assert.deepEqual(optionCountRule("single", "ideas_shortlist_final"), { min: 0, max: null });
+  });
+});
+
+describe("optionTitleLimit", () => {
+  it("gives long text room and keeps the rest short", () => {
+    assert.equal(optionTitleLimit("text"), 80);
+    assert.equal(optionTitleLimit("date"), 80);
+    assert.equal(optionTitleLimit("long_text"), 500);
+  });
+});
+
+describe("roundInstruction", () => {
+  it("says how many to pick in every voting round", () => {
+    assert.equal(roundInstruction("ideas", 0, 2), "Add ideas. Nobody votes yet.");
+    assert.equal(roundInstruction("shortlist", 2, 2), "Pick up to 2. The top 2 go to the final.");
+    assert.equal(roundInstruction("shortlist", 1, 3), "Pick one. The top 3 go to the final.");
+    assert.equal(roundInstruction("final", 1, 2), "Pick one. The most votes wins.");
+    assert.equal(roundInstruction("final", 3, 2), "Pick up to 3. The most votes wins.");
   });
 });
 

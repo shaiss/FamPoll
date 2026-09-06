@@ -2,7 +2,8 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { cache } from "react";
 import { seatsForUser } from "./auth";
 import { getDb, schema } from "./db";
-import type { Decision, Event, Member, Option, Round } from "./db/schema";
+import type { Decision, Event, Member, Option, Round, Vote } from "./db/schema";
+import { effectivePicks } from "./engine/rounds";
 import { settleDueRounds } from "./lifecycle";
 
 export type DecisionCard = {
@@ -11,10 +12,12 @@ export type DecisionCard = {
   rounds: Round[];
   currentRound: Round | null;
   aliveCount: number;
-  /** Seats that voted in the current round. */
+  /** Seats that voted in the current round. Participation is public; picks are not. */
   votedMemberIds: string[];
-  /** Seats that added an idea in the current round (ideas rounds). */
+  /** Seats that added an idea in the current round (ideas rounds). For the viewer's own "done" checks only; never rendered. */
   contributedMemberIds: string[];
+  /** The contributors who can be named: anonymous ideas keep their author out of every avatar stack. */
+  publicContributorIds: string[];
   outcome: Option | null;
 };
 
@@ -31,6 +34,8 @@ export type NeedsVote = {
   pendingSeats: Member[];
   votedNames: string[];
   totalSeats: number;
+  /** The live pick cap for a voting round (0 for ideas). */
+  picks: number;
 };
 
 async function decisionCards(eventIds: string[]): Promise<Map<string, DecisionCard[]>> {
@@ -51,7 +56,9 @@ async function decisionCards(eventIds: string[]): Promise<Map<string, DecisionCa
     const last = d.rounds[d.rounds.length - 1] ?? null;
     const currentRound = rounds[rounds.length - 1] ?? null;
     const votedMemberIds = last ? [...new Set(last.votes.map((v) => v.memberId))] : [];
-    const contributedMemberIds = last ? [...new Set(d.options.filter((o) => o.addedInRoundId === last.id && o.addedByMemberId).map((o) => o.addedByMemberId as string))] : [];
+    const added = last ? d.options.filter((o) => o.addedInRoundId === last.id && o.addedByMemberId) : [];
+    const contributedMemberIds = [...new Set(added.map((o) => o.addedByMemberId as string))];
+    const publicContributorIds = [...new Set(added.filter((o) => !o.anonymous).map((o) => o.addedByMemberId as string))];
     const list = out.get(d.eventId) ?? [];
     list.push({
       decision: d,
@@ -60,6 +67,7 @@ async function decisionCards(eventIds: string[]): Promise<Map<string, DecisionCa
       aliveCount: d.options.filter((o) => !o.eliminatedInRoundId).length,
       votedMemberIds,
       contributedMemberIds,
+      publicContributorIds,
       outcome: d.outcomeOptionId ? (d.options.find((o) => o.id === d.outcomeOptionId) ?? null) : null,
     });
     out.set(d.eventId, list);
@@ -107,6 +115,7 @@ export async function homeData(familyId: string, userId: string) {
             pendingSeats: [],
             votedNames: c.votedMemberIds.map((id) => memberName.get(id) ?? "?"),
             totalSeats: members.length,
+            picks: effectivePicks(r.maxPicks, c.aliveCount),
           });
         }
         continue;
@@ -127,8 +136,10 @@ export async function homeData(familyId: string, userId: string) {
           round: r,
           rounds: c.rounds,
           pendingSeats,
-          votedNames: done.map((id) => memberName.get(id) ?? "?"),
+          // Ideas: only name contributors who signed their idea.
+          votedNames: (r.kind === "ideas" ? c.publicContributorIds : c.votedMemberIds).map((id) => memberName.get(id) ?? "?"),
           totalSeats: r.kind === "ideas" ? members.filter((m) => m.userId !== null).length : members.length,
+          picks: effectivePicks(r.maxPicks, c.aliveCount),
         });
       }
     }
@@ -152,12 +163,16 @@ export async function eventData(eventId: string, familyId: string) {
   return { event, decisions: cards.get(event.id) ?? [], members, log };
 }
 
+/** A round as the decision page sees it. While open, `votes` holds only the viewer's own seats' ballots. */
+export type RoundView = Round & { votes: Vote[]; voterMemberIds: string[] };
+export type OptionView = Option & { addedBy: Member | null };
+
 export async function decisionData(decisionId: string, familyId: string, userId: string) {
   const db = getDb();
   const found = await db.query.decisions.findFirst({ where: eq(schema.decisions.id, decisionId), with: { event: true } });
   if (!found || found.event.familyId !== familyId) return null;
   await settleDueRounds(familyId);
-  const [decision, rounds, options, members, seats] = await Promise.all([
+  const [decision, allRounds, rawOptions, members, seats] = await Promise.all([
     db.query.decisions.findFirst({ where: eq(schema.decisions.id, decisionId) }),
     db.query.rounds.findMany({ where: eq(schema.rounds.decisionId, decisionId), orderBy: [asc(schema.rounds.number)], with: { votes: true } }),
     db.query.options.findMany({ where: eq(schema.options.decisionId, decisionId), orderBy: [asc(schema.options.createdAt)], with: { addedBy: true } }),
@@ -165,12 +180,29 @@ export async function decisionData(decisionId: string, familyId: string, userId:
     seatsForUser(familyId, userId),
   ]);
   if (!decision) return null;
+  const mySeatIds = new Set(seats.map((s) => s.id));
+  // Ballots are sealed while a round is open: the page gets everyone's participation
+  // but only the viewer's own picks, so nobody is swayed by (or can peek at) the rest.
+  const rounds: RoundView[] = allRounds.map((r) => ({
+    ...r,
+    votes: r.status === "open" ? r.votes.filter((v) => mySeatIds.has(v.memberId)) : r.votes,
+    voterMemberIds: [...new Set(r.votes.map((v) => v.memberId))],
+  }));
+  // An anonymous idea never carries its author to the page.
+  const options: OptionView[] = rawOptions.map((o) => (o.anonymous ? { ...o, addedBy: null, addedByMemberId: null } : o));
   const currentRound = rounds[rounds.length - 1] ?? null;
+  // "Hide my vote" starts from the seat's most recent ballot in this decision, else its standing preference.
+  const hiddenDefault = new Map<string, boolean>();
+  for (const seat of seats) {
+    const mine = allRounds.flatMap((r) => r.votes.filter((v) => v.memberId === seat.id).map((v) => ({ n: r.number, v })));
+    mine.sort((a, b) => b.n - a.n || b.v.createdAt.getTime() - a.v.createdAt.getTime());
+    hiddenDefault.set(seat.id, mine[0]?.v.anonymous ?? seat.votesHidden);
+  }
   // Who physically cast each proxy vote, for "Eli (via Shai)".
   const casterIds = [...new Set(rounds.flatMap((r) => r.votes.map((v) => v.castByUserId)))];
   const casters = casterIds.length ? await db.query.users.findMany({ where: inArray(schema.users.id, casterIds), columns: { id: true, name: true } }) : [];
   const casterName = new Map(casters.map((u) => [u.id, u.name.split(" ")[0]]));
-  return { decision, event: found.event, rounds, currentRound, options, members, seats, casterName };
+  return { decision, event: found.event, rounds, currentRound, options, members, seats, casterName, hiddenDefault };
 }
 
 /**

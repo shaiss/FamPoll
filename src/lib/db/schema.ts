@@ -15,6 +15,10 @@ export const memberRole = pgEnum("member_role", ["organizer", "member"]);
 export const eventKind = pgEnum("event_kind", ["trip", "outing", "meal", "party", "other"]);
 export const eventStatus = pgEnum("event_status", ["planning", "done", "archived"]);
 export const decisionPlan = pgEnum("decision_plan", ["quick", "shortlist_final", "ideas_shortlist_final"]);
+/** What an option is: a short line, a paragraph, or a date range. One per decision. */
+export const decisionFormat = pgEnum("decision_format", ["text", "long_text", "date"]);
+/** How each voting round is voted: A or B, pick one of several, or pick up to N. */
+export const voteType = pgEnum("vote_type", ["ab", "single", "multi"]);
 export const decisionStatus = pgEnum("decision_status", ["open", "decided", "skipped"]);
 export const roundKind = pgEnum("round_kind", ["ideas", "shortlist", "final"]);
 export const roundStatus = pgEnum("round_status", ["open", "closed"]);
@@ -56,6 +60,8 @@ export const members = pgTable(
     managedByUserId: text("managed_by_user_id").references(() => users.id),
     displayName: text("display_name").notNull(),
     role: memberRole("role").notNull().default("member"),
+    /** Seat preference: every ballot this seat casts starts with "hide my vote" ticked. */
+    votesHidden: boolean("votes_hidden").notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [
@@ -103,16 +109,20 @@ export const decisions = pgTable(
     title: text("title").notNull(),
     position: integer("position").notNull().default(0),
     plan: decisionPlan("plan").notNull().default("quick"),
+    format: decisionFormat("format").notNull().default("text"),
+    voteType: voteType("vote_type").notNull().default("single"),
     status: decisionStatus("status").notNull().default("open"),
     /** How long each round stays open before it closes on its own. */
     roundHours: integer("round_hours").notNull().default(72),
     anyoneCanAddOptions: boolean("anyone_can_add_options").notNull().default(true),
-    /** Picks per person in a shortlist round. */
-    shortlistPicks: integer("shortlist_picks").notNull().default(2),
+    /** Picks per person when the vote type is "pick several" (column name is historical). */
+    picks: integer("shortlist_picks").notNull().default(2),
     /** How many options advance from a shortlist round to the final. */
     advanceCount: integer("advance_count").notNull().default(2),
-    /** When true, the winning option's date range becomes the event's dates. */
+    /** Date format only: when true, the winning option's date range becomes the event's dates. */
     setsEventDates: boolean("sets_event_dates").notNull().default(false),
+    /** Asked anonymously: the asker is recorded but never named in the UI or the log. */
+    anonymous: boolean("anonymous").notNull().default(false),
     outcomeOptionId: text("outcome_option_id"),
     decidedAt: timestamp("decided_at", { withTimezone: true }),
     createdByMemberId: text("created_by_member_id")
@@ -133,7 +143,7 @@ export const rounds = pgTable(
     number: integer("number").notNull(),
     kind: roundKind("kind").notNull(),
     status: roundStatus("status").notNull().default("open"),
-    /** 0 for an ideas round, N for a shortlist, 1 for a final. */
+    /** Nominal picks at open time: 0 for ideas, 1 for A/B and pick-one, N for pick-several. The live cap is effectivePicks(). */
     maxPicks: integer("max_picks").notNull().default(1),
     openedAt: timestamp("opened_at", { withTimezone: true }).notNull().defaultNow(),
     closesAt: timestamp("closes_at", { withTimezone: true }).notNull(),
@@ -159,6 +169,8 @@ export const options = pgTable(
     startsOn: date("starts_on"),
     endsOn: date("ends_on"),
     addedByMemberId: text("added_by_member_id").references(() => members.id),
+    /** Suggested anonymously: the adder is recorded but never named. */
+    anonymous: boolean("anonymous").notNull().default(false),
     addedInRoundId: text("added_in_round_id").references(() => rounds.id),
     /** Null while the option is still alive. */
     eliminatedInRoundId: text("eliminated_in_round_id").references(() => rounds.id),
@@ -183,6 +195,8 @@ export const votes = pgTable(
     castByUserId: text("cast_by_user_id")
       .notNull()
       .references(() => users.id),
+    /** A hidden ballot: counted like any other, never attributed in the UI. */
+    anonymous: boolean("anonymous").notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [

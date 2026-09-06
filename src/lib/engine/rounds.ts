@@ -3,19 +3,33 @@
  * Everything about how a decision moves from ideas to an outcome lives here so
  * it can be unit-tested and explained in one place.
  *
- * Plans
+ * Three independent choices describe a decision:
+ *
+ * Format: what an option is. Exactly one per decision.
+ *   text       a short line
+ *   long_text  a paragraph
+ *   date       a date range
+ *
+ * Vote type: how each voting round is voted.
+ *   ab       exactly two options, pick one; one round only, nobody adds options
+ *   single   multiple choice: pick one of several
+ *   multi    pick several: each person picks up to N (never all of them)
+ *
+ * Plan: the round structure.
  *   quick                  final
  *   shortlist_final        shortlist -> final
  *   ideas_shortlist_final  ideas -> shortlist -> final
  *
- * Round kinds
+ * Round kinds are stages, and no longer imply how you vote:
  *   ideas      people add options; nobody votes
- *   shortlist  approval vote: each person picks up to N; the top K advance
- *   final      each person picks one; the top option wins
+ *   shortlist  everyone votes; the top K advance
+ *   final      everyone votes; the top option wins
  */
 
 export type Plan = "quick" | "shortlist_final" | "ideas_shortlist_final";
 export type RoundKind = "ideas" | "shortlist" | "final";
+export type Format = "text" | "long_text" | "date";
+export type VoteType = "ab" | "single" | "multi";
 
 export type TallyRow = { optionId: string; count: number };
 
@@ -24,6 +38,47 @@ export const PLAN_LABEL: Record<Plan, string> = {
   shortlist_final: "Shortlist, then final",
   ideas_shortlist_final: "Ideas, shortlist, final",
 };
+
+export const FORMAT_LABEL: Record<Format, string> = {
+  text: "Text",
+  long_text: "Long text",
+  date: "Dates",
+};
+
+export const VOTE_TYPE_LABEL: Record<VoteType, string> = {
+  ab: "A or B",
+  single: "Multiple choice",
+  multi: "Pick several",
+};
+
+export const FORMATS: Format[] = ["text", "long_text", "date"];
+export const VOTE_TYPES: VoteType[] = ["ab", "single", "multi"];
+export const PLANS: Plan[] = ["quick", "shortlist_final", "ideas_shortlist_final"];
+
+/** The plans a vote type allows. A or B is settled in one round: two options never need narrowing. */
+export function plansFor(voteType: VoteType): Plan[] {
+  if (voteType === "ab") return ["quick"];
+  return PLANS;
+}
+
+/** Longest option title per format. Dates derive their title, so they get the short limit. */
+export function optionTitleLimit(format: Format): number {
+  return format === "long_text" ? 500 : 80;
+}
+
+export type OptionCountRule = { min: number; max: number | null };
+
+/**
+ * How many options a decision needs at creation. A or B is exactly two. A quick
+ * vote needs two, or three when people pick several (otherwise the cap makes it
+ * pick-one). A shortlist needs three. An ideas round can start empty.
+ */
+export function optionCountRule(voteType: VoteType, plan: Plan): OptionCountRule {
+  if (voteType === "ab") return { min: 2, max: 2 };
+  if (plan === "ideas_shortlist_final") return { min: 0, max: null };
+  if (plan === "shortlist_final") return { min: 3, max: null };
+  return { min: voteType === "multi" ? 3 : 2, max: null };
+}
 
 export const ROUND_LABEL: Record<RoundKind, string> = {
   ideas: "Ideas",
@@ -46,11 +101,25 @@ export function planRoundCount(plan: Plan): number {
   return roundSequence(plan).length;
 }
 
-/** Picks a person gets in a round of this kind. */
-export function maxPicksFor(kind: RoundKind, shortlistPicks: number): number {
+/**
+ * Picks a person gets in a round, before the live cap: none in an ideas round,
+ * one for A or B and multiple choice, N for pick several. Stored on the round.
+ */
+export function nominalPicks(kind: RoundKind, voteType: VoteType, picks: number): number {
   if (kind === "ideas") return 0;
-  if (kind === "shortlist") return Math.max(1, shortlistPicks);
+  if (voteType === "multi") return Math.max(2, picks);
   return 1;
+}
+
+/**
+ * The cap that actually applies, given how many options are on the ballot: you
+ * can never approve everything (that is what Skip is for), so a pick-several
+ * final between two options is pick-one, and an option added mid-round raises
+ * the cap again. Always at least one for a voting round.
+ */
+export function effectivePicks(nominal: number, optionCount: number): number {
+  if (nominal <= 0) return 0;
+  return Math.max(1, Math.min(nominal, optionCount - 1));
 }
 
 export function closesAtFrom(openedAt: Date, roundHours: number): Date {
@@ -153,14 +222,12 @@ export function nextStep(plan: Plan, closed: RoundKind, alive: string[], advance
   return { kind: "round", round: next };
 }
 
-/** The instruction line under a round title. */
+/** The instruction line under a round title. `maxPicks` is the effective cap. */
 export function roundInstruction(kind: RoundKind, maxPicks: number, advanceCount: number): string {
   if (kind === "ideas") return "Add ideas. Nobody votes yet.";
-  if (kind === "shortlist") {
-    const picks = maxPicks === 1 ? "Pick one." : `Pick up to ${maxPicks}.`;
-    return `${picks} The top ${advanceCount} go to the final.`;
-  }
-  return "Pick one. The most votes wins.";
+  const picks = maxPicks === 1 ? "Pick one." : `Pick up to ${maxPicks}.`;
+  if (kind === "shortlist") return `${picks} The top ${advanceCount} go to the final.`;
+  return `${picks} The most votes wins.`;
 }
 
 export type RoundRef = { kind: RoundKind; number: number };

@@ -5,7 +5,7 @@ Family voting app: decisions grouped under events, settled in rounds. Next.js 16
 ## Commands
 
 - `npm run dev` / `npm run build` / `npm start`
-- `npm test` runs the rounds engine tests (`src/lib/engine/rounds.test.ts`)
+- `npm test` runs the unit tests (`src/**/*.test.ts`: the rounds engine and the format helpers)
 - `npm run typecheck`, `npm run lint`
 - `npm run db:generate` writes SQL to `drizzle/` after a schema change; `npm run build` (and Vercel) applies pending migrations first via `scripts/migrate.mjs`, skipping when `DATABASE_URL` is unset. Because migrations run at build time, every migration must be backward-compatible with the previous deployment (add columns as nullable or with defaults, never drop or rename in the same release), so a rollback or an in-flight request keeps working. The runner holds a Postgres advisory lock, so concurrent builds serialize.
 
