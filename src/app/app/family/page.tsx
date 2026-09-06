@@ -1,20 +1,21 @@
 import { UserButton } from "@clerk/nextjs";
 import { CopyButton } from "@/components/copy-button";
+import { GroupSwitcher } from "@/components/group-switcher";
 import { ShareButton } from "@/components/share-button";
 import { Avatar, Button, Card, Field, inputClass, Pill, SectionLabel, Screen, TopBar } from "@/components/ui";
-import { addProxyMember, deleteFamily, demoteOrganizer, leaveFamily, makeOrganizer, reassignProxy, removeMember, renameMember, removeProxyMember, renameFamily, rotateInviteCode, setVotePrivacy } from "@/lib/actions/family";
+import { addExistingUserToGroup, addProxyMember, deleteFamily, demoteOrganizer, leaveFamily, makeOrganizer, reassignProxy, removeMember, renameMember, removeProxyMember, renameFamily, rotateInviteCode, setVotePrivacy } from "@/lib/actions/family";
 import { brand } from "@/lib/brand";
 import { requireMembership } from "@/lib/auth";
 import { readError } from "@/lib/flash";
 import { getMessages } from "@/lib/locale-server";
 import { interpolate } from "@/lib/messages";
-import { familyMembers } from "@/lib/queries";
+import { familyMembers, invitableUsers } from "@/lib/queries";
 import { baseUrl } from "@/lib/url";
 
 export default async function FamilyPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const { user, family, member } = await requireMembership();
+  const { user, family, member, memberships } = await requireMembership();
   const error = readError(await searchParams);
-  const [members, base] = await Promise.all([familyMembers(family.id), baseUrl()]);
+  const [members, invitable, base] = await Promise.all([familyMembers(family.id), invitableUsers(family.id, user.id), baseUrl()]);
   const t = await getMessages();
   const inviteUrl = `${base}/join/${family.inviteCode}`;
   const organizer = member.role === "organizer";
@@ -23,7 +24,16 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
 
   return (
     <Screen>
-      <TopBar back="/app" backLabel={t.familybackHome} right={<UserButton />} />
+      <TopBar
+        back="/app"
+        backLabel={t.familybackHome}
+        right={
+          <div className="flex items-center gap-2">
+            <GroupSwitcher memberships={memberships} activeId={family.id} />
+            <UserButton />
+          </div>
+        }
+      />
       <div className="flex flex-col gap-1">
         <h1 className="font-display text-[32px] font-bold leading-[1.05] tracking-[-0.025em]">{family.name}</h1>
         <p className="text-sm text-ink-2">{t.familyintroSubtitle}</p>
@@ -40,6 +50,7 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
         <p className="text-xs text-ink-3">{t.familyinviteJoinNote}</p>
         {organizer ? (
           <form action={rotateInviteCode}>
+            <input type="hidden" name="familyId" value={family.id} />
             <Button type="submit" variant="ghost" size="sm">
               {t.familyrotateInvite}
             </Button>
@@ -71,6 +82,7 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
               <div className="flex shrink-0 items-center gap-1.5">
                 {organizer && !proxy && m.role !== "organizer" ? (
                   <form action={makeOrganizer}>
+                    <input type="hidden" name="familyId" value={family.id} />
                     <input type="hidden" name="memberId" value={m.id} />
                     <Button type="submit" variant="ghost" size="sm">
                       {t.familymakeOrganizer}
@@ -79,6 +91,7 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
                 ) : null}
                 {canDemote && !proxy && m.role === "organizer" ? (
                   <form action={demoteOrganizer}>
+                    <input type="hidden" name="familyId" value={family.id} />
                     <input type="hidden" name="memberId" value={m.id} />
                     <Button type="submit" variant="ghost" size="sm">
                       {t.familymakeMember}
@@ -87,6 +100,7 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
                 ) : null}
                 {canRemove ? (
                   <form action={proxy ? removeProxyMember : removeMember}>
+                    <input type="hidden" name="familyId" value={family.id} />
                     <input type="hidden" name="memberId" value={m.id} />
                     <Button type="submit" variant="ghost" size="sm">
                       {t.familyremove}
@@ -101,6 +115,7 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
               <details>
                 <summary className="cursor-pointer list-none text-xs font-semibold text-ink-3 [&::-webkit-details-marker]:hidden">{t.familyrenameToggle}</summary>
                 <form action={renameMember} className="mt-2 flex gap-2">
+                  <input type="hidden" name="familyId" value={family.id} />
                   <input type="hidden" name="memberId" value={m.id} />
                   <input name="displayName" defaultValue={m.displayName} required maxLength={60} className={`${inputClass} h-10 text-[15px]`} aria-label={t.familynameFieldAria} />
                   <Button type="submit" variant="ghost" size="sm">
@@ -118,6 +133,7 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
                   </p>
                   <p className="text-xs text-ink-3">{t.familyprivacyExplain}</p>
                   <form action={setVotePrivacy}>
+                    <input type="hidden" name="familyId" value={family.id} />
                     <input type="hidden" name="memberId" value={m.id} />
                     <input type="hidden" name="votesHidden" value={m.votesHidden ? "0" : "1"} />
                     <Button type="submit" variant="ghost" size="sm">
@@ -131,6 +147,7 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
               <details>
                 <summary className="cursor-pointer list-none text-xs font-semibold text-ink-3 [&::-webkit-details-marker]:hidden">{t.familyproxyManagerToggle}</summary>
                 <form action={reassignProxy} className="mt-2 flex gap-2">
+                  <input type="hidden" name="familyId" value={family.id} />
                   <input type="hidden" name="memberId" value={m.id} />
                   <select name="toMemberId" aria-label={t.familyhandToAria} className={`${inputClass} h-10 flex-1 text-[15px]`} defaultValue={organizers.find((o) => o.userId === m.managedByUserId)?.id ?? organizers[0].id}>
                     {organizers.map((o) => (
@@ -154,6 +171,7 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
       {organizer ? (
         <Card className="p-4">
           <form action={addProxyMember} className="flex flex-col gap-3">
+            <input type="hidden" name="familyId" value={family.id} />
             <Field label={t.familyaddProxyLabel} hint={t.familyaddProxyHint}>
               <input name="displayName" required maxLength={60} placeholder={t.familyaddProxyPlaceholder} className={inputClass} />
             </Field>
@@ -166,7 +184,33 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
         <p className="text-xs text-ink-3">{t.familynonOrganizerNote}</p>
       )}
 
+      {organizer && invitable.length > 0 ? (
+        <Card className="flex flex-col gap-3 p-4">
+          <SectionLabel>{t.familyAddFromOtherGroups}</SectionLabel>
+          <p className="text-xs text-ink-3">{t.familyAddFromOtherGroupsHint}</p>
+          <div className="flex flex-col gap-2">
+            {invitable.map((u) => (
+              <div key={u.userId} className="flex items-center gap-3">
+                <Avatar name={u.name} size={32} ring="#ffffff" />
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <div className="truncate font-semibold">{u.name}</div>
+                  <div className="truncate text-xs text-ink-2">{interpolate(t.familyInGroups, { groups: u.groups.join(", ") })}</div>
+                </div>
+                <form action={addExistingUserToGroup}>
+                  <input type="hidden" name="familyId" value={family.id} />
+                  <input type="hidden" name="userId" value={u.userId} />
+                  <Button type="submit" variant="secondary" size="sm">
+                    {t.familyAddPersonButton}
+                  </Button>
+                </form>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
+
       <form action={leaveFamily} className="flex justify-center">
+        <input type="hidden" name="familyId" value={family.id} />
         <Button type="submit" variant="ghost" size="sm">
           {t.familyleave}
         </Button>
@@ -175,6 +219,7 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
       {organizer ? (
         <Card className="p-4">
           <form action={renameFamily} className="flex flex-col gap-3">
+            <input type="hidden" name="familyId" value={family.id} />
             <Field label={t.familyrenameFamilyLabel}>
               <input name="name" defaultValue={family.name} required maxLength={60} className={inputClass} />
             </Field>
@@ -189,6 +234,7 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
         <details className="rounded-card border border-line bg-card p-4">
           <summary className="cursor-pointer list-none text-xs font-semibold text-ink-3 [&::-webkit-details-marker]:hidden">{t.familydeleteToggle}</summary>
           <form action={deleteFamily} className="mt-3 flex flex-col gap-3">
+            <input type="hidden" name="familyId" value={family.id} />
             <label className="flex items-center gap-2 text-sm text-ink-2">
               <input type="checkbox" name="confirm" /> {interpolate(t.familydeleteConfirm, { family: family.name })}
             </label>

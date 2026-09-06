@@ -8,7 +8,7 @@ import { brandFor } from "@/lib/brand";
 import { getLocale, getMessages } from "@/lib/locale-server";
 import { hasClerk, hasDatabase } from "@/lib/env";
 import { auth } from "@clerk/nextjs/server";
-import { getMembership } from "@/lib/auth";
+import { getMemberships } from "@/lib/auth";
 import { roundLabel } from "@/lib/engine/rounds";
 import { clipTitle, closesRelative, formatDate, formatDateRange, nightsBetween, relativeTime } from "@/lib/format";
 import { interpolate } from "@/lib/messages";
@@ -53,8 +53,8 @@ export default async function PublicSummary({ params }: { params: Promise<{ toke
   }
   const { event, decisions, log, members } = data;
   const { userId } = hasClerk ? await auth() : { userId: null };
-  const membership = userId ? await getMembership(userId) : null;
-  const isMember = membership?.family.id === event.familyId;
+  const memberships = userId ? await getMemberships(userId) : [];
+  const isMember = memberships.some((m) => m.family.id === event.familyId);
   const decided = decisions.filter((d) => d.decision.status === "decided").length;
   const nights = nightsBetween(event.startsOn, event.endsOn);
   const updated = log[0]?.createdAt ?? event.createdAt;

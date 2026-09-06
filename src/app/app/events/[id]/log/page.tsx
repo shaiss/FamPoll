@@ -2,7 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { LocalTime } from "@/components/time";
 import { Screen, SectionLabel, TopBar } from "@/components/ui";
-import { requireMembership } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { getDb, schema } from "@/lib/db";
 import { formatDate } from "@/lib/format";
 import { getLocale, getMessages } from "@/lib/locale-server";
@@ -11,8 +11,8 @@ import { eventData } from "@/lib/queries";
 
 export default async function EventLog({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { family } = await requireMembership();
-  const data = await eventData(id, family.id);
+  const user = await requireUser();
+  const data = await eventData(id, user.id);
   if (!data) notFound();
   const log = await getDb().query.activity.findMany({ where: eq(schema.activity.eventId, id), orderBy: [desc(schema.activity.createdAt)], limit: 300 });
   const t = await getMessages();
