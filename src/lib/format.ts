@@ -81,3 +81,15 @@ export function dateRangeTitle(start: string, end: string | null): string {
   const n = nightsBetween(start, end ?? start);
   return n ? `${range} · ${plural(n, "night")}` : range;
 }
+
+/**
+ * A long-text option is a paragraph; lists, log lines and copy text want one
+ * short line of it. Other formats pass through untouched.
+ */
+export function clipTitle(title: string, format: "text" | "long_text" | "date", max = 70): string {
+  if (format !== "long_text") return title;
+  const line = title.split(/\r?\n/).map((l) => l.trim()).find(Boolean) ?? "";
+  const clipped = line.length < title.trim().length;
+  if (line.length <= max && !clipped) return line;
+  return line.slice(0, Math.max(1, max - 1)).trimEnd() + "…";
+}

@@ -86,7 +86,7 @@ export default async function Home() {
                   <div className="font-display text-xl font-bold tracking-[-0.01em]">{n.decision.title}</div>
                   <div className="text-[13px] text-ink-2">
                     {n.event.title}
-                    {!ideas && n.round.maxPicks > 1 ? ` · pick up to ${n.round.maxPicks}` : ""}
+                    {!ideas && n.picks > 1 ? ` · pick up to ${n.picks}` : ""}
                     {proxies.length ? ` · also for ${proxies.map((p) => p.displayName).join(", ")}` : ""}
                   </div>
                 </div>

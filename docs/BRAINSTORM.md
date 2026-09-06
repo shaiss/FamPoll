@@ -39,7 +39,7 @@ The founder's family: two parents, kids of mixed ages, relatives in one Messenge
 1. Shai creates "Fall break 2026" (title, optional dates, who counts here), taps Share, and the event link fampoll.app/e/<token> lands in Messenger with a text preview: the only link the family ever sees.
 2. A new person taps the invite link, sees who invited them, signs in with Google, Apple or Facebook, and joins in one tap. Anyone already signed in lands on the event.
 3. Shai asks a question: title, options one per line, deadline chip, plan (Quick vote or Narrow down, then final).
-4. Everyone taps an option; the card shows live counts, avatars, "4 of 6 in, waiting on Nana, Eli", and a New option badge when a kid adds sushi. A parent flips "Also vote for Eli" and taps again.
+4. Everyone taps an option; the card shows who has voted so far ("4 of 6 in, waiting on Nana, Eli"); picks stay sealed until the round closes, and a New option badge when a kid adds sushi. A parent flips "Also vote for Eli" and taps again.
 5. The round closes when everyone has voted, at the deadline, or on Close now. A majority with half the roster in decides itself; otherwise the organizer gets one tap: Final round with the top 2, Go with the leader, or on a tie Tiebreak or Decide it.
 6. The outcome moves to "Decided so far" at the top of the event, with Undo for ten minutes; Shai taps Copy for Messenger: "Friday dinner: Taco Palace (round 2, 4-2)".
 
@@ -101,6 +101,7 @@ MVP (four weekends, with the v1 cuts):
 - Family roster with one invite link that can be rotated; proxy seats for kids and relatives without accounts, created by organizers and voted from an adult's screen.
 - Event with title, dates, time zone, pinned roster, ordered decisions, one share link; Ask sheet with title, options, deadline chip, plan toggle: requirement 1.
 - Pick-one and pick-up-to-2 rounds, changeable votes, Skip, add and remove option: requirement 3.
+- Sealed ballots while a round is open; hide my vote per ballot or per seat (counts-only results when any ballot is hidden); ask or suggest anonymously.
 - Close on everyone-voted, deadline, or Close now; auto-decide on majority above quorum.
 - Organizer actions (Final round, Go with it, Narrow down, Tiebreak, Decide it, Reopen for 1 day, Undo, Close without deciding), logged.
 - "Also vote for Eli" proxy with helped-by attribution; last write wins, both logged.
@@ -111,7 +112,7 @@ v1 (cut from MVP to make four weekends honest):
 
 - Flip a coin with a stored seed (Decide it covers ties until then); Extend; link rotation; the second-parent proxy conflict prompt; the open-in-browser interstitial; 10-second polling (MVP is refetch on focus plus Refresh); the next/og image with an "as of" stamp.
 - Organizer-only email reminder ("2 hours left, waiting on Nana, Eli") via an external 15-minute ping.
-- Hide votes until close; claim a seat with a social login across devices.
+- Claim a seat with a social login across devices.
 - Public no-names /s/ summary, if question 9 says yes.
 - Date-range options with a people-by-dates grid; edit a question for 15 minutes; archive.
 
@@ -215,9 +216,9 @@ Mobile-first at 390px, paper ground (#FAF6F0), Figtree at a 20px base in rem, or
 
 3. Home. Needs your vote list; event cards ("3 of 5 decided, 1 open"); New event; People; past events.
 
-4. Event page. Title, dates, "6 people" chip opening screen 10; receipt header; Share; Open now: question cards with round badge, options with counts and avatars, New option badge, "4 of 6 in, waiting on Nana, Eli", an organizer row Close now / Remove option / Dismiss while open, the close actions when closed; Decided: one line per question, losers struck through, Undo for ten minutes; floating Ask; Refresh.
+4. Event page. Title, dates, "6 people" chip opening screen 10; receipt header; Share; Open now: question cards with round badge, options with who has voted so far (picks sealed until close), New option badge, "4 of 6 in, waiting on Nana, Eli", an organizer row Close now / Remove option / Dismiss while open, the close actions when closed; Decided: one line per question, losers struck through, Undo for ten minutes; floating Ask; Refresh.
 
-5. Vote (ballot). "Voting as Nana. Not you?"; question in large type; rule sentence; round-2 card ("Round 2. Cut: sushi, Thai. Vote again"); full-width option cards with live count and avatars; Add an option (first round only); Skip; "Also vote for Eli" toggle; done state "Got it, Nana. 4 of 6 in. You're done, close this tab".
+5. Vote (ballot). "Voting as Nana. Not you?"; question in large type; rule sentence; round-2 card ("Round 2. Cut: sushi, Thai. Vote again"); full-width option cards, no live counts or avatars; a Hide my vote row; Add an option (first round only); Skip; "Also vote for Eli" toggle; done state "Got it, Nana. 4 of 6 in. You're done, close this tab".
 
 6. Round closed (organizer results). Close reason in plain words ("Everyone voted, so it closed early", "Only 2 of 6 voted"); tally bars with avatars; the state-dependent actions, each previewing its ledger line; Copy for Messenger.
 
@@ -252,7 +253,7 @@ Cost: $0 a month; a domain at about $12 a year; Apple Developer $99 a year only 
 1. The real roster: who has Google, who is iPhone-only without Gmail, which kids have devices.
 2. Resolved 5 Sep 2026: everyone signs in with a social account. Still open: is anyone in the family without all three of Google, Apple and Facebook? They would need a proxy seat.
 3. Do both parents organize? Confirms co-organizers in MVP.
-4. Live votes by name, as in Messenger, or hidden until close as the default?
+4. Resolved 6 Sep 2026: hidden until the round closes, for everyone including organizers; names after close unless someone hid their ballot, in which case the round shows counts only. Anyone can hide a ballot, per ballot or as a standing preference, and ask or suggest anonymously; every vote stays recorded under its seat. Asked as: live votes by name, as in Messenger, or hidden until close as the default?
 5. Should "pick up to 2" be round 1 whenever there are four or more options, or on demand only?
 6. Is Friday dinner one standing event or a fresh one each time?
 7. Do kids' votes count equally on money questions, or is an adults-only toggle needed?
@@ -270,4 +271,4 @@ Cost: $0 a month; a domain at about $12 a year; Apple Developer $99 a year only 
 - Notifications to family members, per-vote pings, web push, SMS.
 - A no-account voting path (tap-your-name seats, guest seats, personal links), magic links, passkeys, kid PINs.
 - Realtime infrastructure, polling, cron, native apps, a Messenger bot, calendar export.
-- Anonymous-by-default voting, recap photos, templates, streak counters.
+- Anonymous-by-default voting (hiding a ballot is opt-in, per ballot or per seat), recap photos, templates, streak counters.

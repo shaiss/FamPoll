@@ -9,7 +9,7 @@ import { moveDecision } from "@/lib/actions/decisions";
 import { setEventStatus } from "@/lib/actions/events";
 import { requireMembership } from "@/lib/auth";
 import { roundLabel } from "@/lib/engine/rounds";
-import { closesRelative, formatDate, formatDateRange, nightsBetween, plural } from "@/lib/format";
+import { clipTitle, closesRelative, formatDate, formatDateRange, nightsBetween, plural } from "@/lib/format";
 import { readError } from "@/lib/flash";
 import { eventData } from "@/lib/queries";
 import { baseUrl } from "@/lib/url";
@@ -31,13 +31,13 @@ export default async function EventPage({ params, searchParams }: { params: Prom
   const mySeatIds = new Set(members.filter((m) => m.userId === user.id || m.managedByUserId === user.id).map((m) => m.id));
   const planning = event.status === "planning";
   const shareText = decided.length
-    ? decided.map((d) => `${d.decision.title}: ${d.outcome?.title ?? "decided"}`).join("; ")
+    ? decided.map((d) => `${d.decision.title}: ${d.outcome ? clipTitle(d.outcome.title, d.decision.format) : "decided"}`).join("; ")
     : `Help us decide: ${event.title}`;
   const summaryLines: CopyLine[] = [
     { text: `${event.title}${event.startsOn ? ` (${formatDateRange(event.startsOn, event.endsOn)})` : ""}` },
     ...decisions.map((d) => {
       const r = d.currentRound;
-      if (d.decision.status === "decided") return { text: `• ${d.decision.title}: ${d.outcome?.title ?? "decided"}` };
+      if (d.decision.status === "decided") return { text: `• ${d.decision.title}: ${d.outcome ? clipTitle(d.outcome.title, d.decision.format) : "decided"}` };
       if (d.decision.status === "skipped") return { text: `• ${d.decision.title}: set aside` };
       if (r && r.status === "open") return { text: `• ${d.decision.title}: ${r.kind === "ideas" ? "gathering ideas" : roundLabel(r, d.rounds, d.decision.plan).toLowerCase()}, {closes}`, closesAtIso: r.closesAt.toISOString() };
       return { text: `• ${d.decision.title}: waiting on the organizer` };
@@ -98,7 +98,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
             {decided.map((d) => (
               <div key={d.decision.id} className="flex items-baseline justify-between gap-3">
                 <span className="text-sm font-medium text-teal-deep">{d.decision.title}</span>
-                <span className="text-right font-display text-[17px] font-bold text-teal-ink">{d.outcome?.title}</span>
+                <span className="text-right font-display text-[17px] font-bold text-teal-ink">{d.outcome ? clipTitle(d.outcome.title, d.decision.format) : null}</span>
               </div>
             ))}
           </div>
@@ -160,7 +160,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                     <span className="text-[13px] text-ink-2">
                       {isDecided ? (
                         <>
-                          {d.outcome?.title ?? "Decided"} · <LocalTime iso={(d.decision.decidedAt ?? d.decision.createdAt).toISOString()} mode="date" fallback={formatDate(d.decision.decidedAt ?? d.decision.createdAt)} />
+                          {d.outcome ? clipTitle(d.outcome.title, d.decision.format) : "Decided"} · <LocalTime iso={(d.decision.decidedAt ?? d.decision.createdAt).toISOString()} mode="date" fallback={formatDate(d.decision.decidedAt ?? d.decision.createdAt)} />
                         </>
                       ) : skipped ? (
                         "Set aside"

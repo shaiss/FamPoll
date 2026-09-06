@@ -30,7 +30,7 @@
       "x": 1410,
       "y": 0,
       "w": 390,
-      "h": 844
+      "h": 880
     },
     {
       "file": "RoundResults.dc.html",
@@ -54,7 +54,7 @@
       "x": 2820,
       "y": 0,
       "w": 390,
-      "h": 930
+      "h": 1160
     },
     {
       "file": "DirectionScoreboard.dc.html",
@@ -102,7 +102,7 @@
       "x": 480,
       "y": -200,
       "w": 520,
-      "text": "Flow: 1 Sign in from an invite link → 2 Home shows what needs your vote and every event in flight → 3 A trip groups its decisions in order, with a running “decided so far” → 4 Vote in round 2 of 3 (shortlist, pick up to 2) → 5 Round 2 closes and the final opens by itself; the organizer can reopen or just call it → 6 The shareable summary that goes back to Messenger.\n7 is the sheet for starting a new decision and choosing how many rounds.\n8 is the family roster (invite link, organizers, proxy seats). 9 edits or deletes an event. Screen 7 gained a “We’re choosing dates” toggle: options become date ranges and the winner sets the trip dates."
+      "text": "Flow: 1 Sign in from an invite link → 2 Home shows what needs your vote and every event in flight → 3 A trip groups its decisions in order, with a running “decided so far” → 4 Vote in round 2 of 3 (shortlist, pick up to 2) → 5 Round 2 closes and the final opens by itself; the organizer can reopen or just call it → 6 The shareable summary that goes back to Messenger.\n7 is the sheet for starting a new decision and choosing how many rounds.\n8 is the family roster (invite link, organizers, proxy seats). 9 edits or deletes an event. Screen 7 asks for a format (text, long text, dates) and a vote type (A or B, multiple choice, pick several) before the rounds; dates are a format, and a date decision can set the trip dates. Screen 4 shows no one else’s picks while the round is open and has a “Hide my vote” row."
     },
     {
       "id": "alternates",

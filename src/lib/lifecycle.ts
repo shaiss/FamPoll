@@ -5,15 +5,17 @@ import {
   cutAdvancing,
   hasQuorum,
   isPastDeadline,
-  maxPicksFor,
   nextStep,
+  nominalPicks,
   resolveFinal,
   roundSequence,
+  seatsVoted,
   shouldAutoClose,
   tally,
   type NextStep,
   type RoundKind,
 } from "./engine/rounds";
+import { clipTitle } from "./format";
 import { newId } from "./ids";
 import type { Decision, Round } from "./db/schema";
 
@@ -50,6 +52,7 @@ export async function lockOpenRound(tx: Tx, roundId: string): Promise<Round | nu
  * Opens the next round. For a tiebreak, `only` restricts the ballot to the tied
  * options; the others are stamped as eliminated in `stampRoundId` (the round
  * that tied), so a later reopen of that round brings them back correctly.
+ * The round stores the decision's nominal picks; the live cap is effectivePicks().
  */
 export async function openRound(
   tx: Tx | Db,
@@ -68,7 +71,7 @@ export async function openRound(
       number,
       kind,
       status: "open",
-      maxPicks: maxPicksFor(kind, decision.shortlistPicks),
+      maxPicks: nominalPicks(kind, decision.voteType, decision.picks),
       openedAt: now,
       closesAt: closesAt ?? closesAtFrom(now, decision.roundHours),
     })
@@ -107,7 +110,7 @@ export async function closeRoundAndAdvance(tx: Tx, roundId: string, reason: Clos
 
   // A deadline with too few seats heard from does not decide anything.
   if (reason === "deadline" && round.kind !== "ideas") {
-    const distinct = new Set(votes.map((v) => v.memberId)).size;
+    const distinct = seatsVoted(votes).size;
     const event = await tx.query.events.findFirst({ where: eq(schema.events.id, decision.eventId), columns: { familyId: true } });
     const eligible = event ? await eligibleSeatCount(tx, event.familyId) : 0;
     if (!hasQuorum(distinct, eligible)) {
@@ -143,7 +146,7 @@ export async function closeRoundAndAdvance(tx: Tx, roundId: string, reason: Clos
     .set({ status: "closed", closedAt: now, closeReason: reason, tied: step.kind === "tie" })
     .where(eq(schema.rounds.id, round.id));
 
-  const titleOf = (id: string) => alive.find((o) => o.id === id)?.title ?? "an option";
+  const titleOf = (id: string) => clipTitle(alive.find((o) => o.id === id)?.title ?? "an option", decision.format);
   const why = reason === "everyone_voted" ? "everyone voted" : reason === "deadline" ? "time was up" : reason === "no_quorum" ? "time was up" : "the organizer closed it";
   const log = (kind: string, message: string) =>
     tx.insert(schema.activity).values({ id: newId(), eventId: decision.eventId, decisionId: decision.id, kind, message });
@@ -246,7 +249,7 @@ export async function settleDueRounds(familyId: string, now = new Date()): Promi
 /** With the round locked: close it early when every seat has voted. */
 export async function maybeCloseEarly(tx: Tx, round: Round, familyId: string, now: Date): Promise<boolean> {
   const votes = await tx.select({ memberId: schema.votes.memberId }).from(schema.votes).where(eq(schema.votes.roundId, round.id));
-  const distinct = new Set(votes.map((v) => v.memberId)).size;
+  const distinct = seatsVoted(votes).size;
   const eligible = await eligibleSeatCount(tx, familyId);
   if (shouldAutoClose(round.kind, distinct, eligible)) {
     return (await closeRoundAndAdvance(tx, round.id, "everyone_voted", now)) !== null;

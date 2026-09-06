@@ -1,18 +1,20 @@
 "use server";
 
-import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireMembership, seatsForUser } from "../auth";
 import { getDb, schema } from "../db";
-import { closesAtFrom, isPastDeadline, planRoundCount, resolveFinal, roundSequence, tally } from "../engine/rounds";
+import { ballotsToSkip, closesAtFrom, effectivePicks, isPastDeadline, optionCountRule, optionTitleLimit, planRoundCount, plansFor, resolveFinal, roundSequence, tally, type Format, type Plan, type VoteType } from "../engine/rounds";
 import { fail } from "../flash";
 import { newId } from "../ids";
 import { applyOutcome, closeRoundAndAdvance, lockOpenRound, logActivity, maybeCloseEarly, openRound, settleDueRounds } from "../lifecycle";
-import { dateRangeTitle } from "../format";
+import { clipTitle, dateRangeTitle } from "../format";
 
 const planSchema = z.enum(["quick", "shortlist_final", "ideas_shortlist_final"]);
+const formatSchema = z.enum(["text", "long_text", "date"]);
+const voteTypeSchema = z.enum(["ab", "single", "multi"]);
 
 async function loadEventForFamily(eventId: string, familyId: string) {
   const event = await getDb().query.events.findFirst({ where: eq(schema.events.id, eventId) });
@@ -26,13 +28,18 @@ async function loadDecisionForFamily(decisionId: string, familyId: string) {
   return decision;
 }
 
-/** Split a textarea into clean, de-duplicated option titles. */
-function cleanOptions(raw: FormDataEntryValue[]): string[] {
+/**
+ * Clean, de-duplicated option titles. Short text splits each field into lines;
+ * long text keeps every field whole (a paragraph is one option).
+ */
+function cleanOptions(raw: FormDataEntryValue[], format: Format): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
+  const limit = optionTitleLimit(format);
   for (const v of raw) {
-    for (const line of String(v).split(/\r?\n/)) {
-      const t = line.trim().slice(0, 80);
+    const pieces = format === "long_text" ? [String(v)] : String(v).split(/\r?\n/);
+    for (const piece of pieces) {
+      const t = piece.trim().slice(0, limit).trim();
       if (!t) continue;
       const key = t.toLowerCase();
       if (seen.has(key)) continue;
@@ -41,6 +48,20 @@ function cleanOptions(raw: FormDataEntryValue[]): string[] {
     }
   }
   return out;
+}
+
+/** The option title from an add/edit form, sized for the decision's format. */
+function optionTitleFrom(formData: FormData, format: Format): string {
+  return String(formData.get("title") ?? "").trim().slice(0, optionTitleLimit(format)).trim();
+}
+
+/** "needs at least 3 options" in the family's words, per format. */
+function tooFewOptionsMessage(min: number, format: Format, voteType: VoteType, plan: Plan): string {
+  const noun = format === "date" ? "date ranges" : "options";
+  if (voteType === "ab") return `A or B needs exactly two different ${noun}.`;
+  if (plan === "shortlist_final") return `A shortlist needs at least ${min} ${noun}, or use a quick vote.`;
+  if (voteType === "multi") return `Pick several needs at least ${min} ${noun}, or switch to multiple choice.`;
+  return `A quick vote needs at least ${min} ${noun}${format === "text" ? ", one per line" : ""}.`;
 }
 
 const dateRe = /^\d{4}-\d{2}-\d{2}$/;
@@ -80,7 +101,13 @@ export async function createDecision(formData: FormData) {
 
   const title = String(formData.get("title") ?? "").trim().slice(0, 100);
   if (!title) fail(back, "What are we deciding? Give it a title.");
-  const plan = planSchema.catch("quick").parse(formData.get("plan"));
+  const format = formatSchema.catch("text").parse(formData.get("format"));
+  const voteType = voteTypeSchema.catch("single").parse(formData.get("voteType"));
+  const picks = z.coerce.number().int().min(2).max(4).catch(2).parse(formData.get("picks"));
+  const anonymous = formData.get("anonymous") === "on";
+  const requestedPlan = planSchema.catch("quick").parse(formData.get("plan"));
+  // A or B is settled in one round, whatever the form sent.
+  const plan: Plan = plansFor(voteType).includes(requestedPlan) ? requestedPlan : "quick";
   const roundHours = z.coerce.number().int().min(1).max(24 * 30).catch(72).parse(formData.get("roundHours"));
   // "Tonight": the browser sends an absolute time for round 1; later rounds use roundHours.
   const closesAtRaw = String(formData.get("closesAtIso") ?? "").trim();
@@ -91,19 +118,21 @@ export async function createDecision(formData: FormData) {
     if (Number.isNaN(d.getTime()) || d.getTime() < nowMs + 10 * 60 * 1000 || d.getTime() > nowMs + 31 * 24 * 60 * 60 * 1000) fail(back, "That deadline doesn't look right.");
     firstClosesAt = d;
   }
-  const anyoneCanAddOptions = formData.getAll("anyoneCanAddOptions").map(String).includes("on");
-  const setsEventDates = formData.get("setsEventDates") === "on";
+  // A or B keeps its two options: nobody adds a third.
+  const anyoneCanAddOptions = voteType !== "ab" && formData.getAll("anyoneCanAddOptions").map(String).includes("on");
+  const setsEventDates = format === "date" && formData.get("setsEventDates") === "on";
   let optionRows: { title: string; startsOn: string | null; endsOn: string | null }[];
-  if (setsEventDates) {
+  if (format === "date") {
     const parsed = cleanDateOptions(formData.getAll("dateStart"), formData.getAll("dateEnd"));
     if (typeof parsed === "string") fail(back, parsed);
     optionRows = parsed;
   } else {
-    optionRows = cleanOptions(formData.getAll("options")).map((t) => ({ title: t, startsOn: null, endsOn: null }));
+    optionRows = cleanOptions(formData.getAll("options"), format).map((t) => ({ title: t, startsOn: null, endsOn: null }));
   }
 
-  if (plan === "quick" && optionRows.length < 2) fail(back, setsEventDates ? "A quick vote needs at least 2 date ranges." : "A quick vote needs at least 2 options, one per line.");
-  if (plan === "shortlist_final" && optionRows.length < 3) fail(back, setsEventDates ? "A shortlist needs at least 3 date ranges, or use a quick vote." : "A shortlist needs at least 3 options, or use a quick vote.");
+  const rule = optionCountRule(voteType, plan);
+  if (optionRows.length < rule.min) fail(back, tooFewOptionsMessage(rule.min, format, voteType, plan));
+  if (rule.max !== null && optionRows.length > rule.max) fail(back, voteType === "ab" ? "A or B is just two options. Use multiple choice for more." : "Too many options.");
 
   const db = getDb();
   const decisionId = newId();
@@ -111,19 +140,21 @@ export async function createDecision(formData: FormData) {
     const siblings = await tx.select({ id: schema.decisions.id }).from(schema.decisions).where(eq(schema.decisions.eventId, event.id));
     const [decision] = await tx
       .insert(schema.decisions)
-      .values({ id: decisionId, eventId: event.id, title, position: siblings.length + 1, plan, roundHours, anyoneCanAddOptions, setsEventDates, createdByMemberId: member.id })
+      .values({ id: decisionId, eventId: event.id, title, position: siblings.length + 1, plan, format, voteType, picks, anonymous, roundHours, anyoneCanAddOptions, setsEventDates, createdByMemberId: member.id })
       .returning();
     const round = await openRound(tx, decision, roundSequence(plan)[0], 1, new Date(), undefined, firstClosesAt);
     if (optionRows.length) {
-      await tx.insert(schema.options).values(optionRows.map((o) => ({ id: newId(), decisionId, title: o.title, startsOn: o.startsOn, endsOn: o.endsOn, addedByMemberId: member.id, addedInRoundId: round.id })));
+      // An anonymous question's own options are anonymous too, or the bylines would name the asker.
+      await tx.insert(schema.options).values(optionRows.map((o) => ({ id: newId(), decisionId, title: o.title, startsOn: o.startsOn, endsOn: o.endsOn, addedByMemberId: member.id, anonymous, addedInRoundId: round.id })));
     }
     const rounds = planRoundCount(plan);
     await logActivity(tx, {
       eventId: event.id,
       decisionId,
       kind: "decision_created",
-      message: `${member.displayName} opened "${title}" (${rounds === 1 ? "quick vote" : `${rounds} rounds`}).`,
-      actorMemberId: member.id,
+      message: `${anonymous ? "Someone" : member.displayName} opened "${title}" (${rounds === 1 ? "quick vote" : `${rounds} rounds`}).`,
+      // The asker is still recorded on the decision; the log row stays unattributable.
+      actorMemberId: anonymous ? null : member.id,
     });
   });
   revalidatePath(`/app/events/${event.id}`);
@@ -135,11 +166,11 @@ export async function addOption(formData: FormData) {
   const decisionId = z.string().parse(formData.get("decisionId"));
   const back = `/app/decisions/${decisionId}`;
   const decision = await loadDecisionForFamily(decisionId, family.id);
-  let title = String(formData.get("title") ?? "").trim().slice(0, 80);
+  let title = optionTitleFrom(formData, decision.format);
   let startsOn: string | null = null;
   let endsOn: string | null = null;
   const note = String(formData.get("note") ?? "").trim().slice(0, 140) || null;
-  if (decision.setsEventDates) {
+  if (decision.format === "date") {
     const parsed = cleanDateOptions([formData.get("dateStart") ?? ""], [formData.get("dateEnd") ?? ""]);
     if (typeof parsed === "string") fail(back, parsed);
     if (parsed.length === 0) fail(back, "Pick the dates first.");
@@ -148,6 +179,7 @@ export async function addOption(formData: FormData) {
   if (!title) fail(back, "Type the idea first.");
   if (decision.status !== "open") fail(back, "This decision is closed.");
   if (decision.event.status !== "planning") fail(back, "This event is closed.");
+  if (decision.voteType === "ab") fail(back, "This is an A or B question, so it keeps its two options.");
   const organizer = member.role === "organizer" || decision.createdByMemberId === member.id;
 
   const db = getDb();
@@ -164,8 +196,17 @@ export async function addOption(formData: FormData) {
     if (!decision.anyoneCanAddOptions && !organizer) return void (problem = "The organizer is collecting ideas for this one.");
     const existing = await tx.query.options.findMany({ where: eq(schema.options.decisionId, decision.id) });
     if (existing.some((o) => o.title.toLowerCase() === title.toLowerCase())) return void (problem = "That idea is already on the list.");
-    await tx.insert(schema.options).values({ id: newId(), decisionId: decision.id, title, note, startsOn, endsOn, addedByMemberId: member.id, addedInRoundId: round.id });
-    await logActivity(tx, { eventId: decision.eventId, decisionId: decision.id, kind: "option_added", message: `${member.displayName} suggested "${title}".`, actorMemberId: member.id });
+    // A non-organizer who gets through a curated gate is the anonymous asker; naming them here would unmask them.
+    const gated = (!firstRound && round.kind === "shortlist") || !decision.anyoneCanAddOptions;
+    const anonymous = formData.get("anonymous") === "on" || (decision.anonymous && gated && member.role !== "organizer");
+    await tx.insert(schema.options).values({ id: newId(), decisionId: decision.id, title, note, startsOn, endsOn, addedByMemberId: member.id, anonymous, addedInRoundId: round.id });
+    await logActivity(tx, {
+      eventId: decision.eventId,
+      decisionId: decision.id,
+      kind: "option_added",
+      message: `${anonymous ? "Someone" : member.displayName} suggested "${clipTitle(title, decision.format)}".`,
+      actorMemberId: anonymous ? null : member.id,
+    });
   });
   if (problem) fail(back, problem);
   revalidatePath(back);
@@ -176,6 +217,8 @@ export async function castVote(formData: FormData) {
   const roundId = z.string().parse(formData.get("roundId"));
   const memberId = z.string().parse(formData.get("memberId"));
   const skip = formData.get("skip") === "1";
+  // A hidden ballot: counted like any other, never shown by name.
+  const hidden = formData.get("hidden") === "1";
   const optionIds = skip ? [] : [...new Set(formData.getAll("optionId").map(String))];
   const db = getDb();
   const round = await db.query.rounds.findFirst({ where: eq(schema.rounds.id, roundId) });
@@ -190,7 +233,6 @@ export async function castVote(formData: FormData) {
   if (!seat) fail(back, "You can't vote from that seat.");
   if (round.kind === "ideas") fail(back, "Nobody votes during the ideas round.");
   if (!skip && optionIds.length === 0) fail(back, "Pick at least one, or skip.");
-  if (optionIds.length > round.maxPicks) fail(back, `Pick up to ${round.maxPicks}.`);
 
   // Deadlines are settled in their own committed transaction first, so a
   // redirect below can never roll a close back.
@@ -204,12 +246,16 @@ export async function castVote(formData: FormData) {
     const alive = await tx.query.options.findMany({ where: and(eq(schema.options.decisionId, decision.id), isNull(schema.options.eliminatedInRoundId)) });
     const aliveIds = new Set(alive.map((o) => o.id));
     if (!optionIds.every((id) => aliveIds.has(id))) return void (problem = "One of those options is no longer in the running.");
+    // The cap depends on how many options are alive, so it is checked under the same
+    // lock that addOption and removeOption take.
+    const cap = effectivePicks(fresh.maxPicks, alive.length);
+    if (optionIds.length > cap) return void (problem = cap === 1 ? "Pick one." : `Pick up to ${cap}.`);
     const before = await tx.select({ id: schema.votes.id }).from(schema.votes).where(and(eq(schema.votes.roundId, roundId), eq(schema.votes.memberId, memberId)));
     await tx.delete(schema.votes).where(and(eq(schema.votes.roundId, roundId), eq(schema.votes.memberId, memberId)));
     if (skip) {
-      await tx.insert(schema.votes).values({ id: newId(), roundId, optionId: null, memberId, castByUserId: user.id });
+      await tx.insert(schema.votes).values({ id: newId(), roundId, optionId: null, memberId, castByUserId: user.id, anonymous: hidden });
     } else {
-      await tx.insert(schema.votes).values(optionIds.map((optionId) => ({ id: newId(), roundId, optionId, memberId, castByUserId: user.id })));
+      await tx.insert(schema.votes).values(optionIds.map((optionId) => ({ id: newId(), roundId, optionId, memberId, castByUserId: user.id, anonymous: hidden })));
     }
     if (seat.userId === null && before.length === 0) {
       const me = seats.find((s) => s.userId === user.id);
@@ -222,12 +268,20 @@ export async function castVote(formData: FormData) {
   redirect(back);
 }
 
+/**
+ * Organizer powers belong to organizers and to whoever asked the question. On
+ * an anonymous decision nobody gets a byline for them: naming organizers while
+ * veiling the asker would tell the family the asker is not an organizer. The
+ * log rows carry no member id either, so no later join can name anyone.
+ */
 async function requireOrganizer(decisionId: string) {
   const { family, member } = await requireMembership();
   const decision = await loadDecisionForFamily(decisionId, family.id);
   const organizer = member.role === "organizer" || decision.createdByMemberId === member.id;
   if (!organizer) fail(`/app/decisions/${decisionId}`, "Only the organizer, or whoever asked this, can do that.");
-  return { family, member, decision };
+  const actorName = decision.anonymous ? "Someone" : member.displayName;
+  const actorMemberId = decision.anonymous ? null : member.id;
+  return { family, member, decision, actorName, actorMemberId };
 }
 
 export async function closeRoundNow(formData: FormData) {
@@ -250,7 +304,7 @@ export async function closeRoundNow(formData: FormData) {
 /** Give the open round a fresh deadline. */
 export async function extendRound(formData: FormData) {
   const decisionId = z.string().parse(formData.get("decisionId"));
-  const { decision, member } = await requireOrganizer(decisionId);
+  const { decision, actorName, actorMemberId } = await requireOrganizer(decisionId);
   const back = `/app/decisions/${decisionId}`;
   if (decision.status !== "open") fail(back, "This decision is already settled.");
   const db = getDb();
@@ -261,7 +315,7 @@ export async function extendRound(formData: FormData) {
     const round = open ? await lockOpenRound(tx, open.id) : null;
     if (!round) return;
     await tx.update(schema.rounds).set({ closesAt: closesAtFrom(now, decision.roundHours) }).where(eq(schema.rounds.id, round.id));
-    await logActivity(tx, { eventId: decision.eventId, decisionId: decision.id, kind: "round_extended", message: `${member.displayName} gave round ${round.number} more time.`, actorMemberId: member.id });
+    await logActivity(tx, { eventId: decision.eventId, decisionId: decision.id, kind: "round_extended", message: `${actorName} gave round ${round.number} more time.`, actorMemberId });
     extended = true;
   });
   if (!extended) fail(back, "No round is open to extend.");
@@ -276,7 +330,7 @@ export async function extendRound(formData: FormData) {
  */
 export async function reopenRound(formData: FormData) {
   const decisionId = z.string().parse(formData.get("decisionId"));
-  const { decision, member } = await requireOrganizer(decisionId);
+  const { decision, actorName, actorMemberId } = await requireOrganizer(decisionId);
   const back = `/app/decisions/${decisionId}`;
   if (decision.event.status !== "planning") fail(back, "This event is closed.");
   const db = getDb();
@@ -307,8 +361,8 @@ export async function reopenRound(formData: FormData) {
       eventId: decision.eventId,
       decisionId: decision.id,
       kind: "round_reopened",
-      message: `${member.displayName} reopened round ${target.number}${decision.outcomeOptionId ? " and cleared the outcome" : ""}${clearVotes ? "; everyone votes again" : ""}.`,
-      actorMemberId: member.id,
+      message: `${actorName} reopened round ${target.number}${decision.outcomeOptionId ? " and cleared the outcome" : ""}${clearVotes ? "; everyone votes again" : ""}.`,
+      actorMemberId,
     });
   });
   if (problem) fail(back, problem);
@@ -320,7 +374,7 @@ export async function reopenRound(formData: FormData) {
 export async function pickWinner(formData: FormData) {
   const decisionId = z.string().parse(formData.get("decisionId"));
   const optionId = z.string().parse(formData.get("optionId"));
-  const { decision, member } = await requireOrganizer(decisionId);
+  const { decision, actorName, actorMemberId } = await requireOrganizer(decisionId);
   const back = `/app/decisions/${decisionId}`;
   if (decision.status !== "open") fail(back, "This decision is already settled. Reopen it first.");
   const db = getDb();
@@ -337,7 +391,7 @@ export async function pickWinner(formData: FormData) {
       .where(and(eq(schema.rounds.decisionId, decision.id), eq(schema.rounds.status, "open")));
     await tx.update(schema.rounds).set({ tied: false }).where(and(eq(schema.rounds.decisionId, decision.id), eq(schema.rounds.tied, true)));
     await tx.update(schema.decisions).set({ status: "decided", outcomeOptionId: optionId, decidedAt: now }).where(eq(schema.decisions.id, decision.id));
-    await logActivity(tx, { eventId: decision.eventId, decisionId: decision.id, kind: "decided", message: `${decision.title} decided: ${option.title}. ${member.displayName} called it.`, actorMemberId: member.id });
+    await logActivity(tx, { eventId: decision.eventId, decisionId: decision.id, kind: "decided", message: `${decision.title} decided: ${clipTitle(option.title, decision.format)}. ${actorName} called it.`, actorMemberId });
     await applyOutcome(tx, decision, optionId);
   });
   if (problem) fail(back, problem);
@@ -348,7 +402,7 @@ export async function pickWinner(formData: FormData) {
 /** After a tied final: one more final, just between the tied options. */
 export async function tiebreak(formData: FormData) {
   const decisionId = z.string().parse(formData.get("decisionId"));
-  const { decision, member } = await requireOrganizer(decisionId);
+  const { decision, actorName, actorMemberId } = await requireOrganizer(decisionId);
   const back = `/app/decisions/${decisionId}`;
   if (decision.status !== "open") fail(back, "This decision is already settled.");
   const db = getDb();
@@ -370,8 +424,8 @@ export async function tiebreak(formData: FormData) {
       eventId: decision.eventId,
       decisionId: decision.id,
       kind: "tiebreak",
-      message: `${member.displayName} started a tiebreak between ${result.tiedIds.map((id) => alive.find((o) => o.id === id)?.title).join(" and ")}.`,
-      actorMemberId: member.id,
+      message: `${actorName} started a tiebreak between ${result.tiedIds.map((id) => clipTitle(alive.find((o) => o.id === id)?.title ?? "an option", decision.format)).join(" and ")}.`,
+      actorMemberId,
     });
   });
   if (problem) fail(back, problem);
@@ -381,7 +435,7 @@ export async function tiebreak(formData: FormData) {
 
 export async function skipDecision(formData: FormData) {
   const decisionId = z.string().parse(formData.get("decisionId"));
-  const { decision, member } = await requireOrganizer(decisionId);
+  const { decision, actorName, actorMemberId } = await requireOrganizer(decisionId);
   if (decision.status !== "open") fail(`/app/decisions/${decisionId}`, "This decision is already settled.");
   const db = getDb();
   const now = new Date();
@@ -391,7 +445,7 @@ export async function skipDecision(formData: FormData) {
       .set({ status: "closed", closedAt: now, closeReason: "organizer", tied: false })
       .where(and(eq(schema.rounds.decisionId, decision.id), eq(schema.rounds.status, "open")));
     await tx.update(schema.decisions).set({ status: "skipped" }).where(eq(schema.decisions.id, decision.id));
-    await logActivity(tx, { eventId: decision.eventId, decisionId: decision.id, kind: "skipped", message: `${member.displayName} set "${decision.title}" aside.`, actorMemberId: member.id });
+    await logActivity(tx, { eventId: decision.eventId, decisionId: decision.id, kind: "skipped", message: `${actorName} set "${decision.title}" aside.`, actorMemberId });
   });
   revalidateDecision(decision.id, decision.eventId);
   redirect(`/app/events/${decision.eventId}`);
@@ -401,9 +455,10 @@ export async function skipDecision(formData: FormData) {
 export async function removeOption(formData: FormData) {
   const decisionId = z.string().parse(formData.get("decisionId"));
   const optionId = z.string().parse(formData.get("optionId"));
-  const { decision, member } = await requireOrganizer(decisionId);
+  const { decision, actorName, actorMemberId } = await requireOrganizer(decisionId);
   const back = `/app/decisions/${decisionId}`;
   if (decision.status !== "open") fail(back, "This decision is already settled.");
+  if (decision.voteType === "ab") fail(back, "An A or B question keeps its two options. Fix one instead.");
   const db = getDb();
   let problem: string | null = null;
   await db.transaction(async (tx) => {
@@ -413,8 +468,21 @@ export async function removeOption(formData: FormData) {
     if (round.number !== 1 && round.kind === "final") return void (problem = "Options can't be removed during the final. Reopen the previous round instead.");
     const option = await tx.query.options.findFirst({ where: and(eq(schema.options.id, optionId), eq(schema.options.decisionId, decision.id), isNull(schema.options.eliminatedInRoundId)) });
     if (!option) return void (problem = "That option isn't in the running.");
+    // Ballots are sealed while the round is open but participation is public. Letting
+    // the votes cascade would move whoever picked only this option from "voted" to
+    // "waiting on", which names them. Their emptied ballot becomes a skip instead
+    // (same caster, same hidden flag), so nothing visible moves. A ballot that would
+    // now approve every remaining option becomes a skip too.
+    const aliveAfter = await tx.$count(schema.options, and(eq(schema.options.decisionId, decision.id), isNull(schema.options.eliminatedInRoundId), ne(schema.options.id, option.id)));
+    const roundVotes = await tx.select().from(schema.votes).where(eq(schema.votes.roundId, round.id));
+    const toSkip = ballotsToSkip(roundVotes, option.id, aliveAfter);
+    if (toSkip.length) {
+      const seatIds = toSkip.map((v) => v.memberId).filter((id): id is string => id !== null);
+      await tx.delete(schema.votes).where(and(eq(schema.votes.roundId, round.id), inArray(schema.votes.memberId, seatIds)));
+      await tx.insert(schema.votes).values(toSkip.map((v) => ({ id: newId(), roundId: round.id, optionId: null, memberId: v.memberId, castByUserId: v.castByUserId, anonymous: v.anonymous })));
+    }
     await tx.delete(schema.options).where(eq(schema.options.id, option.id));
-    await logActivity(tx, { eventId: decision.eventId, decisionId: decision.id, kind: "option_removed", message: `${member.displayName} removed "${option.title}".`, actorMemberId: member.id });
+    await logActivity(tx, { eventId: decision.eventId, decisionId: decision.id, kind: "option_removed", message: `${actorName} removed "${clipTitle(option.title, decision.format)}".`, actorMemberId });
   });
   if (problem) fail(back, problem);
   revalidateDecision(decision.id, decision.eventId);
@@ -423,14 +491,14 @@ export async function removeOption(formData: FormData) {
 
 export async function renameDecision(formData: FormData) {
   const decisionId = z.string().parse(formData.get("decisionId"));
-  const { decision, member } = await requireOrganizer(decisionId);
+  const { decision, actorName, actorMemberId } = await requireOrganizer(decisionId);
   const back = `/app/decisions/${decisionId}`;
   const title = String(formData.get("title") ?? "").trim().slice(0, 100);
   if (!title) fail(back, "Give it a title.");
   const db = getDb();
   await db.transaction(async (tx) => {
     await tx.update(schema.decisions).set({ title }).where(eq(schema.decisions.id, decision.id));
-    if (title !== decision.title) await logActivity(tx, { eventId: decision.eventId, decisionId: decision.id, kind: "decision_renamed", message: `${member.displayName} renamed "${decision.title}" to "${title}".`, actorMemberId: member.id });
+    if (title !== decision.title) await logActivity(tx, { eventId: decision.eventId, decisionId: decision.id, kind: "decision_renamed", message: `${actorName} renamed "${decision.title}" to "${title}".`, actorMemberId });
   });
   revalidateDecision(decision.id, decision.eventId);
   redirect(back);
@@ -480,7 +548,7 @@ export async function deleteDecision(formData: FormData) {
 /** Organizer only: bring a set-aside decision back by reopening its last round. */
 export async function unskipDecision(formData: FormData) {
   const decisionId = z.string().parse(formData.get("decisionId"));
-  const { decision, member } = await requireOrganizer(decisionId);
+  const { decision, actorName, actorMemberId } = await requireOrganizer(decisionId);
   const back = `/app/decisions/${decisionId}`;
   if (decision.status !== "skipped") fail(back, "This decision isn't set aside.");
   if (decision.event.status !== "planning") fail(back, "This event is closed.");
@@ -492,7 +560,7 @@ export async function unskipDecision(formData: FormData) {
     if (!last) return void (problem = "There is no round to bring back.");
     await tx.update(schema.rounds).set({ status: "open", closedAt: null, closeReason: null, tied: false, closesAt: closesAtFrom(now, decision.roundHours) }).where(eq(schema.rounds.id, last.id));
     await tx.update(schema.decisions).set({ status: "open" }).where(eq(schema.decisions.id, decision.id));
-    await logActivity(tx, { eventId: decision.eventId, decisionId: decision.id, kind: "unskipped", message: `${member.displayName} brought "${decision.title}" back.`, actorMemberId: member.id });
+    await logActivity(tx, { eventId: decision.eventId, decisionId: decision.id, kind: "unskipped", message: `${actorName} brought "${decision.title}" back.`, actorMemberId });
   });
   if (problem) fail(back, problem);
   revalidateDecision(decision.id, decision.eventId);
@@ -503,13 +571,13 @@ export async function unskipDecision(formData: FormData) {
 export async function editOption(formData: FormData) {
   const decisionId = z.string().parse(formData.get("decisionId"));
   const optionId = z.string().parse(formData.get("optionId"));
-  const { decision, member } = await requireOrganizer(decisionId);
+  const { decision, actorName, actorMemberId } = await requireOrganizer(decisionId);
   const back = `/app/decisions/${decisionId}`;
-  let title = String(formData.get("title") ?? "").trim().slice(0, 80);
+  let title = optionTitleFrom(formData, decision.format);
   const note = String(formData.get("note") ?? "").trim().slice(0, 140) || null;
   let startsOn: string | null = null;
   let endsOn: string | null = null;
-  if (decision.setsEventDates) {
+  if (decision.format === "date") {
     const parsed = cleanDateOptions([formData.get("dateStart") ?? ""], [formData.get("dateEnd") ?? ""]);
     if (typeof parsed === "string") fail(back, parsed);
     if (parsed.length === 0) fail(back, "Pick the dates first.");
@@ -526,9 +594,31 @@ export async function editOption(formData: FormData) {
     await tx.update(schema.options).set({ title, note, startsOn, endsOn }).where(eq(schema.options.id, option.id));
     // If the fixed option is the one that set the event's dates, keep those in step.
     if (decision.setsEventDates && decision.outcomeOptionId === option.id) await applyOutcome(tx, decision, option.id);
-    if (title !== option.title) await logActivity(tx, { eventId: decision.eventId, decisionId: decision.id, kind: "option_edited", message: `${member.displayName} changed "${option.title}" to "${title}".`, actorMemberId: member.id });
+    if (title !== option.title) await logActivity(tx, { eventId: decision.eventId, decisionId: decision.id, kind: "option_edited", message: `${actorName} changed "${clipTitle(option.title, decision.format)}" to "${clipTitle(title, decision.format)}".`, actorMemberId });
   });
   if (problem) fail(back, problem);
+  revalidateDecision(decision.id, decision.eventId);
+  redirect(back);
+}
+
+/**
+ * Poker's "show your hand": after a round has closed, a seat that voted hidden
+ * can put its name back on its ballot. One way only; there is no re-hiding once
+ * the round is over, because the reveal has already been seen.
+ */
+export async function revealVotes(formData: FormData) {
+  const { user, family } = await requireMembership();
+  const roundId = z.string().parse(formData.get("roundId"));
+  const memberId = z.string().parse(formData.get("memberId"));
+  const db = getDb();
+  const round = await db.query.rounds.findFirst({ where: eq(schema.rounds.id, roundId) });
+  if (!round) throw new Error("Round not found.");
+  const decision = await loadDecisionForFamily(round.decisionId, family.id);
+  const back = `/app/decisions/${decision.id}`;
+  if (round.status !== "closed") fail(back, "You can show your hand once the round has closed.");
+  const seats = await seatsForUser(family.id, user.id);
+  if (!seats.some((s) => s.id === memberId)) fail(back, "That isn't your seat.");
+  await db.update(schema.votes).set({ anonymous: false }).where(and(eq(schema.votes.roundId, roundId), eq(schema.votes.memberId, memberId)));
   revalidateDecision(decision.id, decision.eventId);
   redirect(back);
 }

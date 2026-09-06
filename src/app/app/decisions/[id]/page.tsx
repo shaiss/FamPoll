@@ -2,20 +2,17 @@ import { notFound } from "next/navigation";
 import { LocalTime } from "@/components/time";
 import { Avatar, AvatarStack, Button, Card, Field, Icon, inputClass, Pill, Screen, SectionLabel, TopBar } from "@/components/ui";
 import { VoteForm } from "@/components/vote-form";
-import { addOption, closeRoundNow, deleteDecision, editOption, extendRound, pickWinner, removeOption, renameDecision, reopenRound, skipDecision, tiebreak, unskipDecision } from "@/lib/actions/decisions";
+import { addOption, closeRoundNow, deleteDecision, editOption, extendRound, pickWinner, removeOption, renameDecision, reopenRound, revealVotes, skipDecision, tiebreak, unskipDecision } from "@/lib/actions/decisions";
 import { CopyText } from "@/components/copy-text";
 import { baseUrl } from "@/lib/url";
 import { requireMembership } from "@/lib/auth";
-import type { Member, Option, Round, Vote } from "@/lib/db/schema";
-import { ROUND_LABEL, hasQuorum, isTiebreak, roundInstruction, roundLabel, roundSequence, tally, type RoundKind } from "@/lib/engine/rounds";
+import type { Vote } from "@/lib/db/schema";
+import { FORMAT_LABEL, ROUND_LABEL, VOTE_TYPE_LABEL, effectivePicks, isTiebreak, peopleVoted, roundInstruction, roundLabel, roundSequence, tally, type Format, type RoundKind } from "@/lib/engine/rounds";
 import { readError } from "@/lib/flash";
-import { closesRelative, formatDate, plural } from "@/lib/format";
-import { decisionData } from "@/lib/queries";
+import { clipTitle, closesRelative, formatDate, plural } from "@/lib/format";
+import { decisionData, type OptionView, type RoundView } from "@/lib/queries";
 
-type RoundWithVotes = Round & { votes: Vote[] };
-type OptionWithAdder = Option & { addedBy: Member | null };
-
-function Stepper({ rounds, plan, decided }: { rounds: RoundWithVotes[]; plan: "quick" | "shortlist_final" | "ideas_shortlist_final"; decided: boolean }) {
+function Stepper({ rounds, plan, decided }: { rounds: RoundView[]; plan: "quick" | "shortlist_final" | "ideas_shortlist_final"; decided: boolean }) {
   const seq = roundSequence(plan);
   if (seq.length === 1 && rounds.length <= 1) return null;
   const done = rounds.map((r, i) => ({
@@ -51,7 +48,7 @@ function Stepper({ rounds, plan, decided }: { rounds: RoundWithVotes[]; plan: "q
 type Picked = Vote & { optionId: string };
 const picks = (votes: Vote[]): Picked[] => votes.filter((v): v is Picked => v.optionId !== null);
 
-function ResultBars({ round, rounds, options, label, advancing, winnerId }: { round: RoundWithVotes; rounds: RoundWithVotes[]; options: OptionWithAdder[]; label: (v: Vote) => string; advancing: Set<string>; winnerId: string | null }) {
+function ResultBars({ round, rounds, options, format, label, advancing, winnerId }: { round: RoundView; rounds: RoundView[]; options: OptionView[]; format: Format; label: (v: Vote) => string; advancing: Set<string>; winnerId: string | null }) {
   const numberOf = (roundId: string) => rounds.find((r) => r.id === roundId)?.number ?? Infinity;
   // Everything that was on this round's ballot: still alive, or knocked out in this round or a later one.
   const inPlay = options.filter((o) => !o.eliminatedInRoundId || numberOf(o.eliminatedInRoundId) >= round.number);
@@ -61,8 +58,13 @@ function ResultBars({ round, rounds, options, label, advancing, winnerId }: { ro
     chosen.map((v) => ({ optionId: v.optionId })),
   );
   const max = Math.max(1, ...rows.map((r) => r.count));
-  const voters = new Set(round.votes.map((v) => v.memberId)).size;
+  const voters = peopleVoted(round.votes);
+  // One hidden ballot seals the whole round: names plus counts plus who voted would give it away by subtraction.
+  const sealed = round.votes.some((v) => v.anonymous);
+  const hiddenVoters = peopleVoted(round.votes.filter((v) => v.anonymous));
   const skippers = round.votes.filter((v) => v.optionId === null).map(label);
+  const cap = effectivePicks(round.maxPicks, inPlay.length);
+  const longText = format === "long_text";
   return (
     <div className="flex flex-col gap-2">
       {rows.map((r) => {
@@ -70,12 +72,12 @@ function ResultBars({ round, rounds, options, label, advancing, winnerId }: { ro
         const out = o?.eliminatedInRoundId === round.id;
         const won = r.optionId === winnerId;
         const adv = advancing.has(r.optionId);
-        const names = chosen.filter((v) => v.optionId === r.optionId).map(label);
+        const names = sealed ? [] : chosen.filter((v) => v.optionId === r.optionId).map(label);
         return (
           <Card key={r.optionId} className={`flex flex-col gap-2 p-3.5 ${out ? "opacity-70" : ""}`}>
             <div className="flex items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2">
-                <span className={`font-bold ${out ? "text-ink-2" : ""}`}>{o?.title ?? "?"}</span>
+                <span className={`${longText ? "whitespace-pre-line text-[15px] font-semibold leading-snug" : "font-bold"} ${out ? "text-ink-2" : ""}`}>{o?.title ?? "?"}</span>
                 {won ? <Pill tone="teal">Winner</Pill> : adv ? <Pill tone="accent">To the final</Pill> : null}
               </div>
               <span className="font-display text-xl font-extrabold">{r.count}</span>
@@ -89,9 +91,14 @@ function ResultBars({ round, rounds, options, label, advancing, winnerId }: { ro
       })}
       <div className="text-center text-xs text-ink-3">
         {plural(chosen.length, "vote")} from {plural(voters, "person", "people")}
-        {round.maxPicks > 1 ? ` · up to ${round.maxPicks} each` : ""}
-        {skippers.length ? ` · skipped: ${skippers.join(", ")}` : ""}
+        {cap > 1 ? ` · up to ${cap} each` : ""}
+        {skippers.length ? (sealed ? ` · ${skippers.length} skipped` : ` · skipped: ${skippers.join(", ")}`) : ""}
       </div>
+      {sealed ? (
+        <div className="text-center text-xs text-ink-3">
+          {hiddenVoters} of {voters} voted privately, so this round shows counts only.
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -102,11 +109,12 @@ export default async function DecisionPage({ params, searchParams }: { params: P
   const { user, family, member } = await requireMembership();
   const data = await decisionData(id, family.id, user.id);
   if (!data) notFound();
-  const { decision, event, rounds, currentRound, options, members, seats, casterName } = data;
+  const { decision, event, rounds, currentRound, options, members, seats, casterName, hiddenDefault } = data;
   const base = await baseUrl();
   const memberById = new Map(members.map((m) => [m.id, m]));
-  /** "Eli (via Shai)" when someone else cast the vote for that seat. */
+  /** "Eli (via Shai)" when someone else cast the vote for that seat; a seat that has left keeps its ballot, not its name. */
   const label = (v: Vote) => {
+    if (v.memberId === null) return "someone who left";
     const m = memberById.get(v.memberId);
     const name = m?.displayName ?? "?";
     if (!m || m.userId === v.castByUserId) return name;
@@ -124,6 +132,8 @@ export default async function DecisionPage({ params, searchParams }: { params: P
   const runnerUpCount = decidedCounts.filter((r) => r.optionId !== decision.outcomeOptionId)[0]?.count ?? 0;
   const decidedTally = winnerCount != null && winnerCount > 0 ? `, ${winnerCount}–${runnerUpCount}` : "";
   const open = planning && currentRound && currentRound.status === "open" && decision.status === "open" ? currentRound : null;
+  // The live pick cap: never everything on the ballot, so a pick-several final between two options is pick-one.
+  const pickCap = open ? effectivePicks(open.maxPicks, alive.length) : 0;
   const closedRounds = rounds.filter((r) => r.status === "closed");
   const lastClosed = closedRounds[closedRounds.length - 1] ?? null;
   const tied = !open && !decided && decision.status === "open" && currentRound?.tied ? currentRound : null;
@@ -135,14 +145,14 @@ export default async function DecisionPage({ params, searchParams }: { params: P
         return rows.length && rows[0].count > 0 && (rows.length === 1 || rows[0].count > rows[1].count) ? (alive.find((o) => o.id === rows[0].optionId) ?? null) : null;
       })()
     : null;
-  const turnout = lowTurnout ? new Set(lowTurnout.votes.map((v) => v.memberId)).size : 0;
-  void hasQuorum;
+  const turnout = lowTurnout ? peopleVoted(lowTurnout.votes) : 0;
   const firstRound = !!open && open.number === 1;
   const laterFinal = !!open && !firstRound && open.kind === "final";
   const laterShortlist = !!open && !firstRound && open.kind === "shortlist";
-  // Anyone may add while the first round is open (a quick vote too); later rounds are the organizer's.
-  const canAddIdeas = !!open && !laterFinal && (laterShortlist ? organizer : decision.anyoneCanAddOptions || organizer);
-  const votersInOpen = open ? new Set(open.votes.map((v) => v.memberId)) : new Set<string>();
+  // Anyone may add while the first round is open (a quick vote too); later rounds are the organizer's. A or B keeps its two.
+  const canAddIdeas = !!open && decision.voteType !== "ab" && !laterFinal && (laterShortlist ? organizer : decision.anyoneCanAddOptions || organizer);
+  // Participation is public; the open round's `votes` holds only the viewer's own seats' ballots.
+  const votersInOpen = open ? new Set(open.voterMemberIds) : new Set<string>();
   const waitingOn = open ? members.filter((m) => !votersInOpen.has(m.id)).map((m) => m.displayName) : [];
   const tiedOptions = tied
     ? (() => {
@@ -168,11 +178,17 @@ export default async function DecisionPage({ params, searchParams }: { params: P
       <TopBar back={`/app/events/${event.id}`} backLabel={event.title} />
       <div className="flex flex-col gap-3.5">
         <h1 className="font-display text-[30px] font-bold leading-[1.05] tracking-[-0.025em]">{decision.title}</h1>
+        <div className="flex flex-wrap items-center gap-2 text-[13px] text-ink-3">
+          <span>
+            {VOTE_TYPE_LABEL[decision.voteType]} · {FORMAT_LABEL[decision.format]}
+          </span>
+          {decision.anonymous ? <Pill>Asked anonymously</Pill> : null}
+        </div>
         <Stepper rounds={rounds} plan={decision.plan} decided={decided} />
         {open ? (
           <div className="flex items-center justify-between gap-3 text-[13px] text-ink-2">
             <div>
-              <span className="font-bold text-ink">{roundLabel(open, rounds, decision.plan)}.</span> {roundInstruction(open.kind, open.maxPicks, decision.advanceCount)}
+              <span className="font-bold text-ink">{roundLabel(open, rounds, decision.plan)}.</span> {roundInstruction(open.kind, pickCap, decision.advanceCount)}
             </div>
             <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-accent-deep">
               <Icon name="clock" size={13} stroke={2.5} />
@@ -190,7 +206,11 @@ export default async function DecisionPage({ params, searchParams }: { params: P
           <SectionLabel tone="teal">
             Decided <LocalTime iso={(decision.decidedAt ?? decision.createdAt).toISOString()} mode="date" fallback={formatDate(decision.decidedAt ?? decision.createdAt)} />
           </SectionLabel>
-          <div className="font-display text-[26px] font-extrabold tracking-[-0.02em] text-teal-ink">{outcome.title}</div>
+          {decision.format === "long_text" ? (
+            <div className="whitespace-pre-line text-[17px] font-semibold leading-snug text-teal-ink">{outcome.title}</div>
+          ) : (
+            <div className="font-display text-[26px] font-extrabold tracking-[-0.02em] text-teal-ink">{outcome.title}</div>
+          )}
           {outcome.note ? <div className="text-sm text-teal-deep">{outcome.note}</div> : null}
           {decision.setsEventDates ? <div className="text-sm text-teal-deep">These are now the event’s dates.</div> : null}
           <CopyText
@@ -198,7 +218,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
             label="Copy for Messenger"
             lines={[
               { text: `${decision.title} (${event.title})` },
-              { text: `Decided: ${outcome.title}${decidedTally}.` },
+              { text: `Decided: ${clipTitle(outcome.title, decision.format)}${decidedTally}.` },
               { text: `${base}/app/decisions/${decision.id}` },
             ]}
           />
@@ -245,17 +265,21 @@ export default async function DecisionPage({ params, searchParams }: { params: P
         <section className="flex flex-col gap-2.5">
           <SectionLabel right={plural(alive.length, "idea")}>Ideas so far</SectionLabel>
           {alive.length === 0 ? <Card className="p-4 text-sm text-ink-2">No ideas yet. Be the first.</Card> : null}
-          {alive.map((o) => (
-            <Card key={o.id} className="flex items-center gap-3 p-3.5">
-              <Avatar name={o.addedBy?.displayName ?? "?"} size={32} ring="#ffffff" />
-              <div className="flex min-w-0 flex-col">
-                <div className="font-bold">{o.title}</div>
-                <div className="text-[13px] text-ink-2">
-                  {o.addedBy?.displayName ?? "Someone"}’s idea{o.note ? ` · ${o.note}` : ""}
+          {alive.map((o) => {
+            const who = o.anonymous ? null : (o.addedBy?.displayName ?? "Someone");
+            return (
+              <Card key={o.id} className="flex items-center gap-3 p-3.5">
+                <Avatar name={who ?? "?"} size={32} ring="#ffffff" />
+                <div className="flex min-w-0 flex-col">
+                  <div className={decision.format === "long_text" ? "whitespace-pre-line text-[15px] font-semibold leading-snug" : "font-bold"}>{o.title}</div>
+                  <div className="text-[13px] text-ink-2">
+                    {who ? `${who}’s idea` : "Anonymous idea"}
+                    {o.note ? ` · ${o.note}` : ""}
+                  </div>
                 </div>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
           {organizer && alive.length >= 2 ? (
             <div className="flex flex-col gap-2 rounded-card bg-ink p-4 text-white">
               <div className="font-display text-lg font-bold">Got all the ideas?</div>
@@ -275,7 +299,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
         <Card className="p-4">
           <form action={addOption} className="flex flex-col gap-3">
             <input type="hidden" name="decisionId" value={decision.id} />
-            {decision.setsEventDates ? (
+            {decision.format === "date" ? (
               <div className="flex flex-col gap-2">
                 <span className="text-[13px] font-semibold text-ink-2">{open?.kind === "ideas" ? "Suggest dates" : "Add a date range"}</span>
                 <div className="grid grid-cols-2 gap-2">
@@ -283,12 +307,26 @@ export default async function DecisionPage({ params, searchParams }: { params: P
                   <input type="date" name="dateEnd" aria-label="End" className={inputClass} />
                 </div>
               </div>
+            ) : decision.format === "long_text" ? (
+              <Field label={open?.kind === "ideas" ? "Add an idea" : "Add an option"}>
+                <textarea
+                  name="title"
+                  required
+                  maxLength={500}
+                  rows={3}
+                  placeholder="A paragraph: the plan, the place, the why"
+                  className="w-full rounded-[14px] border border-line bg-card px-4 py-3 text-[15px] font-medium leading-snug text-ink outline-none placeholder:text-ink-3 focus:border-accent"
+                />
+              </Field>
             ) : (
               <Field label={open?.kind === "ideas" ? "Add an idea" : "Add an option"}>
                 <input name="title" required maxLength={80} placeholder="Beach house in Cascais" className={inputClass} />
               </Field>
             )}
             <input name="note" maxLength={140} placeholder="Why? (optional)" className={`${inputClass} h-11 text-[15px] font-medium`} />
+            <label className="flex items-center gap-2 text-sm text-ink-2">
+              <input type="checkbox" name="anonymous" className="h-5 w-5 accent-accent" /> Suggest anonymously
+            </label>
             <Button type="submit" variant="secondary">
               Add
             </Button>
@@ -303,23 +341,26 @@ export default async function DecisionPage({ params, searchParams }: { params: P
             const myVotes = open.votes.filter((v) => v.memberId === seat.id);
             const mine = myVotes.map((v) => v.optionId).filter((id): id is string => id !== null);
             const skipped = myVotes.some((v) => v.optionId === null);
+            const hidden = myVotes.some((v) => v.anonymous);
             return (
               <section key={seat.id} className="flex flex-col gap-2.5">
                 {seats.length > 1 ? (
-                  <SectionLabel right={mine.length ? "voted" : skipped ? "skipped" : "not yet"}>{seat.userId === user.id ? "Your vote" : `Voting for ${seat.displayName}`}</SectionLabel>
+                  <SectionLabel right={mine.length ? (hidden ? "voted · hidden" : "voted") : skipped ? "skipped" : "not yet"}>{seat.userId === user.id ? "Your vote" : `Voting for ${seat.displayName}`}</SectionLabel>
                 ) : null}
                 <VoteForm
+                  key={`${open.id}:${seat.id}:${alive.map((o) => o.id).join(",")}`}
                   roundId={open.id}
                   memberId={seat.id}
-                  maxPicks={open.maxPicks}
+                  maxPicks={pickCap}
                   initial={mine}
                   changed={mine.length > 0}
                   skipped={skipped}
+                  hiddenDefault={hiddenDefault.get(seat.id) ?? false}
                   options={alive.map((o) => ({
                     id: o.id,
                     title: o.title,
-                    byline: `${o.addedBy?.displayName ?? "Someone"}’s idea${o.note ? ` · ${o.note}` : ""}`,
-                    voters: open.votes.filter((v) => v.optionId === o.id).map(label),
+                    byline: [o.addedBy ? `${o.addedBy.displayName}’s idea` : null, o.note].filter(Boolean).join(" · "),
+                    longText: decision.format === "long_text",
                   }))}
                 />
               </section>
@@ -364,7 +405,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
         <div className="flex flex-col gap-3 rounded-card bg-ink p-[18px] text-white">
           <div className="flex flex-col gap-1">
             <div className="text-xs font-bold uppercase tracking-[0.08em] text-accent-line">It’s a tie</div>
-            <div className="font-display text-xl font-bold tracking-[-0.01em]">{tiedOptions.map((o) => o.title).join(" and ")} ended level.</div>
+            <div className="font-display text-xl font-bold tracking-[-0.01em]">{tiedOptions.map((o) => clipTitle(o.title, decision.format)).join(" and ")} ended level.</div>
             <div className="text-[13px] leading-snug text-line">{organizer ? "Run one more round between them, or just call it." : "The organizer will break the tie."}</div>
           </div>
           {organizer ? (
@@ -381,7 +422,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
                     <input type="hidden" name="decisionId" value={decision.id} />
                     <input type="hidden" name="optionId" value={o.id} />
                     <button type="submit" className="h-11 w-full rounded-[12px] border border-[#4a423a] px-3 text-sm font-semibold text-white hover:bg-[#2c2622]">
-                      Just take {o.title}
+                      Just take {clipTitle(o.title, decision.format)}
                     </button>
                   </form>
                 ))}
@@ -414,7 +455,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
                     <input type="hidden" name="decisionId" value={decision.id} />
                     <input type="hidden" name="optionId" value={leader.id} />
                     <button type="submit" className="h-11 w-full rounded-[12px] border border-[#4a423a] px-3 text-sm font-semibold text-white hover:bg-[#2c2622]">
-                      Go with {leader.title}
+                      Go with {clipTitle(leader.title, decision.format)}
                     </button>
                   </form>
                 ) : null}
@@ -471,8 +512,23 @@ export default async function DecisionPage({ params, searchParams }: { params: P
               {r.kind === "ideas" ? (
                 <Card className="p-3.5 text-sm text-ink-2">{plural(options.filter((o) => o.addedInRoundId === r.id).length, "idea")} came in.</Card>
               ) : (
-                <ResultBars round={r} rounds={rounds} options={options} label={label} advancing={advancedFrom.get(r.id) ?? new Set()} winnerId={r.kind === "final" ? (decision.outcomeOptionId ?? null) : null} />
+                <ResultBars round={r} rounds={rounds} options={options} format={decision.format} label={label} advancing={advancedFrom.get(r.id) ?? new Set()} winnerId={r.kind === "final" ? (decision.outcomeOptionId ?? null) : null} />
               )}
+              {r.kind !== "ideas" && seats.some((seat) => r.votes.some((v) => v.memberId === seat.id && v.anonymous)) ? (
+                <div className="flex flex-wrap gap-2">
+                  {seats
+                    .filter((seat) => r.votes.some((v) => v.memberId === seat.id && v.anonymous))
+                    .map((seat) => (
+                      <form key={seat.id} action={revealVotes}>
+                        <input type="hidden" name="roundId" value={r.id} />
+                        <input type="hidden" name="memberId" value={seat.id} />
+                        <Button type="submit" variant="ghost" size="sm">
+                          {seat.userId === user.id ? "Show my hand" : `Show ${seat.displayName}’s hand`}
+                        </Button>
+                      </form>
+                    ))}
+                </div>
+              ) : null}
             </div>
           ))}
         </section>
@@ -516,7 +572,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
               Save title
             </Button>
           </form>
-          {open && (open.kind !== "final" || firstRound) && alive.length ? (
+          {open && decision.voteType !== "ab" && (open.kind !== "final" || firstRound) && alive.length ? (
             <div className="flex flex-col gap-2">
               <span className="text-[13px] font-semibold text-ink-2">Remove an option</span>
               <div className="flex flex-col gap-1.5">
@@ -524,7 +580,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
                   <form key={o.id} action={removeOption} className="flex items-center justify-between gap-2 rounded-[10px] bg-sand px-3 py-1.5">
                     <input type="hidden" name="decisionId" value={decision.id} />
                     <input type="hidden" name="optionId" value={o.id} />
-                    <span className="min-w-0 flex-1 truncate text-sm font-semibold">{o.title}</span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold">{clipTitle(o.title, decision.format)}</span>
                     <Button type="submit" variant="ghost" size="sm">
                       Remove
                     </Button>
@@ -539,15 +595,25 @@ export default async function DecisionPage({ params, searchParams }: { params: P
               <div className="flex flex-col gap-1.5">
                 {options.map((o) => (
                   <details key={o.id} className="rounded-[10px] bg-sand px-3 py-2">
-                    <summary className="cursor-pointer list-none text-sm font-semibold [&::-webkit-details-marker]:hidden">{o.title}</summary>
+                    <summary className="cursor-pointer list-none text-sm font-semibold [&::-webkit-details-marker]:hidden">{clipTitle(o.title, decision.format)}</summary>
                     <form action={editOption} className="mt-2 flex flex-col gap-2">
                       <input type="hidden" name="decisionId" value={decision.id} />
                       <input type="hidden" name="optionId" value={o.id} />
-                      {decision.setsEventDates ? (
+                      {decision.format === "date" ? (
                         <div className="grid grid-cols-2 gap-2">
                           <input type="date" name="dateStart" defaultValue={o.startsOn ?? ""} required aria-label="Start" className={`${inputClass} h-10 text-[15px]`} />
                           <input type="date" name="dateEnd" defaultValue={o.endsOn ?? ""} aria-label="End" className={`${inputClass} h-10 text-[15px]`} />
                         </div>
+                      ) : decision.format === "long_text" ? (
+                        <textarea
+                          name="title"
+                          defaultValue={o.title}
+                          required
+                          maxLength={500}
+                          rows={3}
+                          aria-label="Title"
+                          className="w-full rounded-[14px] border border-line bg-card px-4 py-2.5 text-[15px] font-medium leading-snug text-ink outline-none focus:border-accent"
+                        />
                       ) : (
                         <input name="title" defaultValue={o.title} required maxLength={80} aria-label="Title" className={`${inputClass} h-10 text-[15px]`} />
                       )}
@@ -568,7 +634,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
                 <select name="optionId" className={`${inputClass} h-11 text-[15px]`}>
                   {alive.map((o) => (
                     <option key={o.id} value={o.id}>
-                      {o.title}
+                      {clipTitle(o.title, decision.format)}
                     </option>
                   ))}
                 </select>
