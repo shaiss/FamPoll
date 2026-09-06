@@ -9,6 +9,8 @@ import { getDb, schema } from "../db";
 import type { Tx } from "../lifecycle";
 import { fail } from "../flash";
 import { newCode, newId } from "../ids";
+import { getMessages } from "@/lib/locale-server";
+import { interpolate } from "@/lib/messages";
 
 const MAX_PROXIES_PER_PERSON = 4;
 
@@ -50,8 +52,9 @@ async function retireSeats(tx: Tx, memberIds: string[]) {
 export async function createFamily(formData: FormData) {
   const user = await requireUser();
   if (await getMembership(user.id)) redirect("/app");
+  const t = await getMessages();
   const name = cleanName(formData.get("name"));
-  if (!name) fail("/app/family/new", "Give the family a name.");
+  if (!name) fail("/app/family/new", t.errFamnameFamilyRequired);
   const db = getDb();
   await db.transaction(async (tx) => {
     const familyId = newId();
@@ -66,13 +69,14 @@ export async function joinFamily(formData: FormData) {
   const code = String(formData.get("code") ?? "").trim().toLowerCase();
   const fromLink = formData.get("fromLink") === "1";
   const back = fromLink ? `/join/${encodeURIComponent(code)}` : "/app/family/new";
-  if (code.length < 4 || code.length > 40) fail(back, "That invite code doesn't look right.");
+  const t = await getMessages();
+  if (code.length < 4 || code.length > 40) fail(back, t.errFaminviteCodeInvalid);
   const db = getDb();
   const family = await db.query.families.findFirst({ where: eq(schema.families.inviteCode, code) });
-  if (!family) fail(back, "That invite link is not valid any more. Ask for a fresh one.");
+  if (!family) fail(back, t.errFaminviteLinkExpired);
   const existing = await getMembership(user.id);
   if (existing && existing.family.id === family.id) redirect("/app");
-  if (existing) fail(back, `You're already in ${existing.family.name}. One family per person for now.`);
+  if (existing) fail(back, interpolate(t.errFamalreadyInFamily, { family: existing.family.name }));
   try {
     await db.insert(schema.members).values({ id: newId(), familyId: family.id, userId: user.id, displayName: user.name, role: "member" });
   } catch {
@@ -88,25 +92,27 @@ export async function joinFamily(formData: FormData) {
  */
 export async function addProxyMember(formData: FormData) {
   const { user, family, member } = await requireMembership();
-  if (member.role !== "organizer") fail("/app/family", "Only an organizer can add a seat for someone. Ask them to make you an organizer.");
+  const t = await getMessages();
+  if (member.role !== "organizer") fail("/app/family", t.errFamorganizerOnlyAddSeat);
   const displayName = cleanName(formData.get("displayName"));
-  if (!displayName) fail("/app/family", "Give them a name.");
+  if (!displayName) fail("/app/family", t.errFamnamePersonRequired);
   const db = getDb();
   const members = await db.query.members.findMany({ where: eq(schema.members.familyId, family.id) });
-  if (members.some((m) => m.displayName.toLowerCase() === displayName.toLowerCase())) fail("/app/family", `There is already a ${displayName} here. Add a last initial.`);
+  if (members.some((m) => m.displayName.toLowerCase() === displayName.toLowerCase())) fail("/app/family", interpolate(t.errFamduplicateNameAddInitial, { name: displayName }));
   const mine = members.filter((m) => m.userId === null && m.managedByUserId === user.id).length;
-  if (mine >= MAX_PROXIES_PER_PERSON) fail("/app/family", `You can vote for up to ${MAX_PROXIES_PER_PERSON} people. Ask another adult to add the rest.`);
+  if (mine >= MAX_PROXIES_PER_PERSON) fail("/app/family", interpolate(t.errFamproxyLimitReached, { max: MAX_PROXIES_PER_PERSON }));
   await db.insert(schema.members).values({ id: newId(), familyId: family.id, userId: null, managedByUserId: user.id, displayName, role: "member" });
   revalidatePath("/app/family");
 }
 
 export async function removeProxyMember(formData: FormData) {
   const { user, family, member } = await requireMembership();
+  const t = await getMessages();
   const memberId = z.string().parse(formData.get("memberId"));
   const db = getDb();
   const target = await db.query.members.findFirst({ where: and(eq(schema.members.id, memberId), eq(schema.members.familyId, family.id), isNull(schema.members.userId)) });
-  if (!target) fail("/app/family", "That seat is not a proxy seat.");
-  if (target.managedByUserId !== user.id && member.role !== "organizer") fail("/app/family", "Only the person who added them, or an organizer, can remove a seat.");
+  if (!target) fail("/app/family", t.errFamnotProxySeat);
+  if (target.managedByUserId !== user.id && member.role !== "organizer") fail("/app/family", t.errFamremoveSeatNotAllowed);
   await db.transaction(async (tx) => retireSeats(tx, [target.id]));
   revalidatePath("/app/family");
 }
@@ -114,13 +120,14 @@ export async function removeProxyMember(formData: FormData) {
 /** Organizer only: remove a signed-in member and the proxy seats they manage. */
 export async function removeMember(formData: FormData) {
   const { family, member } = await requireMembership();
-  if (member.role !== "organizer") fail("/app/family", "Only an organizer can remove people.");
+  const t = await getMessages();
+  if (member.role !== "organizer") fail("/app/family", t.errFamorganizerOnlyRemovePeople);
   const memberId = z.string().parse(formData.get("memberId"));
   const db = getDb();
   const target = await db.query.members.findFirst({ where: and(eq(schema.members.id, memberId), eq(schema.members.familyId, family.id)) });
-  if (!target) fail("/app/family", "That person is not in this family.");
-  if (target.id === member.id) fail("/app/family", "You can't remove yourself.");
-  if (target.role === "organizer") fail("/app/family", "Organizers can't be removed here.");
+  if (!target) fail("/app/family", t.errFampersonNotInFamily);
+  if (target.id === member.id) fail("/app/family", t.errFamcannotRemoveSelf);
+  if (target.role === "organizer") fail("/app/family", t.errFamcannotRemoveOrganizer);
   await db.transaction(async (tx) => {
     const managed = target.userId
       ? await tx.query.members.findMany({ where: and(eq(schema.members.familyId, family.id), eq(schema.members.managedByUserId, target.userId)) })
@@ -136,11 +143,12 @@ export async function removeMember(formData: FormData) {
 /** Organizer only: make another signed-in adult an organizer too (the co-parent case). */
 export async function makeOrganizer(formData: FormData) {
   const { family, member } = await requireMembership();
-  if (member.role !== "organizer") fail("/app/family", "Only an organizer can do that.");
+  const t = await getMessages();
+  if (member.role !== "organizer") fail("/app/family", t.errFamorganizerOnlyGeneric);
   const memberId = z.string().parse(formData.get("memberId"));
   const db = getDb();
   const target = await db.query.members.findFirst({ where: and(eq(schema.members.id, memberId), eq(schema.members.familyId, family.id)) });
-  if (!target || !target.userId) fail("/app/family", "Only someone with an account can be an organizer.");
+  if (!target || !target.userId) fail("/app/family", t.errFamorganizerNeedsAccount);
   await db.update(schema.members).set({ role: "organizer" }).where(eq(schema.members.id, target.id));
   revalidatePath("/app/family");
 }
@@ -148,16 +156,18 @@ export async function makeOrganizer(formData: FormData) {
 /** Organizer only: a new invite link; the old one stops working immediately. */
 export async function rotateInviteCode() {
   const { family, member } = await requireMembership();
-  if (member.role !== "organizer") fail("/app/family", "Only an organizer can change the invite link.");
+  const t = await getMessages();
+  if (member.role !== "organizer") fail("/app/family", t.errFamorganizerOnlyChangeInvite);
   await getDb().update(schema.families).set({ inviteCode: newCode() + newCode() }).where(eq(schema.families.id, family.id));
   revalidatePath("/app/family");
 }
 
 export async function renameFamily(formData: FormData) {
   const { family, member } = await requireMembership();
+  const t = await getMessages();
   if (member.role !== "organizer") fail("/app/family", "Only an organizer can rename the family.");
   const name = cleanName(formData.get("name"));
-  if (!name) fail("/app/family", "Give the family a name.");
+  if (!name) fail("/app/family", t.errFamnameFamilyRequired);
   await getDb().update(schema.families).set({ name }).where(eq(schema.families.id, family.id));
   revalidatePath("/app");
   revalidatePath("/app/family");
@@ -171,6 +181,7 @@ export async function renameFamily(formData: FormData) {
  */
 export async function leaveFamily() {
   const { user, family, member } = await requireMembership();
+  const t = await getMessages();
   const db = getDb();
   const all = await db.query.members.findMany({ where: eq(schema.members.familyId, family.id) });
   const signedIn = all.filter((m) => m.userId !== null);
@@ -182,7 +193,7 @@ export async function leaveFamily() {
     redirect("/app/family/new");
   }
   const otherOrganizers = signedIn.filter((m) => m.id !== member.id && m.role === "organizer");
-  if (member.role === "organizer" && otherOrganizers.length === 0) fail("/app/family", "Make someone else an organizer before you leave.");
+  if (member.role === "organizer" && otherOrganizers.length === 0) fail("/app/family", t.errFammakeOrganizerBeforeLeaving);
   const heir = otherOrganizers[0] ?? signedIn.find((m) => m.id !== member.id)!;
   await db.transaction(async (tx) => {
     const managed = await tx.query.members.findMany({ where: and(eq(schema.members.familyId, family.id), eq(schema.members.managedByUserId, user.id)) });
@@ -196,7 +207,8 @@ export async function leaveFamily() {
 /** Organizer only: step someone (or yourself) down to a plain member. The last organizer can't. */
 export async function demoteOrganizer(formData: FormData) {
   const { family, member } = await requireMembership();
-  if (member.role !== "organizer") fail("/app/family", "Only an organizer can do that.");
+  const t = await getMessages();
+  if (member.role !== "organizer") fail("/app/family", t.errFamorganizerOnlyGeneric);
   const memberId = z.string().parse(formData.get("memberId"));
   const db = getDb();
   await db.transaction(async (tx) => {
@@ -208,8 +220,8 @@ export async function demoteOrganizer(formData: FormData) {
       .where(and(eq(schema.members.familyId, family.id), eq(schema.members.role, "organizer")))
       .for("update");
     const target = organizers.find((m) => m.id === memberId);
-    if (!target) fail("/app/family", "They aren't an organizer.");
-    if (organizers.length <= 1) fail("/app/family", "Make someone else an organizer first — a family needs one.");
+    if (!target) fail("/app/family", t.errFamnotAnOrganizer);
+    if (organizers.length <= 1) fail("/app/family", t.errFamneedOneOrganizerDemote);
     await tx.update(schema.members).set({ role: "member" }).where(eq(schema.members.id, target.id));
   });
   revalidatePath("/app/family");
@@ -218,14 +230,15 @@ export async function demoteOrganizer(formData: FormData) {
 /** Organizer only: hand a proxy seat (a kid, a grandparent) to another organizer to manage. */
 export async function reassignProxy(formData: FormData) {
   const { family, member } = await requireMembership();
-  if (member.role !== "organizer") fail("/app/family", "Only an organizer can move a seat.");
+  const t = await getMessages();
+  if (member.role !== "organizer") fail("/app/family", t.errFamorganizerOnlyMoveSeat);
   const memberId = z.string().parse(formData.get("memberId"));
   const toMemberId = z.string().parse(formData.get("toMemberId"));
   const db = getDb();
   const target = await db.query.members.findFirst({ where: and(eq(schema.members.id, memberId), eq(schema.members.familyId, family.id), isNull(schema.members.userId)) });
-  if (!target) fail("/app/family", "That seat is not a proxy seat.");
+  if (!target) fail("/app/family", t.errFamnotProxySeat);
   const to = await db.query.members.findFirst({ where: and(eq(schema.members.id, toMemberId), eq(schema.members.familyId, family.id)) });
-  if (!to || !to.userId || to.role !== "organizer") fail("/app/family", "Hand it to another organizer.");
+  if (!to || !to.userId || to.role !== "organizer") fail("/app/family", t.errFamhandToOrganizer);
   await db.update(schema.members).set({ managedByUserId: to.userId }).where(eq(schema.members.id, target.id));
   revalidatePath("/app/family");
 }
@@ -233,8 +246,9 @@ export async function reassignProxy(formData: FormData) {
 /** Organizer only: delete the whole family, and everything in it, behind a confirm. */
 export async function deleteFamily(formData: FormData) {
   const { family, member } = await requireMembership();
-  if (member.role !== "organizer") fail("/app/family", "Only an organizer can delete the family.");
-  if (formData.get("confirm") !== "on") fail("/app/family", "Tick the box to confirm you want to delete everything.");
+  const t = await getMessages();
+  if (member.role !== "organizer") fail("/app/family", t.errFamorganizerOnlyDeleteFamily);
+  if (formData.get("confirm") !== "on") fail("/app/family", t.errFamconfirmDeleteRequired);
   await getDb().delete(schema.families).where(eq(schema.families.id, family.id));
   redirect("/app/family/new");
 }
@@ -242,15 +256,16 @@ export async function deleteFamily(formData: FormData) {
 /** Your own display name, or (organizer) anyone's, proxies included. */
 export async function renameMember(formData: FormData) {
   const { user, family, member } = await requireMembership();
+  const t = await getMessages();
   const memberId = z.string().parse(formData.get("memberId"));
   const displayName = cleanName(formData.get("displayName"));
-  if (!displayName) fail("/app/family", "Give them a name.");
+  if (!displayName) fail("/app/family", t.errFamnamePersonRequired);
   const db = getDb();
   const target = await db.query.members.findFirst({ where: and(eq(schema.members.id, memberId), eq(schema.members.familyId, family.id)) });
-  if (!target) fail("/app/family", "That person is not in this family.");
-  if (target.userId !== user.id && member.role !== "organizer") fail("/app/family", "You can rename yourself; an organizer can rename anyone.");
+  if (!target) fail("/app/family", t.errFampersonNotInFamily);
+  if (target.userId !== user.id && member.role !== "organizer") fail("/app/family", t.errFamrenameNotAllowed);
   const members = await db.query.members.findMany({ where: eq(schema.members.familyId, family.id) });
-  if (members.some((m) => m.id !== target.id && m.displayName.toLowerCase() === displayName.toLowerCase())) fail("/app/family", `There is already a ${displayName} here.`);
+  if (members.some((m) => m.id !== target.id && m.displayName.toLowerCase() === displayName.toLowerCase())) fail("/app/family", interpolate(t.errFamduplicateName, { name: displayName }));
   await db.update(schema.members).set({ displayName }).where(eq(schema.members.id, target.id));
   revalidatePath("/app/family");
   revalidatePath("/app");
@@ -264,12 +279,13 @@ export async function renameMember(formData: FormData) {
  */
 export async function setVotePrivacy(formData: FormData) {
   const { user, family } = await requireMembership();
+  const t = await getMessages();
   const memberId = z.string().parse(formData.get("memberId"));
   const votesHidden = formData.get("votesHidden") === "1";
   const db = getDb();
   const target = await db.query.members.findFirst({ where: and(eq(schema.members.id, memberId), eq(schema.members.familyId, family.id)) });
-  if (!target) fail("/app/family", "That person is not in this family.");
-  if (target.userId !== user.id && target.managedByUserId !== user.id) fail("/app/family", "Only that person, or whoever votes for them, can change this.");
+  if (!target) fail("/app/family", t.errFampersonNotInFamily);
+  if (target.userId !== user.id && target.managedByUserId !== user.id) fail("/app/family", t.errFamprivacyNotAllowed);
   await db.update(schema.members).set({ votesHidden }).where(eq(schema.members.id, target.id));
   revalidatePath("/app/family");
 }

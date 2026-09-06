@@ -8,10 +8,10 @@ import { SubmitButton } from "@/components/submit-button";
 import { joinFamily } from "@/lib/actions/family";
 import { getMembership, requireUser } from "@/lib/auth";
 import { brandFor } from "@/lib/brand";
-import { getLocale } from "@/lib/locale-server";
+import { getLocale, getMessages } from "@/lib/locale-server";
 import { hasClerk, hasDatabase } from "@/lib/env";
 import { readError } from "@/lib/flash";
-import { plural } from "@/lib/format";
+import { interpolate } from "@/lib/messages";
 import { familyByCode } from "@/lib/queries";
 import { isInAppBrowser } from "@/lib/ua";
 
@@ -19,11 +19,12 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ code: string }> }): Promise<Metadata> {
   const b = brandFor(await getLocale());
-  if (!hasDatabase) return { title: "Invite" };
+  const t = await getMessages();
+  if (!hasDatabase) return { title: t.pubMetaInviteTitle };
   const { code } = await params;
   const family = await familyByCode(code.toLowerCase());
-  const title = family ? `Join ${family.name} on ${b.name}` : `Invite · ${b.name}`;
-  const description = family ? `${plural(family.members.length, "person", "people")} in. Sign in with Google, Apple or Facebook to vote with them.` : "This invite link is no longer valid.";
+  const title = family ? interpolate(t.pubMetaJoinFamilyTitle, { family: family.name, brand: b.name }) : interpolate(t.pubMetaInviteBrandTitle, { brand: b.name });
+  const description = family ? interpolate(t.pubMetaJoinDescription, { count: family.members.length }) : t.pubMetaInviteInvalidDescription;
   return { title, description, robots: { index: false }, openGraph: { title, description, siteName: b.name, type: "website" } };
 }
 
@@ -33,16 +34,17 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
   const error = readError(await searchParams);
   const family = await familyByCode(code.toLowerCase());
   const { userId } = await auth();
+  const t = await getMessages();
 
   if (!family) {
     return (
       <Screen className="pt-14">
         <Wordmark href="/" />
         <Card className="flex flex-col gap-3 p-5">
-          <h1 className="font-display text-2xl font-bold">That invite link isn’t valid.</h1>
-          <p className="text-ink-2">It may have been replaced. Ask whoever sent it for a fresh one.</p>
+          <h1 className="font-display text-2xl font-bold">{t.pubInvalidTitle}</h1>
+          <p className="text-ink-2">{t.pubInvalidBody}</p>
           <LinkButton href={userId ? "/app" : "/"} variant="secondary">
-            {userId ? "Go to your family" : "Home"}
+            {userId ? t.pubGoToYourFamily : t.pubHome}
           </LinkButton>
         </Card>
       </Screen>
@@ -54,9 +56,9 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
     <>
       <AvatarStack names={names} size={32} ring="#ffffff" />
       <div>
-        <div className="text-[13px] text-ink-2">You’re invited to join</div>
+        <div className="text-[13px] text-ink-2">{t.pubInvitedToJoin}</div>
         <h1 className="font-display text-[26px] font-bold tracking-[-0.01em]">{family.name}</h1>
-        <div className="text-[13px] text-ink-2">{plural(family.members.length, "person", "people")} in</div>
+        <div className="text-[13px] text-ink-2">{interpolate(t.pubPeopleIn, { count: family.members.length })}</div>
       </div>
     </>
   );
@@ -70,17 +72,17 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
         <Card className="flex flex-col gap-4 p-5 shadow-card">
           {invite}
           {inApp ? (
-            <p className="rounded-[12px] bg-accent-tint px-3 py-2 text-sm font-semibold text-accent-deep">Sign-in works best in your browser. Tap the menu and choose “Open in browser”, then come back to this link.</p>
+            <p className="rounded-[12px] bg-accent-tint px-3 py-2 text-sm font-semibold text-accent-deep">{t.pubInAppBrowserHint}</p>
           ) : null}
           <div className="flex flex-col gap-2">
             <SignInButton mode="modal" forceRedirectUrl={here} signUpForceRedirectUrl={here}>
-              <Button>Continue with Google, Apple or Facebook</Button>
+              <Button>{t.pubContinueSocial}</Button>
             </SignInButton>
             <SignUpButton mode="modal" forceRedirectUrl={here} signInForceRedirectUrl={here}>
-              <Button variant="secondary">I’m new here</Button>
+              <Button variant="secondary">{t.pubImNewHere}</Button>
             </SignUpButton>
           </div>
-          <p className="text-xs text-ink-3">No passwords. We only keep your name and photo so the family knows who voted.</p>
+          <p className="text-xs text-ink-3">{t.pubNoPasswords}</p>
         </Card>
       </Screen>
     );
@@ -97,16 +99,16 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
         {invite}
         {existing ? (
           <>
-            <p className="text-sm text-accent-deep">You’re already in {existing.family.name}. One family per person for now.</p>
+            <p className="text-sm text-accent-deep">{interpolate(t.pubAlreadyInFamily, { family: existing.family.name })}</p>
             <LinkButton href="/app" variant="secondary">
-              Go to {existing.family.name}
+              {interpolate(t.pubGoToNamedFamily, { family: existing.family.name })}
             </LinkButton>
           </>
         ) : (
           <form action={joinFamily} className="flex flex-col gap-3">
             <input type="hidden" name="code" value={code} />
             <input type="hidden" name="fromLink" value="1" />
-            <SubmitButton pendingLabel="Joining…">Join as {user.name}</SubmitButton>
+            <SubmitButton pendingLabel={t.pubJoiningPending}>{interpolate(t.pubJoinAsName, { name: user.name })}</SubmitButton>
           </form>
         )}
         {error ? <p className="text-sm text-accent-deep">{error}</p> : null}

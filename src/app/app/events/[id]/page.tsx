@@ -9,8 +9,10 @@ import { moveDecision } from "@/lib/actions/decisions";
 import { setEventStatus } from "@/lib/actions/events";
 import { requireMembership } from "@/lib/auth";
 import { roundLabel } from "@/lib/engine/rounds";
-import { clipTitle, closesRelative, formatDate, formatDateRange, nightsBetween, plural } from "@/lib/format";
+import { clipTitle, closesRelative, formatDate, formatDateRange, nightsBetween } from "@/lib/format";
 import { readError } from "@/lib/flash";
+import { getMessages } from "@/lib/locale-server";
+import { interpolate } from "@/lib/messages";
 import { eventData } from "@/lib/queries";
 import { baseUrl } from "@/lib/url";
 
@@ -22,6 +24,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
   if (!data) notFound();
   const { event, decisions, members, log } = data;
   const base = await baseUrl();
+  const t = await getMessages();
   // The version tag makes Messenger fetch a fresh preview instead of its cached one.
   const shareUrl = `${base}/s/${event.shareToken}?v=${(log[0]?.createdAt ?? event.createdAt).getTime()}`;
   const memberName = new Map(members.map((m) => [m.id, m.displayName]));
@@ -31,33 +34,33 @@ export default async function EventPage({ params, searchParams }: { params: Prom
   const mySeatIds = new Set(members.filter((m) => m.userId === user.id || m.managedByUserId === user.id).map((m) => m.id));
   const planning = event.status === "planning";
   const shareText = decided.length
-    ? decided.map((d) => `${d.decision.title}: ${d.outcome ? clipTitle(d.outcome.title, d.decision.format) : "decided"}`).join("; ")
-    : `Help us decide: ${event.title}`;
+    ? decided.map((d) => `${d.decision.title}: ${d.outcome ? clipTitle(d.outcome.title, d.decision.format) : t.eventsSummaryDecidedFallback}`).join("; ")
+    : interpolate(t.eventsShareHelpDecide, { event: event.title });
   const summaryLines: CopyLine[] = [
     { text: `${event.title}${event.startsOn ? ` (${formatDateRange(event.startsOn, event.endsOn)})` : ""}` },
     ...decisions.map((d) => {
       const r = d.currentRound;
-      if (d.decision.status === "decided") return { text: `• ${d.decision.title}: ${d.outcome ? clipTitle(d.outcome.title, d.decision.format) : "decided"}` };
-      if (d.decision.status === "skipped") return { text: `• ${d.decision.title}: set aside` };
-      if (r && r.status === "open") return { text: `• ${d.decision.title}: ${r.kind === "ideas" ? "gathering ideas" : roundLabel(r, d.rounds, d.decision.plan).toLowerCase()}, {closes}`, closesAtIso: r.closesAt.toISOString() };
-      return { text: `• ${d.decision.title}: waiting on the organizer` };
+      if (d.decision.status === "decided") return { text: `• ${d.decision.title}: ${d.outcome ? clipTitle(d.outcome.title, d.decision.format) : t.eventsSummaryDecidedFallback}` };
+      if (d.decision.status === "skipped") return { text: `• ${d.decision.title}: ${t.eventsSummarySetAside}` };
+      if (r && r.status === "open") return { text: `• ${d.decision.title}: ${r.kind === "ideas" ? t.eventsSummaryGatheringIdeas : roundLabel(r, d.rounds, d.decision.plan).toLowerCase()}, {closes}`, closesAtIso: r.closesAt.toISOString() };
+      return { text: `• ${d.decision.title}: ${t.eventsSummaryWaitingOrganizer}` };
     }),
-    { text: `See it all: ${shareUrl}` },
+    { text: interpolate(t.eventsSummarySeeItAll, { url: shareUrl }) },
   ];
 
   return (
     <Screen>
       <TopBar
         back="/app"
-        backLabel="Home"
+        backLabel={t.eventsBackHome}
         right={
           <div className="flex items-center gap-2">
             {organizer ? (
               <LinkButton href={`/app/events/${event.id}/edit`} variant="secondary" size="sm">
-                Edit
+                {t.eventsEdit}
               </LinkButton>
             ) : null}
-            <ShareButton url={shareUrl} title={`${event.title} · what we’ve decided`} text={shareText} />
+            <ShareButton url={shareUrl} title={interpolate(t.eventsShareTitle, { event: event.title })} text={shareText} />
           </div>
         }
       />
@@ -68,7 +71,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
           <div className="flex items-center gap-3 text-[13px] font-medium text-ink-2">
             <span className="inline-flex items-center gap-1">
               <Icon name="calendar" size={14} />
-              {event.startsOn ? formatDateRange(event.startsOn, event.endsOn) : "Dates open"}
+              {event.startsOn ? formatDateRange(event.startsOn, event.endsOn) : t.eventsDatesOpen}
             </span>
             {!planning ? <span className="rounded-full bg-sand px-2 py-0.5 text-xs font-bold">{event.status}</span> : null}
           </div>
@@ -79,19 +82,19 @@ export default async function EventPage({ params, searchParams }: { params: Prom
       {error ? <p className="rounded-[12px] bg-accent-tint px-3 py-2 text-sm font-semibold text-accent-deep">{error}</p> : null}
 
       <div className="flex flex-col gap-2.5 rounded-card bg-teal-tint p-4">
-        <SectionLabel tone="teal" right={<span className="text-teal-deep">{decided.length} of {decisions.length}</span>}>
-          Decided so far
+        <SectionLabel tone="teal" right={<span className="text-teal-deep">{interpolate(t.eventsDecidedOfTotal, { decided: decided.length, decisions: decisions.length })}</span>}>
+          {t.eventsDecidedSoFar}
         </SectionLabel>
         {decided.length === 0 && !event.startsOn ? (
-          <p className="text-sm text-teal-ink">Nothing settled yet. The first decision usually goes fast.</p>
+          <p className="text-sm text-teal-ink">{t.eventsNothingSettled}</p>
         ) : (
           <div className="flex flex-col gap-2">
             {event.startsOn ? (
               <div className="flex items-baseline justify-between gap-3">
-                <span className="text-sm font-medium text-teal-deep">When</span>
+                <span className="text-sm font-medium text-teal-deep">{t.eventsWhenLabel}</span>
                 <span className="text-right font-display text-[17px] font-bold text-teal-ink">
                   {formatDateRange(event.startsOn, event.endsOn)}
-                  {nights ? ` · ${plural(nights, "night")}` : ""}
+                  {nights ? ` · ${interpolate(t.eventsNightCount, { count: nights })}` : ""}
                 </span>
               </div>
             ) : null}
@@ -105,10 +108,10 @@ export default async function EventPage({ params, searchParams }: { params: Prom
         )}
       </div>
 
-      <CopyText lines={summaryLines} label="Copy summary for Messenger" />
+      <CopyText lines={summaryLines} label={t.eventsCopySummaryLabel} />
 
       <section className="flex flex-col gap-2.5">
-        <SectionLabel right="In order">Decisions</SectionLabel>
+        <SectionLabel right={t.eventsDecisionsInOrder}>{t.eventsDecisionsHeading}</SectionLabel>
         <div className="flex flex-col gap-2">
           {decisions.map((d, i) => {
             const r = d.currentRound;
@@ -135,11 +138,11 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                     <div className="flex items-center gap-2">
                       <AvatarStack names={d.votedMemberIds.map((mid) => memberName.get(mid) ?? "?")} size={24} max={4} ring="#ffffff" />
                       <span className="text-xs text-ink-2">
-                        {d.votedMemberIds.length} of {members.length} voted{iAmDone ? "" : " · not you yet"}
+                        {interpolate(t.eventsVotedCount, { voted: d.votedMemberIds.length, total: members.length })}{iAmDone ? "" : ` · ${t.eventsNotYouYet}`}
                       </span>
                     </div>
                     <LinkButton href={`/app/decisions/${d.decision.id}`} size="sm" variant={iAmDone ? "ghost" : "primary"}>
-                      {iAmDone ? "Change" : "Vote"}
+                      {iAmDone ? t.eventsChange : t.eventsVote}
                     </LinkButton>
                   </div>
                 </Card>
@@ -160,29 +163,29 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                     <span className="text-[13px] text-ink-2">
                       {isDecided ? (
                         <>
-                          {d.outcome ? clipTitle(d.outcome.title, d.decision.format) : "Decided"} · <LocalTime iso={(d.decision.decidedAt ?? d.decision.createdAt).toISOString()} mode="date" fallback={formatDate(d.decision.decidedAt ?? d.decision.createdAt)} />
+                          {d.outcome ? clipTitle(d.outcome.title, d.decision.format) : t.eventsDecidedFallbackCap} · <LocalTime iso={(d.decision.decidedAt ?? d.decision.createdAt).toISOString()} mode="date" fallback={formatDate(d.decision.decidedAt ?? d.decision.createdAt)} />
                         </>
                       ) : skipped ? (
-                        "Set aside"
+                        t.eventsSetAsideCap
                       ) : open && r ? (
                         <>
-                          Gathering ideas · {plural(d.aliveCount, "idea")} so far · <LocalTime iso={r.closesAt.toISOString()} mode="closes" fallback={closesRelative(r.closesAt)} />
+                          {t.eventsGatheringIdeasCap} · {interpolate(t.eventsIdeaCount, { count: d.aliveCount })} {t.eventsSoFar} · <LocalTime iso={r.closesAt.toISOString()} mode="closes" fallback={closesRelative(r.closesAt)} />
                         </>
                       ) : planning ? (
-                        "Waiting on the organizer"
+                        t.eventsWaitingOrganizerCap
                       ) : (
-                        "Not settled"
+                        t.eventsNotSettled
                       )}
                     </span>
                   </span>
-                  {open && r?.kind === "ideas" ? <span className="inline-flex h-8 items-center rounded-[10px] bg-sand px-3 text-[13px] font-bold">{iAmDone ? "See ideas" : "Add idea"}</span> : null}
+                  {open && r?.kind === "ideas" ? <span className="inline-flex h-8 items-center rounded-[10px] bg-sand px-3 text-[13px] font-bold">{iAmDone ? t.eventsSeeIdeas : t.eventsAddIdea}</span> : null}
                 </Card>
               </Link>
             );
           })}
           {organizer && planning && decisions.length > 1 ? (
             <details className="rounded-card border border-line bg-card">
-              <summary className="cursor-pointer list-none px-4 py-3 text-sm font-bold text-ink-2 [&::-webkit-details-marker]:hidden">Reorder decisions</summary>
+              <summary className="cursor-pointer list-none px-4 py-3 text-sm font-bold text-ink-2 [&::-webkit-details-marker]:hidden">{t.eventsReorderDecisions}</summary>
               <div className="flex flex-col gap-1 border-t border-line p-2">
                 {decisions.map((d, i) => (
                   <div key={d.decision.id} className="flex items-center gap-2 px-2 py-1">
@@ -191,14 +194,14 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                     <form action={moveDecision}>
                       <input type="hidden" name="decisionId" value={d.decision.id} />
                       <input type="hidden" name="direction" value="up" />
-                      <MoveButton disabled={i === 0} aria-label="Move up" className="h-9 w-9 rounded-[10px] bg-sand text-ink-2 disabled:opacity-30">
+                      <MoveButton disabled={i === 0} aria-label={t.eventsMoveUp} className="h-9 w-9 rounded-[10px] bg-sand text-ink-2 disabled:opacity-30">
                         ↑
                       </MoveButton>
                     </form>
                     <form action={moveDecision}>
                       <input type="hidden" name="decisionId" value={d.decision.id} />
                       <input type="hidden" name="direction" value="down" />
-                      <MoveButton disabled={i === decisions.length - 1} aria-label="Move down" className="h-9 w-9 rounded-[10px] bg-sand text-ink-2 disabled:opacity-30">
+                      <MoveButton disabled={i === decisions.length - 1} aria-label={t.eventsMoveDown} className="h-9 w-9 rounded-[10px] bg-sand text-ink-2 disabled:opacity-30">
                         ↓
                       </MoveButton>
                     </form>
@@ -213,17 +216,17 @@ export default async function EventPage({ params, searchParams }: { params: Prom
               className="flex items-center justify-center gap-2 rounded-card border-[1.5px] border-dashed border-line-2 p-3.5 text-sm font-semibold text-ink-2 hover:bg-sand"
             >
               <Icon name="plus" stroke={2.5} />
-              Add a decision
+              {t.eventsAddDecision}
             </Link>
           ) : (
-            <p className="text-center text-xs text-ink-3">This event is {event.status}. Reopen it to keep deciding.</p>
+            <p className="text-center text-xs text-ink-3">{interpolate(t.eventsEventStatusReopen, { status: event.status })}</p>
           )}
         </div>
       </section>
 
       {log.length ? (
         <section className="flex flex-col gap-2">
-          <SectionLabel right={log.length > 8 ? <Link href={`/app/events/${event.id}/log`}>See all</Link> : undefined}>How we got here</SectionLabel>
+          <SectionLabel right={log.length > 8 ? <Link href={`/app/events/${event.id}/log`}>{t.eventsSeeAll}</Link> : undefined}>{t.eventsHowWeGotHere}</SectionLabel>
           {log.slice(0, 8).map((a) => (
             <div key={a.id} className="flex gap-3 py-1">
               <div className="w-12 shrink-0 pt-0.5 text-xs font-semibold text-ink-3">
@@ -240,7 +243,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
           <input type="hidden" name="eventId" value={event.id} />
           <input type="hidden" name="status" value={planning ? "done" : "planning"} />
           <Button type="submit" variant="ghost" size="sm">
-            {planning ? "Mark this event done" : "Reopen this event"}
+            {planning ? t.eventsMarkDone : t.eventsReopenEvent}
           </Button>
         </form>
       ) : null}

@@ -5,12 +5,13 @@ import { LocalTime } from "@/components/time";
 import { Card, Icon, LinkButton } from "@/components/ui";
 import { Wordmark } from "@/components/wordmark";
 import { brandFor } from "@/lib/brand";
-import { getLocale } from "@/lib/locale-server";
+import { getLocale, getMessages } from "@/lib/locale-server";
 import { hasClerk, hasDatabase } from "@/lib/env";
 import { auth } from "@clerk/nextjs/server";
 import { getMembership } from "@/lib/auth";
 import { roundLabel } from "@/lib/engine/rounds";
-import { clipTitle, closesRelative, formatDate, formatDateRange, nightsBetween, plural, relativeTime } from "@/lib/format";
+import { clipTitle, closesRelative, formatDate, formatDateRange, nightsBetween, relativeTime } from "@/lib/format";
+import { interpolate } from "@/lib/messages";
 import { summaryByToken } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -18,15 +19,16 @@ export const dynamic = "force-dynamic";
 /** Text-only link preview for the family chat. Names and votes stay off it. */
 export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
   const b = brandFor(await getLocale());
-  if (!hasDatabase) return { title: "Summary" };
+  const t = await getMessages();
+  if (!hasDatabase) return { title: t.pubMetaSummaryTitle };
   const { token } = await params;
   const data = await summaryByToken(token);
-  if (!data) return { title: "Summary", robots: { index: false } };
+  if (!data) return { title: t.pubMetaSummaryTitle, robots: { index: false } };
   const decided = data.decisions.filter((d) => d.decision.status === "decided");
   const open = data.decisions.filter((d) => d.decision.status === "open" && d.currentRound?.status === "open");
-  const parts = [`${decided.length} of ${data.decisions.length} decided`];
-  if (open.length) parts.push(`${open.length === 1 ? open[0].decision.title : `${open.length} open`}${open.length === 1 && open[0].currentRound ? " · " + closesRelative(open[0].currentRound.closesAt) : ""}`);
-  const title = `${data.event.title} · what we’ve decided`;
+  const parts = [interpolate(t.pubMetaDecidedCount, { decided: decided.length, total: data.decisions.length })];
+  if (open.length) parts.push(`${open.length === 1 ? open[0].decision.title : interpolate(t.pubMetaOpenCount, { count: open.length })}${open.length === 1 && open[0].currentRound ? " · " + closesRelative(open[0].currentRound.closesAt) : ""}`);
+  const title = interpolate(t.pubMetaDecidedTitle, { event: data.event.title });
   const description = parts.join(" · ");
   return { title, description, robots: { index: false }, openGraph: { title, description, siteName: b.name, type: "website" } };
 }
@@ -35,13 +37,14 @@ export default async function PublicSummary({ params }: { params: Promise<{ toke
   if (!hasDatabase) redirect("/setup");
   const { token } = await params;
   const data = await summaryByToken(token);
+  const t = await getMessages();
   if (!data) {
     return (
       <main className="mx-auto flex w-full max-w-md flex-col gap-4 px-5 pt-14">
         <Wordmark href="/" />
-        <p className="text-ink-2">This link doesn’t point to anything any more.</p>
+        <p className="text-ink-2">{t.pubLinkDead}</p>
         <LinkButton href="/" variant="secondary">
-          Home
+          {t.pubHome}
         </LinkButton>
       </main>
     );
@@ -58,26 +61,26 @@ export default async function PublicSummary({ params }: { params: Promise<{ toke
     <main className="mx-auto flex w-full max-w-md flex-col gap-5 px-5 pb-16 pt-10">
       <div className="flex items-center justify-between">
         <Wordmark size={18} href="/" />
-        <div className="text-[13px] text-ink-3">Updated {relativeTime(updated)}</div>
+        <div className="text-[13px] text-ink-3">{interpolate(t.pubUpdatedTime, { time: relativeTime(updated) })}</div>
       </div>
       <div className="flex flex-col gap-1">
-        <h1 className="font-display text-[30px] font-bold leading-[1.05] tracking-[-0.025em]">What we’ve decided</h1>
-        <p className="text-sm text-ink-2">{event.family.name} · read-only link</p>
+        <h1 className="font-display text-[30px] font-bold leading-[1.05] tracking-[-0.025em]">{t.pubDecidedHeading}</h1>
+        <p className="text-sm text-ink-2">{interpolate(t.pubReadOnlyLink, { family: event.family.name })}</p>
       </div>
 
       <Card className="overflow-hidden shadow-card">
         <div className="flex flex-col gap-1 bg-teal-tint px-[18px] pb-4 pt-[18px]">
           <div className="text-xs font-bold uppercase tracking-[0.08em] text-teal-deep">{event.title}</div>
           <div className="font-display text-[26px] font-extrabold leading-[1.05] tracking-[-0.02em] text-teal-ink">
-            {event.startsOn ? formatDateRange(event.startsOn, event.endsOn) : "Dates to be decided"}
+            {event.startsOn ? formatDateRange(event.startsOn, event.endsOn) : t.pubDatesTBD}
           </div>
           <div className="text-[13px] text-teal-deep">
-            {plural(members.length, "person", "people")}
-            {nights ? ` · ${plural(nights, "night")}` : ""}
+            {interpolate(t.pubPeopleCount, { count: members.length })}
+            {nights ? ` · ${interpolate(t.pubNightsCount, { count: nights })}` : ""}
           </div>
         </div>
         <div className="flex flex-col px-[18px] pb-3 pt-1.5">
-          {decisions.length === 0 ? <div className="py-3 text-sm text-ink-2">No decisions yet.</div> : null}
+          {decisions.length === 0 ? <div className="py-3 text-sm text-ink-2">{t.pubNoDecisions}</div> : null}
           {decisions.map((d, i) => {
             const isDecided = d.decision.status === "decided";
             const r = d.currentRound;
@@ -96,13 +99,13 @@ export default async function PublicSummary({ params }: { params: Promise<{ toke
                   {isDecided ? (
                     d.outcome ? clipTitle(d.outcome.title, d.decision.format) : null
                   ) : d.decision.status === "skipped" ? (
-                    <span className="text-[13px] text-ink-3">Set aside</span>
+                    <span className="text-[13px] text-ink-3">{t.pubSetAside}</span>
                   ) : open && r ? (
                     <span className="text-[13px] text-accent-deep">
-                      {r.kind === "ideas" ? "Gathering ideas" : roundLabel(r, d.rounds, d.decision.plan)} · <LocalTime iso={r.closesAt.toISOString()} mode="closes" fallback={closesRelative(r.closesAt)} />
+                      {r.kind === "ideas" ? t.pubGatheringIdeas : roundLabel(r, d.rounds, d.decision.plan)} · <LocalTime iso={r.closesAt.toISOString()} mode="closes" fallback={closesRelative(r.closesAt)} />
                     </span>
                   ) : (
-                    <span className="text-[13px] text-ink-3">Waiting on the organizer</span>
+                    <span className="text-[13px] text-ink-3">{t.pubWaitingOrganizer}</span>
                   )}
                 </div>
               </div>
@@ -117,22 +120,22 @@ export default async function PublicSummary({ params }: { params: Promise<{ toke
           })}
         </div>
         <div className="flex items-center justify-between border-t border-sand px-[18px] py-2.5 text-xs text-ink-3">
-          <span>Only the family can vote</span>
+          <span>{t.pubOnlyFamilyVotes}</span>
           <span>
-            {decided} decided · {decisions.length - decided} to go
+            {interpolate(t.pubDecidedToGo, { decided, remaining: decisions.length - decided })}
           </span>
         </div>
       </Card>
 
       {isMember ? (
-        <LinkButton href={`/app/events/${event.id}`}>Open it and vote</LinkButton>
+        <LinkButton href={`/app/events/${event.id}`}>{t.pubOpenAndVote}</LinkButton>
       ) : (
-        <LinkButton href={`/join/${event.family.inviteCode}`}>Join {event.family.name} to vote</LinkButton>
+        <LinkButton href={`/join/${event.family.inviteCode}`}>{interpolate(t.pubJoinToVote, { family: event.family.name })}</LinkButton>
       )}
 
       {log.length ? (
         <section className="flex flex-col gap-2">
-          <div className="text-xs font-bold uppercase tracking-[0.08em] text-ink-2">How we got here</div>
+          <div className="text-xs font-bold uppercase tracking-[0.08em] text-ink-2">{t.pubHowWeGotHere}</div>
           {log.map((a) => (
             <div key={a.id} className="flex gap-3 py-1.5">
               <div className="w-12 shrink-0 pt-0.5 text-xs font-semibold text-ink-3">
