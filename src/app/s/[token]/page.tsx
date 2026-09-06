@@ -8,7 +8,7 @@ import { hasClerk, hasDatabase } from "@/lib/env";
 import { auth } from "@clerk/nextjs/server";
 import { getMembership } from "@/lib/auth";
 import { roundLabel } from "@/lib/engine/rounds";
-import { closesRelative, formatDate, formatDateRange, nightsBetween, plural, relativeTime } from "@/lib/format";
+import { clipTitle, closesRelative, formatDate, formatDateRange, nightsBetween, plural, relativeTime } from "@/lib/format";
 import { summaryByToken } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -91,7 +91,7 @@ export default async function PublicSummary({ params }: { params: Promise<{ toke
                 <div className="flex-1 text-[15px] font-medium text-ink-2">{d.decision.title}</div>
                 <div className="text-right text-[15px] font-bold">
                   {isDecided ? (
-                    d.outcome?.title
+                    d.outcome ? clipTitle(d.outcome.title, d.decision.format) : null
                   ) : d.decision.status === "skipped" ? (
                     <span className="text-[13px] text-ink-3">Set aside</span>
                   ) : open && r ? (

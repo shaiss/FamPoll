@@ -2,7 +2,7 @@ import { UserButton } from "@clerk/nextjs";
 import { CopyButton } from "@/components/copy-button";
 import { ShareButton } from "@/components/share-button";
 import { Avatar, Button, Card, Field, inputClass, Pill, SectionLabel, Screen, TopBar } from "@/components/ui";
-import { addProxyMember, deleteFamily, demoteOrganizer, leaveFamily, makeOrganizer, reassignProxy, removeMember, renameMember, removeProxyMember, renameFamily, rotateInviteCode } from "@/lib/actions/family";
+import { addProxyMember, deleteFamily, demoteOrganizer, leaveFamily, makeOrganizer, reassignProxy, removeMember, renameMember, removeProxyMember, renameFamily, rotateInviteCode, setVotePrivacy } from "@/lib/actions/family";
 import { brand } from "@/lib/brand";
 import { requireMembership } from "@/lib/auth";
 import { readError } from "@/lib/flash";
@@ -52,6 +52,9 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
           const managedByMe = m.managedByUserId === user.id;
           const canRemove = proxy ? managedByMe || organizer : organizer && !mine && m.role !== "organizer";
           const canRename = mine || organizer;
+          // Privacy is personal: only the seat's own person, or whoever votes for a proxy, sees or changes it.
+          const controlsPrivacy = mine || managedByMe;
+          const whose = mine ? "my" : `${m.displayName}’s`;
           return (
             <Card key={m.id} className="flex flex-col gap-2 p-3">
             <div className="flex items-center gap-3">
@@ -102,6 +105,24 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
                     Save
                   </Button>
                 </form>
+              </details>
+            ) : null}
+            {controlsPrivacy ? (
+              <details>
+                <summary className="cursor-pointer list-none text-xs font-semibold text-ink-3 [&::-webkit-details-marker]:hidden">Vote privacy</summary>
+                <div className="mt-2 flex flex-col gap-2">
+                  <p className="text-sm text-ink-2">
+                    {mine ? "Your" : `${m.displayName}’s`} votes {m.votesHidden ? "start hidden." : "are shown by name."}
+                  </p>
+                  <p className="text-xs text-ink-3">Hidden votes are counted, and still recorded under the name. If anyone hides, that round shows counts only. You can show your hand on any decision.</p>
+                  <form action={setVotePrivacy}>
+                    <input type="hidden" name="memberId" value={m.id} />
+                    <input type="hidden" name="votesHidden" value={m.votesHidden ? "0" : "1"} />
+                    <Button type="submit" variant="ghost" size="sm">
+                      {m.votesHidden ? `Show ${whose} votes by name` : `Hide ${whose} votes by default`}
+                    </Button>
+                  </form>
+                </div>
               </details>
             ) : null}
             {organizer && proxy && organizers.length > 1 ? (
