@@ -8,7 +8,7 @@ import { membershipFor, requireUser } from "../auth";
 import { getDb, schema } from "../db";
 import type { Tx } from "../lifecycle";
 import { fail } from "../flash";
-import { clearActiveGroupId, setActiveGroupId } from "../group";
+import { clearActiveGroupId, getActiveGroupId, setActiveGroupId } from "../group";
 import { newCode, newId } from "../ids";
 
 const MAX_PROXIES_PER_PERSON = 4;
@@ -16,6 +16,20 @@ const MAX_PROXIES_PER_PERSON = 4;
 function cleanName(v: FormDataEntryValue | null): string | null {
   const t = String(v ?? "").trim().slice(0, 60);
   return t.length ? t : null;
+}
+
+/** Postgres unique_violation (SQLSTATE 23505): a concurrent insert already created the row. */
+function isUniqueViolation(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { code?: unknown }).code === "23505";
+}
+
+/**
+ * Forget the active group only when it is the one being left or deleted. These
+ * actions target an explicit `familyId` that need not be the active group, so
+ * acting on a non-active group must never reset which group is active.
+ */
+async function clearActiveGroupIfCurrent(familyId: string) {
+  if ((await getActiveGroupId()) === familyId) await clearActiveGroupId();
 }
 
 /**
@@ -88,8 +102,10 @@ export async function joinFamily(formData: FormData) {
   if (!existing) {
     try {
       await db.insert(schema.members).values({ id: newId(), familyId: family.id, userId: user.id, displayName: user.name, role: "member" });
-    } catch {
+    } catch (err) {
       // The unique index on (family_id, user_id) caught a concurrent join; whichever won is fine.
+      // Any other database error is real — don't redirect as if the join succeeded.
+      if (!isUniqueViolation(err)) throw err;
     }
   }
   await setActiveGroupId(family.id);
@@ -141,8 +157,10 @@ export async function addExistingUserToGroup(formData: FormData) {
   }
   try {
     await db.insert(schema.members).values({ id: newId(), familyId: family.id, userId: targetUserId, displayName, role: "member" });
-  } catch {
+  } catch (err) {
     // The unique index on (family_id, user_id) caught a concurrent add; that's fine.
+    // Any other database error is real — surface it instead of silently succeeding.
+    if (!isUniqueViolation(err)) throw err;
   }
   revalidatePath("/app/family");
 }
@@ -247,7 +265,7 @@ export async function leaveFamily(formData: FormData) {
     // the no-action foreign keys are checked at statement end, by which point every
     // referencing row has gone too.
     await db.delete(schema.families).where(eq(schema.families.id, family.id));
-    await clearActiveGroupId();
+    await clearActiveGroupIfCurrent(family.id);
     redirect("/app");
   }
   const otherOrganizers = signedIn.filter((m) => m.id !== member.id && m.role === "organizer");
@@ -259,7 +277,7 @@ export async function leaveFamily(formData: FormData) {
     await reassignHistory(tx, goneIds, heir.id);
     await retireSeats(tx, goneIds);
   });
-  await clearActiveGroupId();
+  await clearActiveGroupIfCurrent(family.id);
   redirect("/app");
 }
 
@@ -306,7 +324,7 @@ export async function deleteFamily(formData: FormData) {
   if (member.role !== "organizer") fail("/app/family", "Only an organizer can delete the group.");
   if (formData.get("confirm") !== "on") fail("/app/family", "Tick the box to confirm you want to delete everything.");
   await getDb().delete(schema.families).where(eq(schema.families.id, family.id));
-  await clearActiveGroupId();
+  await clearActiveGroupIfCurrent(family.id);
   redirect("/app");
 }
 
