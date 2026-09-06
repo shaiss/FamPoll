@@ -7,7 +7,7 @@ import { CopyText } from "@/components/copy-text";
 import { baseUrl } from "@/lib/url";
 import { requireMembership } from "@/lib/auth";
 import type { Vote } from "@/lib/db/schema";
-import { FORMAT_LABEL, ROUND_LABEL, VOTE_TYPE_LABEL, effectivePicks, isTiebreak, roundInstruction, roundLabel, roundSequence, tally, type Format, type RoundKind } from "@/lib/engine/rounds";
+import { FORMAT_LABEL, ROUND_LABEL, VOTE_TYPE_LABEL, effectivePicks, isTiebreak, peopleVoted, roundInstruction, roundLabel, roundSequence, tally, type Format, type RoundKind } from "@/lib/engine/rounds";
 import { readError } from "@/lib/flash";
 import { clipTitle, closesRelative, formatDate, plural } from "@/lib/format";
 import { decisionData, type OptionView, type RoundView } from "@/lib/queries";
@@ -58,10 +58,10 @@ function ResultBars({ round, rounds, options, format, label, advancing, winnerId
     chosen.map((v) => ({ optionId: v.optionId })),
   );
   const max = Math.max(1, ...rows.map((r) => r.count));
-  const voters = new Set(round.votes.map((v) => v.memberId)).size;
+  const voters = peopleVoted(round.votes);
   // One hidden ballot seals the whole round: names plus counts plus who voted would give it away by subtraction.
   const sealed = round.votes.some((v) => v.anonymous);
-  const hiddenVoters = new Set(round.votes.filter((v) => v.anonymous).map((v) => v.memberId)).size;
+  const hiddenVoters = peopleVoted(round.votes.filter((v) => v.anonymous));
   const skippers = round.votes.filter((v) => v.optionId === null).map(label);
   const cap = effectivePicks(round.maxPicks, inPlay.length);
   const longText = format === "long_text";
@@ -112,8 +112,9 @@ export default async function DecisionPage({ params, searchParams }: { params: P
   const { decision, event, rounds, currentRound, options, members, seats, casterName, hiddenDefault } = data;
   const base = await baseUrl();
   const memberById = new Map(members.map((m) => [m.id, m]));
-  /** "Eli (via Shai)" when someone else cast the vote for that seat. */
+  /** "Eli (via Shai)" when someone else cast the vote for that seat; a seat that has left keeps its ballot, not its name. */
   const label = (v: Vote) => {
+    if (v.memberId === null) return "someone who left";
     const m = memberById.get(v.memberId);
     const name = m?.displayName ?? "?";
     if (!m || m.userId === v.castByUserId) return name;
@@ -144,7 +145,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
         return rows.length && rows[0].count > 0 && (rows.length === 1 || rows[0].count > rows[1].count) ? (alive.find((o) => o.id === rows[0].optionId) ?? null) : null;
       })()
     : null;
-  const turnout = lowTurnout ? new Set(lowTurnout.votes.map((v) => v.memberId)).size : 0;
+  const turnout = lowTurnout ? peopleVoted(lowTurnout.votes) : 0;
   const firstRound = !!open && open.number === 1;
   const laterFinal = !!open && !firstRound && open.kind === "final";
   const laterShortlist = !!open && !firstRound && open.kind === "shortlist";
@@ -347,6 +348,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
                   <SectionLabel right={mine.length ? (hidden ? "voted · hidden" : "voted") : skipped ? "skipped" : "not yet"}>{seat.userId === user.id ? "Your vote" : `Voting for ${seat.displayName}`}</SectionLabel>
                 ) : null}
                 <VoteForm
+                  key={`${open.id}:${seat.id}:${alive.map((o) => o.id).join(",")}`}
                   roundId={open.id}
                   memberId={seat.id}
                   maxPicks={pickCap}

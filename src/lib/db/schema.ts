@@ -188,9 +188,11 @@ export const votes = pgTable(
       .references(() => rounds.id, { onDelete: "cascade" }),
     /** Null means the seat skipped: "whatever you all pick". Counts as taking part. */
     optionId: text("option_id").references(() => options.id, { onDelete: "cascade" }),
-    memberId: text("member_id")
-      .notNull()
-      .references(() => members.id, { onDelete: "cascade" }),
+    /**
+     * Null once the seat has left the family: a closed round keeps its ballots
+     * so its counts (and any hidden vote in it) never shift after the fact.
+     */
+    memberId: text("member_id").references(() => members.id, { onDelete: "set null" }),
     /** The signed-in person who physically cast it (differs from the member for proxies). */
     castByUserId: text("cast_by_user_id")
       .notNull()

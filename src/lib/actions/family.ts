@@ -20,7 +20,7 @@ function cleanName(v: FormDataEntryValue | null): string | null {
 /**
  * Point every history row owned by `memberIds` at `heirMemberId` so those members
  * can be deleted without tripping the not-null / no-action foreign keys on events,
- * decisions, options and the activity log (their votes cascade away on delete).
+ * decisions, options and the activity log (retireSeats handles their ballots).
  * `heirMemberId` must be a seat that survives — an organizer of the same family.
  */
 async function reassignHistory(tx: Tx, memberIds: string[], heirMemberId: string) {
@@ -29,6 +29,22 @@ async function reassignHistory(tx: Tx, memberIds: string[], heirMemberId: string
   await tx.update(schema.decisions).set({ createdByMemberId: heirMemberId }).where(inArray(schema.decisions.createdByMemberId, memberIds));
   await tx.update(schema.options).set({ addedByMemberId: heirMemberId }).where(inArray(schema.options.addedByMemberId, memberIds));
   await tx.update(schema.activity).set({ actorMemberId: heirMemberId }).where(inArray(schema.activity.actorMemberId, memberIds));
+}
+
+/**
+ * Remove seats from the family. Their ballots in rounds still open go with them
+ * (they are no longer eligible, and "everyone voted" must not wait on them);
+ * ballots in closed rounds stay, with member_id set null by the foreign key,
+ * so a settled round's counts never shift and a hidden vote in it is never
+ * given away by subtraction.
+ */
+async function retireSeats(tx: Tx, memberIds: string[]) {
+  if (memberIds.length === 0) return;
+  const open = await tx.select({ id: schema.rounds.id }).from(schema.rounds).where(eq(schema.rounds.status, "open"));
+  if (open.length) {
+    await tx.delete(schema.votes).where(and(inArray(schema.votes.memberId, memberIds), inArray(schema.votes.roundId, open.map((r) => r.id))));
+  }
+  await tx.delete(schema.members).where(inArray(schema.members.id, memberIds));
 }
 
 export async function createFamily(formData: FormData) {
@@ -91,7 +107,7 @@ export async function removeProxyMember(formData: FormData) {
   const target = await db.query.members.findFirst({ where: and(eq(schema.members.id, memberId), eq(schema.members.familyId, family.id), isNull(schema.members.userId)) });
   if (!target) fail("/app/family", "That seat is not a proxy seat.");
   if (target.managedByUserId !== user.id && member.role !== "organizer") fail("/app/family", "Only the person who added them, or an organizer, can remove a seat.");
-  await db.delete(schema.members).where(eq(schema.members.id, memberId));
+  await db.transaction(async (tx) => retireSeats(tx, [target.id]));
   revalidatePath("/app/family");
 }
 
@@ -112,7 +128,7 @@ export async function removeMember(formData: FormData) {
     const goneIds = [target.id, ...managed.map((m) => m.id)];
     // Keep the record: their events, decisions, options and log lines move to the acting organizer.
     await reassignHistory(tx, goneIds, member.id);
-    await tx.delete(schema.members).where(inArray(schema.members.id, goneIds));
+    await retireSeats(tx, goneIds);
   });
   revalidatePath("/app/family");
 }
@@ -172,7 +188,7 @@ export async function leaveFamily() {
     const managed = await tx.query.members.findMany({ where: and(eq(schema.members.familyId, family.id), eq(schema.members.managedByUserId, user.id)) });
     const goneIds = [member.id, ...managed.map((m) => m.id)];
     await reassignHistory(tx, goneIds, heir.id);
-    await tx.delete(schema.members).where(inArray(schema.members.id, goneIds));
+    await retireSeats(tx, goneIds);
   });
   redirect("/app/family/new");
 }

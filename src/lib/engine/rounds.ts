@@ -260,3 +260,56 @@ export function hasQuorum(distinctVoters: number, eligibleSeats: number): boolea
   if (eligibleSeats <= 0) return false;
   return distinctVoters * 2 >= eligibleSeats;
 }
+
+export type BallotRef = { memberId: string | null; optionId: string | null; castByUserId: string };
+
+/** The seats that took part in a round. A seat that has since left the family (memberId null) is not one. */
+export function seatsVoted(votes: { memberId: string | null }[]): Set<string> {
+  const out = new Set<string>();
+  for (const v of votes) if (v.memberId !== null) out.add(v.memberId);
+  return out;
+}
+
+/**
+ * How many people are behind a round's ballots, for the results footer. Seats
+ * still in the family count once each; ballots left behind by seats that have
+ * gone are grouped by whoever cast them, the closest thing to a person we keep.
+ */
+export function peopleVoted(votes: { memberId: string | null; castByUserId: string }[]): number {
+  const departed = new Set<string>();
+  for (const v of votes) if (v.memberId === null) departed.add(v.castByUserId);
+  return seatsVoted(votes).size + departed.size;
+}
+
+/**
+ * When an option is removed mid-round, the ballots whose only pick was that
+ * option. Each becomes a skip so participation never moves (which would name
+ * the pickers). A ballot that would approve every remaining option is a skip
+ * too: that is what approving everything means.
+ */
+export function ballotsToSkip<T extends { memberId: string | null; optionId: string | null }>(votes: T[], removedOptionId: string, aliveAfter: number): T[] {
+  const out: T[] = [];
+  const seen = new Set<string>();
+  for (const v of votes) {
+    if (v.memberId === null || v.optionId === null || seen.has(v.memberId)) continue;
+    const mine = votes.filter((w) => w.memberId === v.memberId && w.optionId !== null);
+    const remaining = mine.filter((w) => w.optionId !== removedOptionId);
+    if (remaining.length === 0 || (aliveAfter > 0 && remaining.length >= aliveAfter)) {
+      seen.add(v.memberId);
+      out.push(v);
+    }
+  }
+  return out;
+}
+
+/**
+ * The starting state of "hide my vote" for a seat in a decision: what its most
+ * recent ballot in this decision did, else the seat's standing preference.
+ */
+export function hiddenDefaultFor(ballots: { roundNumber: number; createdAt: Date; anonymous: boolean }[], seatPreference: boolean): boolean {
+  let latest: (typeof ballots)[number] | null = null;
+  for (const b of ballots) {
+    if (!latest || b.roundNumber > latest.roundNumber || (b.roundNumber === latest.roundNumber && b.createdAt.getTime() > latest.createdAt.getTime())) latest = b;
+  }
+  return latest ? latest.anonymous : seatPreference;
+}

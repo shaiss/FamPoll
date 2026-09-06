@@ -3,7 +3,7 @@ import { cache } from "react";
 import { seatsForUser } from "./auth";
 import { getDb, schema } from "./db";
 import type { Decision, Event, Member, Option, Round, Vote } from "./db/schema";
-import { effectivePicks } from "./engine/rounds";
+import { effectivePicks, hiddenDefaultFor, seatsVoted } from "./engine/rounds";
 import { settleDueRounds } from "./lifecycle";
 
 export type DecisionCard = {
@@ -55,7 +55,7 @@ async function decisionCards(eventIds: string[]): Promise<Map<string, DecisionCa
     });
     const last = d.rounds[d.rounds.length - 1] ?? null;
     const currentRound = rounds[rounds.length - 1] ?? null;
-    const votedMemberIds = last ? [...new Set(last.votes.map((v) => v.memberId))] : [];
+    const votedMemberIds = last ? [...seatsVoted(last.votes)] : [];
     const added = last ? d.options.filter((o) => o.addedInRoundId === last.id && o.addedByMemberId) : [];
     const contributedMemberIds = [...new Set(added.map((o) => o.addedByMemberId as string))];
     const publicContributorIds = [...new Set(added.filter((o) => !o.anonymous).map((o) => o.addedByMemberId as string))];
@@ -185,8 +185,8 @@ export async function decisionData(decisionId: string, familyId: string, userId:
   // but only the viewer's own picks, so nobody is swayed by (or can peek at) the rest.
   const rounds: RoundView[] = allRounds.map((r) => ({
     ...r,
-    votes: r.status === "open" ? r.votes.filter((v) => mySeatIds.has(v.memberId)) : r.votes,
-    voterMemberIds: [...new Set(r.votes.map((v) => v.memberId))],
+    votes: r.status === "open" ? r.votes.filter((v) => v.memberId !== null && mySeatIds.has(v.memberId)) : r.votes,
+    voterMemberIds: [...seatsVoted(r.votes)],
   }));
   // An anonymous idea never carries its author to the page.
   const options: OptionView[] = rawOptions.map((o) => (o.anonymous ? { ...o, addedBy: null, addedByMemberId: null } : o));
@@ -194,9 +194,8 @@ export async function decisionData(decisionId: string, familyId: string, userId:
   // "Hide my vote" starts from the seat's most recent ballot in this decision, else its standing preference.
   const hiddenDefault = new Map<string, boolean>();
   for (const seat of seats) {
-    const mine = allRounds.flatMap((r) => r.votes.filter((v) => v.memberId === seat.id).map((v) => ({ n: r.number, v })));
-    mine.sort((a, b) => b.n - a.n || b.v.createdAt.getTime() - a.v.createdAt.getTime());
-    hiddenDefault.set(seat.id, mine[0]?.v.anonymous ?? seat.votesHidden);
+    const mine = allRounds.flatMap((r) => r.votes.filter((v) => v.memberId === seat.id).map((v) => ({ roundNumber: r.number, createdAt: v.createdAt, anonymous: v.anonymous })));
+    hiddenDefault.set(seat.id, hiddenDefaultFor(mine, seat.votesHidden));
   }
   // Who physically cast each proxy vote, for "Eli (via Shai)".
   const casterIds = [...new Set(rounds.flatMap((r) => r.votes.map((v) => v.castByUserId)))];

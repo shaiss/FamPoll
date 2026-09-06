@@ -9,6 +9,7 @@ import {
   nominalPicks,
   resolveFinal,
   roundSequence,
+  seatsVoted,
   shouldAutoClose,
   tally,
   type NextStep,
@@ -109,7 +110,7 @@ export async function closeRoundAndAdvance(tx: Tx, roundId: string, reason: Clos
 
   // A deadline with too few seats heard from does not decide anything.
   if (reason === "deadline" && round.kind !== "ideas") {
-    const distinct = new Set(votes.map((v) => v.memberId)).size;
+    const distinct = seatsVoted(votes).size;
     const event = await tx.query.events.findFirst({ where: eq(schema.events.id, decision.eventId), columns: { familyId: true } });
     const eligible = event ? await eligibleSeatCount(tx, event.familyId) : 0;
     if (!hasQuorum(distinct, eligible)) {
@@ -248,7 +249,7 @@ export async function settleDueRounds(familyId: string, now = new Date()): Promi
 /** With the round locked: close it early when every seat has voted. */
 export async function maybeCloseEarly(tx: Tx, round: Round, familyId: string, now: Date): Promise<boolean> {
   const votes = await tx.select({ memberId: schema.votes.memberId }).from(schema.votes).where(eq(schema.votes.roundId, round.id));
-  const distinct = new Set(votes.map((v) => v.memberId)).size;
+  const distinct = seatsVoted(votes).size;
   const eligible = await eligibleSeatCount(tx, familyId);
   if (shouldAutoClose(round.kind, distinct, eligible)) {
     return (await closeRoundAndAdvance(tx, round.id, "everyone_voted", now)) !== null;

@@ -29,6 +29,13 @@
       "when": 1788667729286,
       "tag": "0003_formats_privacy",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788669749488,
+      "tag": "0004_keep_departed_ballots",
+      "breakpoints": true
     }
   ]
 }

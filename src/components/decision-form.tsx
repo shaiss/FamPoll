@@ -43,13 +43,17 @@ type DateRow = { start: string; end: string };
 const emptyDates = (): DateRow[] => OPTION_SLOTS.map(() => ({ start: "", end: "" }));
 
 /** A single-row segmented control of real radio inputs, in the DeadlinePicker style. */
-function Segmented<T extends string>({ name, value, items, onChange }: { name: string; value: T; items: { value: T; label: string }[]; onChange: (v: T) => void }) {
+function Segmented<T extends string>({ name, label, value, items, onChange }: { name: string; label: string; value: T; items: { value: T; label: string }[]; onChange: (v: T) => void }) {
   return (
-    <div className="flex gap-1 rounded-[12px] bg-sand-2 p-1">
+    <div role="radiogroup" aria-label={label} className="flex gap-1 rounded-[12px] bg-sand-2 p-1">
       {items.map((it) => (
         <label key={it.value} className="flex-1 cursor-pointer">
-          <input type="radio" name={name} value={it.value} checked={value === it.value} onChange={() => onChange(it.value)} className="sr-only" />
-          <span className={`flex h-[38px] items-center justify-center rounded-[9px] text-sm ${value === it.value ? "bg-card font-bold text-ink shadow-sm" : "font-semibold text-ink-2"}`}>{it.label}</span>
+          <input type="radio" name={name} value={it.value} checked={value === it.value} onChange={() => onChange(it.value)} className="peer sr-only" />
+          <span
+            className={`flex h-[38px] items-center justify-center rounded-[9px] text-sm peer-focus-visible:ring-2 peer-focus-visible:ring-accent ${value === it.value ? "bg-card font-bold text-ink shadow-sm" : "font-semibold text-ink-2"}`}
+          >
+            {it.label}
+          </span>
         </label>
       ))}
     </div>
@@ -164,6 +168,7 @@ export function DecisionForm({ eventId, defaultDeadline }: { eventId: string; de
       <textarea
         name="options"
         rows={5}
+        aria-label="Options, one per line"
         placeholder={"Apartment in Alfama\nBeach house in Cascais\nHotel near Belém"}
         value={textLines}
         onChange={(e) => setTextLines(e.target.value)}
@@ -198,12 +203,12 @@ export function DecisionForm({ eventId, defaultDeadline }: { eventId: string; de
       </Field>
 
       <Section label="Format">
-        <Segmented name="format" value={format} items={FORMATS.map((f) => ({ value: f, label: FORMAT_LABEL[f] }))} onChange={setFormat} />
+        <Segmented name="format" label="Format" value={format} items={FORMATS.map((f) => ({ value: f, label: FORMAT_LABEL[f] }))} onChange={setFormat} />
         <span className="text-xs text-ink-3">{FORMAT_HINT[format]}</span>
       </Section>
 
       <Section label="Type">
-        <Segmented name="voteType" value={voteType} items={VOTE_TYPES.map((t) => ({ value: t, label: VOTE_TYPE_LABEL[t] }))} onChange={chooseType} />
+        <Segmented name="voteType" label="Type" value={voteType} items={VOTE_TYPES.map((t) => ({ value: t, label: VOTE_TYPE_LABEL[t] }))} onChange={chooseType} />
         <span className="text-xs text-ink-3">
           {voteType === "ab" ? "Two options, pick one. Settled in one round." : voteType === "single" ? "Pick one of several." : `Everyone picks up to ${picks}; the most picks wins.`}
         </span>
@@ -235,11 +240,11 @@ export function DecisionForm({ eventId, defaultDeadline }: { eventId: string; de
         </>
       ) : (
         <Section label="Rounds">
-          <div className="flex flex-col gap-2">
+          <div role="radiogroup" aria-label="Rounds" className="flex flex-col gap-2">
             {plans.map((p) => (
               <label key={p} className="group block cursor-pointer">
                 <input type="radio" name="plan" value={p} checked={plan === p} onChange={() => setPlan(p)} className="sr-only" />
-                <Card as="span" className="flex items-center gap-3 px-3.5 py-3 group-has-checked:border-2 group-has-checked:border-accent group-has-checked:shadow-accent">
+                <Card as="span" className="flex items-center gap-3 px-3.5 py-3 group-has-checked:border-2 group-has-checked:border-accent group-has-checked:shadow-accent group-has-focus-visible:ring-2 group-has-focus-visible:ring-accent">
                   <span className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border-2 border-line-2 group-has-checked:border-accent group-has-checked:bg-accent">
                     <span className="h-2 w-2 rounded-full bg-transparent group-has-checked:bg-white" />
                   </span>

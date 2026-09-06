@@ -1,21 +1,25 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  ballotsToSkip,
   closesAtFrom,
   cutAdvancing,
   effectivePicks,
   hasQuorum,
+  hiddenDefaultFor,
   isPastDeadline,
   isTiebreak,
   nextStep,
   nominalPicks,
   optionCountRule,
   optionTitleLimit,
+  peopleVoted,
   plansFor,
   resolveFinal,
   roundInstruction,
   roundLabel,
   roundSequence,
+  seatsVoted,
   shouldAutoClose,
   tally,
 } from "./rounds";
@@ -290,5 +294,62 @@ describe("hasQuorum", () => {
     assert.equal(hasQuorum(2, 3), true);
     assert.equal(hasQuorum(1, 3), false);
     assert.equal(hasQuorum(0, 0), false);
+  });
+});
+
+describe("seatsVoted and peopleVoted", () => {
+  const votes = [
+    { memberId: "a", optionId: "x", castByUserId: "ua" },
+    { memberId: "a", optionId: "y", castByUserId: "ua" },
+    { memberId: "b", optionId: null, castByUserId: "ub" },
+    { memberId: null, optionId: "x", castByUserId: "uc" },
+    { memberId: null, optionId: "y", castByUserId: "uc" },
+    { memberId: null, optionId: "x", castByUserId: "ud" },
+  ];
+  it("counts seats once and ignores seats that have left", () => {
+    assert.deepEqual([...seatsVoted(votes)], ["a", "b"]);
+  });
+  it("counts departed seats by who cast their ballots", () => {
+    assert.equal(peopleVoted(votes), 4);
+    assert.equal(peopleVoted([]), 0);
+  });
+});
+
+describe("ballotsToSkip", () => {
+  const votes = [
+    { id: 1, memberId: "solo", optionId: "gone" },
+    { id: 2, memberId: "pair", optionId: "gone" },
+    { id: 3, memberId: "pair", optionId: "kept" },
+    { id: 4, memberId: "other", optionId: "kept" },
+    { id: 5, memberId: "skipper", optionId: null },
+    { id: 6, memberId: null, optionId: "gone" },
+  ];
+  it("turns a ballot whose only pick was the removed option into a skip", () => {
+    assert.deepEqual(ballotsToSkip(votes, "gone", 3).map((v) => v.memberId), ["solo"]);
+  });
+  it("also skips a ballot that would now approve everything left", () => {
+    const all = [
+      { memberId: "n", optionId: "a" },
+      { memberId: "n", optionId: "b" },
+      { memberId: "m", optionId: "a" },
+    ];
+    assert.deepEqual(ballotsToSkip(all, "c", 2).map((v) => v.memberId), ["n"]);
+    assert.deepEqual(ballotsToSkip(all, "c", 3).map((v) => v.memberId), []);
+  });
+  it("leaves skips, departed seats and untouched ballots alone", () => {
+    assert.deepEqual(ballotsToSkip(votes, "nothing", 3), []);
+  });
+});
+
+describe("hiddenDefaultFor", () => {
+  const t = (s: number) => new Date(2026, 8, 6, 0, 0, s);
+  it("falls back to the seat preference with no ballots", () => {
+    assert.equal(hiddenDefaultFor([], true), true);
+    assert.equal(hiddenDefaultFor([], false), false);
+  });
+  it("follows the most recent ballot: later round first, then later cast", () => {
+    assert.equal(hiddenDefaultFor([{ roundNumber: 1, createdAt: t(1), anonymous: true }, { roundNumber: 2, createdAt: t(0), anonymous: false }], true), false);
+    assert.equal(hiddenDefaultFor([{ roundNumber: 1, createdAt: t(1), anonymous: true }, { roundNumber: 1, createdAt: t(5), anonymous: false }], true), false);
+    assert.equal(hiddenDefaultFor([{ roundNumber: 1, createdAt: t(1), anonymous: false }, { roundNumber: 1, createdAt: t(5), anonymous: true }], false), true);
   });
 });

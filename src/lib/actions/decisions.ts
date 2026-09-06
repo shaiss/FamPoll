@@ -1,12 +1,12 @@
 "use server";
 
-import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireMembership, seatsForUser } from "../auth";
 import { getDb, schema } from "../db";
-import { closesAtFrom, effectivePicks, isPastDeadline, optionCountRule, optionTitleLimit, planRoundCount, plansFor, resolveFinal, roundSequence, tally, type Format, type Plan, type VoteType } from "../engine/rounds";
+import { ballotsToSkip, closesAtFrom, effectivePicks, isPastDeadline, optionCountRule, optionTitleLimit, planRoundCount, plansFor, resolveFinal, roundSequence, tally, type Format, type Plan, type VoteType } from "../engine/rounds";
 import { fail } from "../flash";
 import { newId } from "../ids";
 import { applyOutcome, closeRoundAndAdvance, lockOpenRound, logActivity, maybeCloseEarly, openRound, settleDueRounds } from "../lifecycle";
@@ -269,19 +269,18 @@ export async function castVote(formData: FormData) {
 }
 
 /**
- * Organizer powers belong to organizers and to whoever asked the question. A
- * non-organizer who gets through is therefore the asker, so on an anonymous
- * decision the log calls them "Whoever asked this" instead of naming them.
+ * Organizer powers belong to organizers and to whoever asked the question. On
+ * an anonymous decision nobody gets a byline for them: naming organizers while
+ * veiling the asker would tell the family the asker is not an organizer. The
+ * log rows carry no member id either, so no later join can name anyone.
  */
 async function requireOrganizer(decisionId: string) {
   const { family, member } = await requireMembership();
   const decision = await loadDecisionForFamily(decisionId, family.id);
   const organizer = member.role === "organizer" || decision.createdByMemberId === member.id;
   if (!organizer) fail(`/app/decisions/${decisionId}`, "Only the organizer, or whoever asked this, can do that.");
-  const veiled = decision.anonymous && member.role !== "organizer";
-  const actorName = veiled ? "Whoever asked this" : member.displayName;
-  // A veiled actor's log rows carry no member id either, so no later join can name them.
-  const actorMemberId = veiled ? null : member.id;
+  const actorName = decision.anonymous ? "Someone" : member.displayName;
+  const actorMemberId = decision.anonymous ? null : member.id;
   return { family, member, decision, actorName, actorMemberId };
 }
 
@@ -472,11 +471,15 @@ export async function removeOption(formData: FormData) {
     // Ballots are sealed while the round is open but participation is public. Letting
     // the votes cascade would move whoever picked only this option from "voted" to
     // "waiting on", which names them. Their emptied ballot becomes a skip instead
-    // (same caster, same hidden flag), so nothing visible moves.
+    // (same caster, same hidden flag), so nothing visible moves. A ballot that would
+    // now approve every remaining option becomes a skip too.
+    const aliveAfter = await tx.$count(schema.options, and(eq(schema.options.decisionId, decision.id), isNull(schema.options.eliminatedInRoundId), ne(schema.options.id, option.id)));
     const roundVotes = await tx.select().from(schema.votes).where(eq(schema.votes.roundId, round.id));
-    const emptied = roundVotes.filter((v) => v.optionId === option.id && !roundVotes.some((w) => w.memberId === v.memberId && w.optionId !== option.id));
-    if (emptied.length) {
-      await tx.insert(schema.votes).values(emptied.map((v) => ({ id: newId(), roundId: round.id, optionId: null, memberId: v.memberId, castByUserId: v.castByUserId, anonymous: v.anonymous })));
+    const toSkip = ballotsToSkip(roundVotes, option.id, aliveAfter);
+    if (toSkip.length) {
+      const seatIds = toSkip.map((v) => v.memberId).filter((id): id is string => id !== null);
+      await tx.delete(schema.votes).where(and(eq(schema.votes.roundId, round.id), inArray(schema.votes.memberId, seatIds)));
+      await tx.insert(schema.votes).values(toSkip.map((v) => ({ id: newId(), roundId: round.id, optionId: null, memberId: v.memberId, castByUserId: v.castByUserId, anonymous: v.anonymous })));
     }
     await tx.delete(schema.options).where(eq(schema.options.id, option.id));
     await logActivity(tx, { eventId: decision.eventId, decisionId: decision.id, kind: "option_removed", message: `${actorName} removed "${clipTitle(option.title, decision.format)}".`, actorMemberId });
