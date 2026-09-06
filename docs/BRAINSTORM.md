@@ -252,7 +252,7 @@ Cost: $0 a month; a domain at about $12 a year; Apple Developer $99 a year only 
 1. The real roster: who has Google, who is iPhone-only without Gmail, which kids have devices.
 2. Resolved 5 Sep 2026: everyone signs in with a social account. Still open: is anyone in the family without all three of Google, Apple and Facebook? They would need a proxy seat.
 3. Do both parents organize? Confirms co-organizers in MVP.
-4. Live votes by name, as in Messenger, or hidden until close as the default?
+4. Resolved 6 Sep 2026: hidden until the round closes, for everyone including organizers; names after close unless someone hid their ballot, in which case the round shows counts only. Anyone can hide a ballot, per ballot or as a standing preference, and ask or suggest anonymously; every vote stays recorded under its seat. Asked as: live votes by name, as in Messenger, or hidden until close as the default?
 5. Should "pick up to 2" be round 1 whenever there are four or more options, or on demand only?
 6. Is Friday dinner one standing event or a fresh one each time?
 7. Do kids' votes count equally on money questions, or is an adults-only toggle needed?
@@ -270,4 +270,4 @@ Cost: $0 a month; a domain at about $12 a year; Apple Developer $99 a year only 
 - Notifications to family members, per-vote pings, web push, SMS.
 - A no-account voting path (tap-your-name seats, guest seats, personal links), magic links, passkeys, kid PINs.
 - Realtime infrastructure, polling, cron, native apps, a Messenger bot, calendar export.
-- Anonymous-by-default voting, recap photos, templates, streak counters.
+- Anonymous-by-default voting (hiding a ballot is opt-in, per ballot or per seat), recap photos, templates, streak counters.

@@ -13,7 +13,7 @@
     a { color: #E4702E; } a:hover { color: #C25A1E; }
   </style>
 </helmet>
-<div style="width: 390px; min-height: 844px; box-sizing: border-box; background: #B9AFA4; display: flex; flex-direction: column; justify-content: flex-end; position: relative; overflow: hidden;">
+<div style="width: 390px; min-height: 1080px; box-sizing: border-box; background: #B9AFA4; display: flex; flex-direction: column; justify-content: flex-end; position: relative; overflow: hidden;">
   <div style="position: absolute; top: 58px; left: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; opacity: 0.5;">
     <div style="font-family: 'Bricolage Grotesque', 'Avenir Next', 'Segoe UI', system-ui, sans-serif; font-weight: 700; font-size: 32px; letter-spacing: -0.025em; color: #3A332C;">Summer ’27 Trip</div>
     <div style="font-size: 13px; color: #3A332C;">Lisbon · Jul 11–18</div>
@@ -36,7 +36,27 @@
     </div>
 
     <div style="display: flex; flex-direction: column; gap: 8px;">
-      <div style="font-size: 13px; font-weight: 600; color: #5E564E;">How do we decide?</div>
+      <div style="font-size: 13px; font-weight: 600; color: #5E564E;">Format</div>
+      <div style="display: flex; background: #EFE8DF; border-radius: 12px; padding: 4px; gap: 4px;">
+        <div style="flex-grow: 1; height: 38px; border-radius: 9px; background: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; box-shadow: 0 2px 6px rgba(32, 28, 24, 0.10);">Text</div>
+        <div style="flex-grow: 1; height: 38px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; color: #5E564E;">Long text</div>
+        <div style="flex-grow: 1; height: 38px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; color: #5E564E;">Dates</div>
+      </div>
+      <div style="font-size: 12px; color: #8A8178;">A short line each.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div style="font-size: 13px; font-weight: 600; color: #5E564E;">Type</div>
+      <div style="display: flex; background: #EFE8DF; border-radius: 12px; padding: 4px; gap: 4px;">
+        <div style="flex-grow: 1; height: 38px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; color: #5E564E;">A or B</div>
+        <div style="flex-grow: 1; height: 38px; border-radius: 9px; background: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; box-shadow: 0 2px 6px rgba(32, 28, 24, 0.10);">Multiple choice</div>
+        <div style="flex-grow: 1; height: 38px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; color: #5E564E;">Pick several</div>
+      </div>
+      <div style="font-size: 12px; color: #8A8178;">Pick one of several.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div style="font-size: 13px; font-weight: 600; color: #5E564E;">Rounds</div>
       <div style="display: flex; flex-direction: column; gap: 8px;">
         <div style="display: flex; align-items: center; gap: 12px; background: #FFFFFF; border: 1px solid #EAE2D8; border-radius: 14px; padding: 12px 14px;">
           <div style="width: 22px; height: 22px; border-radius: 50%; border: 2px solid #D9CFC3; box-sizing: border-box; flex-shrink: 0;"></div>
@@ -62,16 +82,6 @@
       </div>
     </div>
 
-    <div style="display: flex; align-items: center; justify-content: space-between; background: #FFFFFF; border: 1px solid #EAE2D8; border-radius: 14px; padding: 12px 14px;">
-      <div style="display: flex; flex-direction: column; gap: 1px;">
-        <div style="font-size: 15px; font-weight: 700;">We’re choosing dates</div>
-        <div style="font-size: 13px; color: #5E564E;">Options become date ranges; the winner sets the trip dates</div>
-      </div>
-      <div style="width: 48px; height: 28px; border-radius: 999px; background: #E3DACF; position: relative; flex-shrink: 0;">
-        <div style="position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #FFFFFF;"></div>
-      </div>
-    </div>
-
     <div style="display: flex; flex-direction: column; gap: 8px;">
       <div style="font-size: 13px; font-weight: 600; color: #5E564E;">Each round closes after</div>
       <div style="display: flex; background: #EFE8DF; border-radius: 12px; padding: 4px; gap: 4px;">
@@ -89,6 +99,16 @@
       </div>
       <div style="width: 48px; height: 28px; border-radius: 999px; background: #1D9A85; position: relative; flex-shrink: 0;">
         <div style="position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border-radius: 50%; background: #FFFFFF;"></div>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; justify-content: space-between; background: #FFFFFF; border: 1px solid #EAE2D8; border-radius: 14px; padding: 12px 14px;">
+      <div style="display: flex; flex-direction: column; gap: 1px;">
+        <div style="font-size: 15px; font-weight: 700;">Ask anonymously</div>
+        <div style="font-size: 13px; color: #5E564E;">Your name stays off the question and its options.</div>
+      </div>
+      <div style="width: 48px; height: 28px; border-radius: 999px; background: #E3DACF; position: relative; flex-shrink: 0;">
+        <div style="position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #FFFFFF;"></div>
       </div>
     </div>
 
