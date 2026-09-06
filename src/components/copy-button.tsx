@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useMessages } from "@/components/locale-provider";
 import { Button, Icon } from "./ui";
 
-export function CopyButton({ text, label = "Copy link" }: { text: string; label?: string }) {
+export function CopyButton({ text, label }: { text: string; label?: string }) {
+  const t = useMessages();
   const [done, setDone] = useState(false);
   return (
     <Button
@@ -15,12 +17,12 @@ export function CopyButton({ text, label = "Copy link" }: { text: string; label?
           setDone(true);
           setTimeout(() => setDone(false), 2000);
         } catch {
-          window.prompt("Copy this link", text);
+          window.prompt(t.cmpcopyThisLinkPrompt, text);
         }
       }}
     >
       <Icon name={done ? "check" : "link"} size={18} stroke={2.25} />
-      {done ? "Copied" : label}
+      {done ? t.cmpcopied : label ?? t.cmpcopyLink}
     </Button>
   );
 }

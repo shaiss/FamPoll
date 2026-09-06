@@ -1,5 +1,3 @@
-import { headers } from "next/headers";
-
 export const LOCALES = ["en", "es", "pt-BR"] as const;
 export type Locale = (typeof LOCALES)[number];
 export const DEFAULT_LOCALE: Locale = "en";
@@ -22,15 +20,9 @@ const HOST_LOCALE: Record<string, Locale> = {
   "quórum.family": "pt-BR",
 };
 
-/** Pure host → locale. Strips a port and a leading "www."; unknown hosts (localhost, the vercel.app preview) fall back to English. */
+/** Pure host → locale. Strips a port and a leading "www."; unknown hosts (localhost, the vercel.app preview) fall back to English. This module stays client-safe — the request-bound getLocale() lives in locale-server.ts. */
 export function localeFromHost(host: string | null | undefined): Locale {
   if (!host) return DEFAULT_LOCALE;
   const h = host.split(":")[0].trim().toLowerCase().replace(/^www\./, "");
   return HOST_LOCALE[h] ?? DEFAULT_LOCALE;
-}
-
-/** Server-only: the active locale for this request, from its Host header. */
-export async function getLocale(): Promise<Locale> {
-  const h = await headers();
-  return localeFromHost(h.get("x-forwarded-host") ?? h.get("host"));
 }

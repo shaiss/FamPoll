@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { brandFor } from "@/lib/brand";
-import { getLocale } from "@/lib/locale";
+import { getLocale } from "@/lib/locale-server";
 import { Icon } from "./ui";
 
 /**

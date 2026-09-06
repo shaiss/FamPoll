@@ -98,7 +98,7 @@ export function TopBar({ back, backLabel, right }: { back?: string; backLabel?: 
       {back ? (
         <Link href={back} className="inline-flex items-center gap-1 text-[15px] font-semibold text-ink-2 hover:text-ink">
           <Icon name="chevron-left" size={20} />
-          <span>{backLabel ?? "Back"}</span>
+          <span>{backLabel}</span>
         </Link>
       ) : (
         <span />

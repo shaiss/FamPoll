@@ -23,6 +23,9 @@ import {
   shouldAutoClose,
   tally,
 } from "./rounds";
+import { messages } from "../messages";
+
+const en = messages("en");
 
 describe("roundSequence", () => {
   it("maps each plan to its rounds", () => {
@@ -100,11 +103,11 @@ describe("optionTitleLimit", () => {
 
 describe("roundInstruction", () => {
   it("says how many to pick in every voting round", () => {
-    assert.equal(roundInstruction("ideas", 0, 2), "Add ideas. Nobody votes yet.");
-    assert.equal(roundInstruction("shortlist", 2, 2), "Pick up to 2. The top 2 go to the final.");
-    assert.equal(roundInstruction("shortlist", 1, 3), "Pick one. The top 3 go to the final.");
-    assert.equal(roundInstruction("final", 1, 2), "Pick one. The most votes wins.");
-    assert.equal(roundInstruction("final", 3, 2), "Pick up to 3. The most votes wins.");
+    assert.equal(roundInstruction(en, "ideas", 0, 2), "Add ideas. Nobody votes yet.");
+    assert.equal(roundInstruction(en, "shortlist", 2, 2), "Pick up to 2. The top 2 go to the final.");
+    assert.equal(roundInstruction(en, "shortlist", 1, 3), "Pick one. The top 3 go to the final.");
+    assert.equal(roundInstruction(en, "final", 1, 2), "Pick one. The most votes wins.");
+    assert.equal(roundInstruction(en, "final", 3, 2), "Pick up to 3. The most votes wins.");
   });
 });
 
@@ -238,23 +241,23 @@ describe("nextStep", () => {
 
 describe("roundLabel", () => {
   it("labels a quick vote", () => {
-    assert.equal(roundLabel({ kind: "final", number: 1 }, [{ kind: "final", number: 1 }], "quick"), "Quick vote");
+    assert.equal(roundLabel(en, { kind: "final", number: 1 }, [{ kind: "final", number: 1 }], "quick"), "Quick vote");
   });
   it("counts remaining rounds from the plan", () => {
     const all = [{ kind: "ideas" as const, number: 1 }];
-    assert.equal(roundLabel(all[0], all, "ideas_shortlist_final"), "Round 1 of 3 · Ideas");
+    assert.equal(roundLabel(en, all[0], all, "ideas_shortlist_final"), "Round 1 of 3 · Ideas");
     const two = [...all, { kind: "shortlist" as const, number: 2 }];
-    assert.equal(roundLabel(two[1], two, "ideas_shortlist_final"), "Round 2 of 3 · Shortlist");
+    assert.equal(roundLabel(en, two[1], two, "ideas_shortlist_final"), "Round 2 of 3 · Shortlist");
   });
   it("shrinks the denominator when the shortlist was skipped", () => {
     const all = [{ kind: "ideas" as const, number: 1 }, { kind: "final" as const, number: 2 }];
-    assert.equal(roundLabel(all[1], all, "ideas_shortlist_final"), "Round 2 of 2 · Final");
+    assert.equal(roundLabel(en, all[1], all, "ideas_shortlist_final"), "Round 2 of 2 · Final");
   });
   it("names a tiebreak", () => {
     const all = [{ kind: "final" as const, number: 1 }, { kind: "final" as const, number: 2 }];
     assert.equal(isTiebreak(all[1], all), true);
     assert.equal(isTiebreak(all[0], all), false);
-    assert.equal(roundLabel(all[1], all, "quick"), "Tiebreak");
+    assert.equal(roundLabel(en, all[1], all, "quick"), "Tiebreak");
   });
 });
 

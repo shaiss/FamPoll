@@ -24,7 +24,12 @@
  *   ideas      people add options; nobody votes
  *   shortlist  everyone votes; the top K advance
  *   final      everyone votes; the top option wins
+ *
+ * The user-facing labels below take a message catalog (`t`) so they read in the
+ * viewer's language; they stay pure — deterministic in their arguments.
  */
+
+import { interpolate, type Messages } from "../messages";
 
 export type Plan = "quick" | "shortlist_final" | "ideas_shortlist_final";
 export type RoundKind = "ideas" | "shortlist" | "final";
@@ -33,23 +38,17 @@ export type VoteType = "ab" | "single" | "multi";
 
 export type TallyRow = { optionId: string; count: number };
 
-export const PLAN_LABEL: Record<Plan, string> = {
-  quick: "Quick vote",
-  shortlist_final: "Shortlist, then final",
-  ideas_shortlist_final: "Ideas, shortlist, final",
-};
+export function planLabel(t: Messages, plan: Plan): string {
+  return { quick: t.enginePlanQuick, shortlist_final: t.enginePlanShortlistFinal, ideas_shortlist_final: t.enginePlanIdeasShortlistFinal }[plan];
+}
 
-export const FORMAT_LABEL: Record<Format, string> = {
-  text: "Text",
-  long_text: "Long text",
-  date: "Dates",
-};
+export function formatLabel(t: Messages, format: Format): string {
+  return { text: t.engineFormatText, long_text: t.engineFormatLongText, date: t.engineFormatDate }[format];
+}
 
-export const VOTE_TYPE_LABEL: Record<VoteType, string> = {
-  ab: "A or B",
-  single: "Multiple choice",
-  multi: "Pick several",
-};
+export function voteTypeLabel(t: Messages, voteType: VoteType): string {
+  return { ab: t.engineVoteTypeAb, single: t.engineVoteTypeSingle, multi: t.engineVoteTypeMulti }[voteType];
+}
 
 export const FORMATS: Format[] = ["text", "long_text", "date"];
 export const VOTE_TYPES: VoteType[] = ["ab", "single", "multi"];
@@ -80,11 +79,9 @@ export function optionCountRule(voteType: VoteType, plan: Plan): OptionCountRule
   return { min: voteType === "multi" ? 3 : 2, max: null };
 }
 
-export const ROUND_LABEL: Record<RoundKind, string> = {
-  ideas: "Ideas",
-  shortlist: "Shortlist",
-  final: "Final",
-};
+export function roundKindLabel(t: Messages, kind: RoundKind): string {
+  return { ideas: t.engineRoundIdeas, shortlist: t.engineRoundShortlist, final: t.engineRoundFinal }[kind];
+}
 
 export function roundSequence(plan: Plan): RoundKind[] {
   switch (plan) {
@@ -223,11 +220,11 @@ export function nextStep(plan: Plan, closed: RoundKind, alive: string[], advance
 }
 
 /** The instruction line under a round title. `maxPicks` is the effective cap. */
-export function roundInstruction(kind: RoundKind, maxPicks: number, advanceCount: number): string {
-  if (kind === "ideas") return "Add ideas. Nobody votes yet.";
-  const picks = maxPicks === 1 ? "Pick one." : `Pick up to ${maxPicks}.`;
-  if (kind === "shortlist") return `${picks} The top ${advanceCount} go to the final.`;
-  return `${picks} The most votes wins.`;
+export function roundInstruction(t: Messages, kind: RoundKind, maxPicks: number, advanceCount: number): string {
+  if (kind === "ideas") return t.engineInstructionIdeas;
+  const picks = maxPicks === 1 ? t.engineInstructionPickOne : interpolate(t.engineInstructionPickUpTo, { max: maxPicks });
+  if (kind === "shortlist") return interpolate(t.engineInstructionShortlist, { picks, advanceCount });
+  return interpolate(t.engineInstructionFinal, { picks });
 }
 
 export type RoundRef = { kind: RoundKind; number: number };
@@ -243,12 +240,12 @@ export function isTiebreak(round: RoundRef, all: RoundRef[]): boolean {
  * rounds actually played so far plus what the plan still has left, so a skipped
  * shortlist or a tiebreak never reads "Round 2 of 3" or "Round 4 of 3".
  */
-export function roundLabel(round: RoundRef, all: RoundRef[], plan: Plan): string {
-  if (isTiebreak(round, all)) return "Tiebreak";
+export function roundLabel(t: Messages, round: RoundRef, all: RoundRef[], plan: Plan): string {
+  if (isTiebreak(round, all)) return t.engineRoundTiebreak;
   const seq = roundSequence(plan);
-  if (seq.length === 1 && round.number === 1) return "Quick vote";
+  if (seq.length === 1 && round.number === 1) return t.engineRoundQuickVote;
   const remaining = round.kind === "final" ? 0 : seq.slice(seq.indexOf(round.kind) + 1).length;
-  return `Round ${round.number} of ${round.number + remaining} · ${ROUND_LABEL[round.kind]}`;
+  return interpolate(t.engineRoundNofM, { number: round.number, total: round.number + remaining, label: roundKindLabel(t, round.kind) });
 }
 
 /**

@@ -7,23 +7,26 @@ import { CopyText } from "@/components/copy-text";
 import { baseUrl } from "@/lib/url";
 import { requireUser } from "@/lib/auth";
 import type { Vote } from "@/lib/db/schema";
-import { FORMAT_LABEL, ROUND_LABEL, VOTE_TYPE_LABEL, effectivePicks, isTiebreak, peopleVoted, roundInstruction, roundLabel, roundSequence, tally, type Format, type RoundKind } from "@/lib/engine/rounds";
+import { formatLabel, roundKindLabel, voteTypeLabel, effectivePicks, isTiebreak, peopleVoted, roundInstruction, roundLabel, roundSequence, tally, type Format, type RoundKind } from "@/lib/engine/rounds";
 import { readError } from "@/lib/flash";
-import { clipTitle, closesRelative, formatDate, plural } from "@/lib/format";
+import { clipTitle, closesRelative, formatDate } from "@/lib/format";
 import { decisionData, type OptionView, type RoundView } from "@/lib/queries";
+import { getLocale, getMessages } from "@/lib/locale-server";
+import { interpolate } from "@/lib/messages";
 
-function Stepper({ rounds, plan, decided }: { rounds: RoundView[]; plan: "quick" | "shortlist_final" | "ideas_shortlist_final"; decided: boolean }) {
+async function Stepper({ rounds, plan, decided }: { rounds: RoundView[]; plan: "quick" | "shortlist_final" | "ideas_shortlist_final"; decided: boolean }) {
+  const t = await getMessages();
   const seq = roundSequence(plan);
   if (seq.length === 1 && rounds.length <= 1) return null;
   const done = rounds.map((r, i) => ({
     key: r.id,
-    label: isTiebreak(r, rounds) ? "Tiebreak" : ROUND_LABEL[r.kind],
+    label: isTiebreak(r, rounds) ? t.decisionstepTiebreak : roundKindLabel(t, r.kind),
     number: r.number,
     state: (r.status === "closed" ? "done" : i === rounds.length - 1 ? "current" : "done") as "done" | "current" | "todo",
   }));
   const lastKind = rounds[rounds.length - 1]?.kind;
   const remaining: RoundKind[] = decided || lastKind === "final" ? [] : seq.slice(seq.indexOf(lastKind ?? seq[0]) + 1);
-  const steps = [...done, ...remaining.map((kind, i) => ({ key: "todo-" + kind, label: ROUND_LABEL[kind], number: rounds.length + i + 1, state: "todo" as const }))];
+  const steps = [...done, ...remaining.map((kind, i) => ({ key: "todo-" + kind, label: roundKindLabel(t, kind), number: rounds.length + i + 1, state: "todo" as const }))];
   return (
     <div className="flex items-center">
       {steps.map((s, i) => (
@@ -48,7 +51,8 @@ function Stepper({ rounds, plan, decided }: { rounds: RoundView[]; plan: "quick"
 type Picked = Vote & { optionId: string };
 const picks = (votes: Vote[]): Picked[] => votes.filter((v): v is Picked => v.optionId !== null);
 
-function ResultBars({ round, rounds, options, format, label, advancing, winnerId }: { round: RoundView; rounds: RoundView[]; options: OptionView[]; format: Format; label: (v: Vote) => string; advancing: Set<string>; winnerId: string | null }) {
+async function ResultBars({ round, rounds, options, format, label, advancing, winnerId }: { round: RoundView; rounds: RoundView[]; options: OptionView[]; format: Format; label: (v: Vote) => string; advancing: Set<string>; winnerId: string | null }) {
+  const t = await getMessages();
   const numberOf = (roundId: string) => rounds.find((r) => r.id === roundId)?.number ?? Infinity;
   // Everything that was on this round's ballot: still alive, or knocked out in this round or a later one.
   const inPlay = options.filter((o) => !o.eliminatedInRoundId || numberOf(o.eliminatedInRoundId) >= round.number);
@@ -78,7 +82,7 @@ function ResultBars({ round, rounds, options, format, label, advancing, winnerId
             <div className="flex items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 <span className={`${longText ? "whitespace-pre-line text-[15px] font-semibold leading-snug" : "font-bold"} ${out ? "text-ink-2" : ""}`}>{o?.title ?? "?"}</span>
-                {won ? <Pill tone="teal">Winner</Pill> : adv ? <Pill tone="accent">To the final</Pill> : null}
+                {won ? <Pill tone="teal">{t.decisionpillWinner}</Pill> : adv ? <Pill tone="accent">{t.decisionpillToFinal}</Pill> : null}
               </div>
               <span className="font-display text-xl font-extrabold">{r.count}</span>
             </div>
@@ -90,13 +94,13 @@ function ResultBars({ round, rounds, options, format, label, advancing, winnerId
         );
       })}
       <div className="text-center text-xs text-ink-3">
-        {plural(chosen.length, "vote")} from {plural(voters, "person", "people")}
-        {cap > 1 ? ` · up to ${cap} each` : ""}
-        {skippers.length ? (sealed ? ` · ${skippers.length} skipped` : ` · skipped: ${skippers.join(", ")}`) : ""}
+        {interpolate(t.decisionvotesFrom, { votes: interpolate(t.decisionvoteCount, { count: chosen.length }), people: interpolate(t.decisionpersonCount, { count: voters }) })}
+        {cap > 1 ? ` · ${interpolate(t.decisionpicksUpToEach, { cap })}` : ""}
+        {skippers.length ? (sealed ? ` · ${interpolate(t.decisionskippedCount, { count: skippers.length })}` : ` · ${interpolate(t.decisionskippedNames, { names: skippers.join(", ") })}`) : ""}
       </div>
       {sealed ? (
         <div className="text-center text-xs text-ink-3">
-          {hiddenVoters} of {voters} voted privately, so this round shows counts only.
+          {interpolate(t.decisionprivateVotesNote, { hidden: hiddenVoters, voters })}
         </div>
       ) : null}
     </div>
@@ -111,14 +115,16 @@ export default async function DecisionPage({ params, searchParams }: { params: P
   if (!data) notFound();
   const { decision, event, rounds, currentRound, options, members, seats, casterName, hiddenDefault, member } = data;
   const base = await baseUrl();
+  const t = await getMessages();
+  const locale = await getLocale();
   const memberById = new Map(members.map((m) => [m.id, m]));
   /** "Eli (via Shai)" when someone else cast the vote for that seat; a seat that has left keeps its ballot, not its name. */
   const label = (v: Vote) => {
-    if (v.memberId === null) return "someone who left";
+    if (v.memberId === null) return t.decisionvoterLeft;
     const m = memberById.get(v.memberId);
     const name = m?.displayName ?? "?";
     if (!m || m.userId === v.castByUserId) return name;
-    return `${name} (via ${casterName.get(v.castByUserId) ?? "someone"})`;
+    return interpolate(t.decisionviaCaster, { name, caster: casterName.get(v.castByUserId) ?? t.decisioncasterFallback });
   };
   const organizer = member.role === "organizer" || decision.createdByMemberId === member.id;
   const planning = event.status === "planning";
@@ -180,31 +186,33 @@ export default async function DecisionPage({ params, searchParams }: { params: P
         <h1 className="font-display text-[30px] font-bold leading-[1.05] tracking-[-0.025em]">{decision.title}</h1>
         <div className="flex flex-wrap items-center gap-2 text-[13px] text-ink-3">
           <span>
-            {VOTE_TYPE_LABEL[decision.voteType]} · {FORMAT_LABEL[decision.format]}
+            {voteTypeLabel(t, decision.voteType)} · {formatLabel(t, decision.format)}
           </span>
-          {decision.anonymous ? <Pill>Asked anonymously</Pill> : null}
+          {decision.anonymous ? <Pill>{t.decisionpillAskedAnonymously}</Pill> : null}
         </div>
         <Stepper rounds={rounds} plan={decision.plan} decided={decided} />
         {open ? (
           <div className="flex items-center justify-between gap-3 text-[13px] text-ink-2">
             <div>
-              <span className="font-bold text-ink">{roundLabel(open, rounds, decision.plan)}.</span> {roundInstruction(open.kind, pickCap, decision.advanceCount)}
+              <span className="font-bold text-ink">{roundLabel(t, open, rounds, decision.plan)}.</span> {roundInstruction(t, open.kind, pickCap, decision.advanceCount)}
             </div>
             <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-accent-deep">
               <Icon name="clock" size={13} stroke={2.5} />
-              <LocalTime iso={open.closesAt.toISOString()} mode="closes" fallback={closesRelative(open.closesAt)} />
+              <LocalTime iso={open.closesAt.toISOString()} mode="closes" fallback={closesRelative(open.closesAt, undefined, locale)} />
             </span>
           </div>
         ) : null}
       </div>
 
       {error ? <p className="rounded-[12px] bg-accent-tint px-3 py-2 text-sm font-semibold text-accent-deep">{error}</p> : null}
-      {!planning ? <Card className="p-4 text-sm text-ink-2">This event is {event.status}, so voting is closed here.</Card> : null}
+      {!planning ? <Card className="p-4 text-sm text-ink-2">{interpolate(t.decisioneventClosedNote, { status: event.status })}</Card> : null}
 
       {decided && outcome ? (
         <div className="flex flex-col gap-2 rounded-card bg-teal-tint p-4">
           <SectionLabel tone="teal">
-            Decided <LocalTime iso={(decision.decidedAt ?? decision.createdAt).toISOString()} mode="date" fallback={formatDate(decision.decidedAt ?? decision.createdAt)} />
+            {t.decisiondecidedOn.split("{date}")[0]}
+            <LocalTime iso={(decision.decidedAt ?? decision.createdAt).toISOString()} mode="date" fallback={formatDate(decision.decidedAt ?? decision.createdAt, undefined, locale)} />
+            {t.decisiondecidedOn.split("{date}")[1]}
           </SectionLabel>
           {decision.format === "long_text" ? (
             <div className="whitespace-pre-line text-[17px] font-semibold leading-snug text-teal-ink">{outcome.title}</div>
@@ -212,13 +220,13 @@ export default async function DecisionPage({ params, searchParams }: { params: P
             <div className="font-display text-[26px] font-extrabold tracking-[-0.02em] text-teal-ink">{outcome.title}</div>
           )}
           {outcome.note ? <div className="text-sm text-teal-deep">{outcome.note}</div> : null}
-          {decision.setsEventDates ? <div className="text-sm text-teal-deep">These are now the event’s dates.</div> : null}
+          {decision.setsEventDates ? <div className="text-sm text-teal-deep">{t.decisioneventDatesSet}</div> : null}
           <CopyText
             variant="ghost"
-            label="Copy for Messenger"
+            label={t.decisioncopyForMessenger}
             lines={[
               { text: `${decision.title} (${event.title})` },
-              { text: `Decided: ${clipTitle(outcome.title, decision.format)}${decidedTally}.` },
+              { text: interpolate(t.decisioncopyDecidedLine, { outcome: clipTitle(outcome.title, decision.format), tally: decidedTally }) },
               { text: `${base}/app/decisions/${decision.id}` },
             ]}
           />
@@ -226,7 +234,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
             <form action={reopenRound} className="pt-1">
               <input type="hidden" name="decisionId" value={decision.id} />
               <Button type="submit" variant="ghost" size="sm">
-                Changed your minds? Reopen the last round
+                {t.decisionreopenChangedMinds}
               </Button>
             </form>
           ) : null}
@@ -235,24 +243,24 @@ export default async function DecisionPage({ params, searchParams }: { params: P
 
       {decision.status === "skipped" ? (
         <Card className="flex flex-col gap-3 p-4">
-          <div className="text-sm text-ink-2">This decision was set aside.</div>
+          <div className="text-sm text-ink-2">{t.decisionsetAsideNote}</div>
           {organizer && planning ? (
             <div className="flex flex-wrap items-center gap-2">
               <form action={unskipDecision}>
                 <input type="hidden" name="decisionId" value={decision.id} />
                 <Button type="submit" variant="secondary" size="sm">
-                  Bring it back
+                  {t.decisionbringItBack}
                 </Button>
               </form>
               <details>
-                <summary className="cursor-pointer list-none text-xs font-semibold text-ink-3 [&::-webkit-details-marker]:hidden">Delete for good…</summary>
+                <summary className="cursor-pointer list-none text-xs font-semibold text-ink-3 [&::-webkit-details-marker]:hidden">{t.decisiondeleteForGood}</summary>
                 <form action={deleteDecision} className="mt-2 flex flex-col gap-2">
                   <input type="hidden" name="decisionId" value={decision.id} />
                   <label className="flex items-center gap-2 text-sm text-ink-2">
-                    <input type="checkbox" name="confirm" /> Delete this decision and its votes for good.
+                    <input type="checkbox" name="confirm" /> {t.decisiondeleteConfirmVotes}
                   </label>
                   <Button type="submit" variant="danger" size="sm">
-                    Delete decision
+                    {t.decisiondeleteDecision}
                   </Button>
                 </form>
               </details>
@@ -263,17 +271,17 @@ export default async function DecisionPage({ params, searchParams }: { params: P
 
       {open && open.kind === "ideas" ? (
         <section className="flex flex-col gap-2.5">
-          <SectionLabel right={plural(alive.length, "idea")}>Ideas so far</SectionLabel>
-          {alive.length === 0 ? <Card className="p-4 text-sm text-ink-2">No ideas yet. Be the first.</Card> : null}
+          <SectionLabel right={interpolate(t.decisionideaCount, { count: alive.length })}>{t.decisionideasSoFar}</SectionLabel>
+          {alive.length === 0 ? <Card className="p-4 text-sm text-ink-2">{t.decisionnoIdeasYet}</Card> : null}
           {alive.map((o) => {
-            const who = o.anonymous ? null : (o.addedBy?.displayName ?? "Someone");
+            const who = o.anonymous ? null : (o.addedBy?.displayName ?? t.decisionsomeoneFallback);
             return (
               <Card key={o.id} className="flex items-center gap-3 p-3.5">
                 <Avatar name={who ?? "?"} size={32} ring="#ffffff" />
                 <div className="flex min-w-0 flex-col">
                   <div className={decision.format === "long_text" ? "whitespace-pre-line text-[15px] font-semibold leading-snug" : "font-bold"}>{o.title}</div>
                   <div className="text-[13px] text-ink-2">
-                    {who ? `${who}’s idea` : "Anonymous idea"}
+                    {who ? interpolate(t.decisionpersonsIdea, { name: who }) : t.decisionanonymousIdea}
                     {o.note ? ` · ${o.note}` : ""}
                   </div>
                 </div>
@@ -282,12 +290,12 @@ export default async function DecisionPage({ params, searchParams }: { params: P
           })}
           {organizer && alive.length >= 2 ? (
             <div className="flex flex-col gap-2 rounded-card bg-ink p-4 text-white">
-              <div className="font-display text-lg font-bold">Got all the ideas?</div>
-              <p className="text-[13px] text-line">Ideas rounds only close on their deadline. Start the next round whenever the list looks complete.</p>
+              <div className="font-display text-lg font-bold">{t.decisiongotAllIdeas}</div>
+              <p className="text-[13px] text-line">{t.decisionideasCloseHint}</p>
               <form action={closeRoundNow}>
                 <input type="hidden" name="decisionId" value={decision.id} />
                 <Button type="submit" size="sm" className="w-full">
-                  {alive.length <= decision.advanceCount ? "Start the final" : "Start the shortlist"}
+                  {alive.length <= decision.advanceCount ? t.decisionstartTheFinal : t.decisionstartTheShortlist}
                 </Button>
               </form>
             </div>
@@ -301,39 +309,39 @@ export default async function DecisionPage({ params, searchParams }: { params: P
             <input type="hidden" name="decisionId" value={decision.id} />
             {decision.format === "date" ? (
               <div className="flex flex-col gap-2">
-                <span className="text-[13px] font-semibold text-ink-2">{open?.kind === "ideas" ? "Suggest dates" : "Add a date range"}</span>
+                <span className="text-[13px] font-semibold text-ink-2">{open?.kind === "ideas" ? t.decisionsuggestDates : t.decisionaddDateRange}</span>
                 <div className="grid grid-cols-2 gap-2">
-                  <input type="date" name="dateStart" required aria-label="Start" className={inputClass} />
-                  <input type="date" name="dateEnd" aria-label="End" className={inputClass} />
+                  <input type="date" name="dateStart" required aria-label={t.decisionariaStart} className={inputClass} />
+                  <input type="date" name="dateEnd" aria-label={t.decisionariaEnd} className={inputClass} />
                 </div>
               </div>
             ) : decision.format === "long_text" ? (
-              <Field label={open?.kind === "ideas" ? "Add an idea" : "Add an option"}>
+              <Field label={open?.kind === "ideas" ? t.decisionaddAnIdea : t.decisionaddAnOption}>
                 <textarea
                   name="title"
                   required
                   maxLength={500}
                   rows={3}
-                  placeholder="A paragraph: the plan, the place, the why"
+                  placeholder={t.decisionlongTextPlaceholder}
                   className="w-full rounded-[14px] border border-line bg-card px-4 py-3 text-[15px] font-medium leading-snug text-ink outline-none placeholder:text-ink-3 focus:border-accent"
                 />
               </Field>
             ) : (
-              <Field label={open?.kind === "ideas" ? "Add an idea" : "Add an option"}>
-                <input name="title" required maxLength={80} placeholder="Beach house in Cascais" className={inputClass} />
+              <Field label={open?.kind === "ideas" ? t.decisionaddAnIdea : t.decisionaddAnOption}>
+                <input name="title" required maxLength={80} placeholder={t.decisiontitlePlaceholder} className={inputClass} />
               </Field>
             )}
-            <input name="note" maxLength={140} placeholder="Why? (optional)" className={`${inputClass} h-11 text-[15px] font-medium`} />
+            <input name="note" maxLength={140} placeholder={t.decisionwhyPlaceholder} className={`${inputClass} h-11 text-[15px] font-medium`} />
             <label className="flex items-center gap-2 text-sm text-ink-2">
-              <input type="checkbox" name="anonymous" className="h-5 w-5 accent-accent" /> Suggest anonymously
+              <input type="checkbox" name="anonymous" className="h-5 w-5 accent-accent" /> {t.decisionsuggestAnonymously}
             </label>
             <Button type="submit" variant="secondary">
-              Add
+              {t.decisionaddButton}
             </Button>
           </form>
         </Card>
       ) : open?.kind === "ideas" ? (
-        <p className="text-xs text-ink-3">The organizer is collecting ideas for this one.</p>
+        <p className="text-xs text-ink-3">{t.decisionorganizerCollectingIdeas}</p>
       ) : null}
 
       {open && open.kind !== "ideas"
@@ -345,7 +353,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
             return (
               <section key={seat.id} className="flex flex-col gap-2.5">
                 {seats.length > 1 ? (
-                  <SectionLabel right={mine.length ? (hidden ? "voted · hidden" : "voted") : skipped ? "skipped" : "not yet"}>{seat.userId === user.id ? "Your vote" : `Voting for ${seat.displayName}`}</SectionLabel>
+                  <SectionLabel right={mine.length ? (hidden ? t.decisionstatusVotedHidden : t.decisionstatusVoted) : skipped ? t.decisionstatusSkipped : t.decisionstatusNotYet}>{seat.userId === user.id ? t.decisionyourVote : interpolate(t.decisionvotingFor, { name: seat.displayName })}</SectionLabel>
                 ) : null}
                 <VoteForm
                   key={`${open.id}:${seat.id}:${alive.map((o) => o.id).join(",")}`}
@@ -359,7 +367,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
                   options={alive.map((o) => ({
                     id: o.id,
                     title: o.title,
-                    byline: [o.addedBy ? `${o.addedBy.displayName}’s idea` : null, o.note].filter(Boolean).join(" · "),
+                    byline: [o.addedBy ? interpolate(t.decisionpersonsIdea, { name: o.addedBy.displayName }) : null, o.note].filter(Boolean).join(" · "),
                     longText: decision.format === "long_text",
                   }))}
                 />
@@ -374,28 +382,27 @@ export default async function DecisionPage({ params, searchParams }: { params: P
             <div className="flex items-center justify-between">
               <AvatarStack names={members.map((m) => m.displayName)} size={28} max={8} />
               <div className="text-right text-xs text-ink-2">
-                {votersInOpen.size} of {members.length} voted
+                {interpolate(t.decisionvotedOfTotal, { voted: votersInOpen.size, total: members.length })}
                 {waitingOn.length ? (
                   <>
                     <br />
-                    waiting on {waitingOn.slice(0, 3).join(", ")}
-                    {waitingOn.length > 3 ? ` +${waitingOn.length - 3}` : ""}
+                    {interpolate(t.decisionwaitingOn, { names: waitingOn.slice(0, 3).join(", ") + (waitingOn.length > 3 ? ` +${waitingOn.length - 3}` : "") })}
                   </>
                 ) : null}
               </div>
             </div>
           ) : null}
           <p className="text-center text-xs text-ink-3">
-            {open.kind === "ideas" ? "Ideas " : "You can change your mind until the round closes. It "}
-            <LocalTime iso={open.closesAt.toISOString()} mode="closes" fallback={closesRelative(open.closesAt)} />
-            {open.kind !== "ideas" ? ", or as soon as everyone has voted." : "."}
+            {(open.kind === "ideas" ? t.decisionideasCloseNote : t.decisionchangeMindNote).split("{closes}")[0]}
+            <LocalTime iso={open.closesAt.toISOString()} mode="closes" fallback={closesRelative(open.closesAt, undefined, locale)} />
+            {(open.kind === "ideas" ? t.decisionideasCloseNote : t.decisionchangeMindNote).split("{closes}")[1]}
           </p>
           <CopyText
             lines={[
               { text: `${decision.title} (${event.title})` },
-              { text: open.kind === "ideas" ? "Add your ideas, {closes}:" : `${roundLabel(open, rounds, decision.plan)}. Vote, {closes}:`, closesAtIso: open.closesAt.toISOString() },
+              { text: open.kind === "ideas" ? t.decisioncopyAddIdeas : interpolate(t.decisioncopyVote, { round: roundLabel(t, open, rounds, decision.plan) }), closesAtIso: open.closesAt.toISOString() },
               { text: `${base}/app/decisions/${decision.id}` },
-              ...(open.kind !== "ideas" && waitingOn.length ? [{ text: `Still waiting on ${waitingOn.join(", ")}.` }] : []),
+              ...(open.kind !== "ideas" && waitingOn.length ? [{ text: interpolate(t.decisioncopyStillWaiting, { names: waitingOn.join(", ") }) }] : []),
             ]}
           />
         </div>
@@ -404,16 +411,16 @@ export default async function DecisionPage({ params, searchParams }: { params: P
       {tied ? (
         <div className="flex flex-col gap-3 rounded-card bg-ink p-[18px] text-white">
           <div className="flex flex-col gap-1">
-            <div className="text-xs font-bold uppercase tracking-[0.08em] text-accent-line">It’s a tie</div>
-            <div className="font-display text-xl font-bold tracking-[-0.01em]">{tiedOptions.map((o) => clipTitle(o.title, decision.format)).join(" and ")} ended level.</div>
-            <div className="text-[13px] leading-snug text-line">{organizer ? "Run one more round between them, or just call it." : "The organizer will break the tie."}</div>
+            <div className="text-xs font-bold uppercase tracking-[0.08em] text-accent-line">{t.decisiontieHeading}</div>
+            <div className="font-display text-xl font-bold tracking-[-0.01em]">{interpolate(t.decisiontieEndedLevel, { options: tiedOptions.map((o) => clipTitle(o.title, decision.format)).join(` ${t.decisiontiedJoinAnd} `) })}</div>
+            <div className="text-[13px] leading-snug text-line">{organizer ? t.decisiontieOrganizerHint : t.decisiontieMemberHint}</div>
           </div>
           {organizer ? (
             <div className="flex flex-col gap-2">
               <form action={tiebreak}>
                 <input type="hidden" name="decisionId" value={decision.id} />
                 <Button type="submit" className="w-full">
-                  Tiebreak round
+                  {t.decisiontiebreakRound}
                 </Button>
               </form>
               <div className="grid grid-cols-2 gap-2">
@@ -422,7 +429,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
                     <input type="hidden" name="decisionId" value={decision.id} />
                     <input type="hidden" name="optionId" value={o.id} />
                     <button type="submit" className="h-11 w-full rounded-[12px] border border-[#4a423a] px-3 text-sm font-semibold text-white hover:bg-[#2c2622]">
-                      Just take {clipTitle(o.title, decision.format)}
+                      {interpolate(t.decisionjustTake, { option: clipTitle(o.title, decision.format) })}
                     </button>
                   </form>
                 ))}
@@ -435,18 +442,18 @@ export default async function DecisionPage({ params, searchParams }: { params: P
       {lowTurnout ? (
         <div className="flex flex-col gap-3 rounded-card bg-ink p-[18px] text-white">
           <div className="flex flex-col gap-1">
-            <div className="text-xs font-bold uppercase tracking-[0.08em] text-accent-line">Not enough votes</div>
+            <div className="text-xs font-bold uppercase tracking-[0.08em] text-accent-line">{t.decisionnotEnoughVotes}</div>
             <div className="font-display text-xl font-bold tracking-[-0.01em]">
-              Time ran out with {turnout} of {members.length} voting.
+              {interpolate(t.decisiontimeRanOut, { turnout, members: members.length })}
             </div>
-            <div className="text-[13px] leading-snug text-line">{organizer ? "Nothing was decided. Give it more time, go with the leader, or set it aside." : "Nothing was decided yet. The organizer will give it more time or call it."}</div>
+            <div className="text-[13px] leading-snug text-line">{organizer ? t.decisionnoQuorumOrganizerHint : t.decisionnoQuorumMemberHint}</div>
           </div>
           {organizer ? (
             <div className="flex flex-col gap-2">
               <form action={reopenRound}>
                 <input type="hidden" name="decisionId" value={decision.id} />
                 <Button type="submit" className="w-full">
-                  Give it more time
+                  {t.decisiongiveMoreTime}
                 </Button>
               </form>
               <div className="grid grid-cols-2 gap-2">
@@ -455,14 +462,14 @@ export default async function DecisionPage({ params, searchParams }: { params: P
                     <input type="hidden" name="decisionId" value={decision.id} />
                     <input type="hidden" name="optionId" value={leader.id} />
                     <button type="submit" className="h-11 w-full rounded-[12px] border border-[#4a423a] px-3 text-sm font-semibold text-white hover:bg-[#2c2622]">
-                      Go with {clipTitle(leader.title, decision.format)}
+                      {interpolate(t.decisiongoWith, { option: clipTitle(leader.title, decision.format) })}
                     </button>
                   </form>
                 ) : null}
                 <form action={skipDecision}>
                   <input type="hidden" name="decisionId" value={decision.id} />
                   <button type="submit" className="h-11 w-full rounded-[12px] border border-[#4a423a] px-3 text-sm font-semibold text-white hover:bg-[#2c2622]">
-                    Set aside
+                    {t.decisionsetAside}
                   </button>
                 </form>
               </div>
@@ -471,23 +478,23 @@ export default async function DecisionPage({ params, searchParams }: { params: P
         </div>
       ) : stalled ? (
         <Card className="flex flex-col gap-2 p-4">
-          <div className="font-bold">Nothing to vote on.</div>
+          <div className="font-bold">{t.decisionnothingToVote}</div>
           <p className="text-sm text-ink-2">
-            {alive.length === 0 ? "No ideas came in before the round closed." : "The round closed without a result."}{" "}
-            {organizer ? "Reopen the last round, or set this decision aside." : "The organizer can reopen it."}
+            {alive.length === 0 ? t.decisionnoIdeasCameIn : t.decisionclosedNoResult}{" "}
+            {organizer ? t.decisionreopenOrSetAsideHint : t.decisionorganizerCanReopen}
           </p>
           {organizer ? (
             <div className="flex gap-2">
               <form action={reopenRound}>
                 <input type="hidden" name="decisionId" value={decision.id} />
                 <Button type="submit" variant="secondary" size="sm">
-                  Reopen the last round
+                  {t.decisionreopenLastRound}
                 </Button>
               </form>
               <form action={skipDecision}>
                 <input type="hidden" name="decisionId" value={decision.id} />
                 <Button type="submit" variant="danger" size="sm">
-                  Set aside
+                  {t.decisionsetAside}
                 </Button>
               </form>
             </div>
@@ -497,20 +504,20 @@ export default async function DecisionPage({ params, searchParams }: { params: P
 
       {closedRounds.length ? (
         <section className="flex flex-col gap-3">
-          <SectionLabel>{decided ? "How it went" : "Earlier rounds"}</SectionLabel>
+          <SectionLabel>{decided ? t.decisionhowItWent : t.decisionearlierRounds}</SectionLabel>
           {[...closedRounds].reverse().map((r) => (
             <div key={r.id} className="flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 <Pill tone="teal">
                   <Icon name="check" size={12} stroke={3} />
-                  {roundLabel(r, rounds, decision.plan)} closed
+                  {interpolate(t.decisionroundClosed, { round: roundLabel(t, r, rounds, decision.plan) })}
                 </Pill>
                 <span className="text-[13px] text-ink-2">
-                  {r.closeReason === "everyone_voted" ? "everyone voted, so it closed early" : r.closeReason === "deadline" ? "time was up" : r.closeReason === "no_quorum" ? "time was up, too few voted" : "closed by the organizer"}
+                  {r.closeReason === "everyone_voted" ? t.decisioncloseEveryoneVoted : r.closeReason === "deadline" ? t.decisioncloseDeadline : r.closeReason === "no_quorum" ? t.decisioncloseNoQuorum : t.decisioncloseByOrganizer}
                 </span>
               </div>
               {r.kind === "ideas" ? (
-                <Card className="p-3.5 text-sm text-ink-2">{plural(options.filter((o) => o.addedInRoundId === r.id).length, "idea")} came in.</Card>
+                <Card className="p-3.5 text-sm text-ink-2">{interpolate(t.decisionideasCameIn, { ideas: interpolate(t.decisionideaCount, { count: options.filter((o) => o.addedInRoundId === r.id).length }) })}</Card>
               ) : (
                 <ResultBars round={r} rounds={rounds} options={options} format={decision.format} label={label} advancing={advancedFrom.get(r.id) ?? new Set()} winnerId={r.kind === "final" ? (decision.outcomeOptionId ?? null) : null} />
               )}
@@ -523,7 +530,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
                         <input type="hidden" name="roundId" value={r.id} />
                         <input type="hidden" name="memberId" value={seat.id} />
                         <Button type="submit" variant="ghost" size="sm">
-                          {seat.userId === user.id ? "Show my hand" : `Show ${seat.displayName}’s hand`}
+                          {seat.userId === user.id ? t.decisionshowMyHand : interpolate(t.decisionshowHand, { name: seat.displayName })}
                         </Button>
                       </form>
                     ))}
@@ -536,20 +543,20 @@ export default async function DecisionPage({ params, searchParams }: { params: P
 
       {organizer && planning && decision.status !== "skipped" ? (
         <Card className="flex flex-col gap-3 p-4">
-          <SectionLabel>Organizer</SectionLabel>
+          <SectionLabel>{t.decisionorganizerLabel}</SectionLabel>
           <div className="flex flex-wrap gap-2">
             {open ? (
               <>
                 <form action={closeRoundNow}>
                   <input type="hidden" name="decisionId" value={decision.id} />
                   <Button type="submit" variant="secondary" size="sm">
-                    Close this round now
+                    {t.decisioncloseRoundNow}
                   </Button>
                 </form>
                 <form action={extendRound}>
                   <input type="hidden" name="decisionId" value={decision.id} />
                   <Button type="submit" variant="secondary" size="sm">
-                    Give it more time
+                    {t.decisiongiveMoreTime}
                   </Button>
                 </form>
               </>
@@ -558,23 +565,23 @@ export default async function DecisionPage({ params, searchParams }: { params: P
               <form action={reopenRound}>
                 <input type="hidden" name="decisionId" value={decision.id} />
                 <Button type="submit" variant="secondary" size="sm">
-                  Reopen round {lastClosed.number}
+                  {interpolate(t.decisionreopenRoundN, { number: lastClosed.number })}
                 </Button>
               </form>
             ) : null}
           </div>
           <form action={renameDecision} className="flex flex-col gap-2">
             <input type="hidden" name="decisionId" value={decision.id} />
-            <Field label="Rename">
+            <Field label={t.decisionrenameLabel}>
               <input name="title" defaultValue={decision.title} required maxLength={100} className={`${inputClass} h-11 text-[15px]`} />
             </Field>
             <Button type="submit" variant="ghost" size="sm">
-              Save title
+              {t.decisionsaveTitle}
             </Button>
           </form>
           {open && decision.voteType !== "ab" && (open.kind !== "final" || firstRound) && alive.length ? (
             <div className="flex flex-col gap-2">
-              <span className="text-[13px] font-semibold text-ink-2">Remove an option</span>
+              <span className="text-[13px] font-semibold text-ink-2">{t.decisionremoveOptionLabel}</span>
               <div className="flex flex-col gap-1.5">
                 {alive.map((o) => (
                   <form key={o.id} action={removeOption} className="flex items-center justify-between gap-2 rounded-[10px] bg-sand px-3 py-1.5">
@@ -582,7 +589,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
                     <input type="hidden" name="optionId" value={o.id} />
                     <span className="min-w-0 flex-1 truncate text-sm font-semibold">{clipTitle(o.title, decision.format)}</span>
                     <Button type="submit" variant="ghost" size="sm">
-                      Remove
+                      {t.decisionremove}
                     </Button>
                   </form>
                 ))}
@@ -591,7 +598,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
           ) : null}
           {options.length ? (
             <div className="flex flex-col gap-2">
-              <span className="text-[13px] font-semibold text-ink-2">Fix an option</span>
+              <span className="text-[13px] font-semibold text-ink-2">{t.decisionfixOptionLabel}</span>
               <div className="flex flex-col gap-1.5">
                 {options.map((o) => (
                   <details key={o.id} className="rounded-[10px] bg-sand px-3 py-2">
@@ -601,8 +608,8 @@ export default async function DecisionPage({ params, searchParams }: { params: P
                       <input type="hidden" name="optionId" value={o.id} />
                       {decision.format === "date" ? (
                         <div className="grid grid-cols-2 gap-2">
-                          <input type="date" name="dateStart" defaultValue={o.startsOn ?? ""} required aria-label="Start" className={`${inputClass} h-10 text-[15px]`} />
-                          <input type="date" name="dateEnd" defaultValue={o.endsOn ?? ""} aria-label="End" className={`${inputClass} h-10 text-[15px]`} />
+                          <input type="date" name="dateStart" defaultValue={o.startsOn ?? ""} required aria-label={t.decisionariaStart} className={`${inputClass} h-10 text-[15px]`} />
+                          <input type="date" name="dateEnd" defaultValue={o.endsOn ?? ""} aria-label={t.decisionariaEnd} className={`${inputClass} h-10 text-[15px]`} />
                         </div>
                       ) : decision.format === "long_text" ? (
                         <textarea
@@ -611,15 +618,15 @@ export default async function DecisionPage({ params, searchParams }: { params: P
                           required
                           maxLength={500}
                           rows={3}
-                          aria-label="Title"
+                          aria-label={t.decisionariaTitle}
                           className="w-full rounded-[14px] border border-line bg-card px-4 py-2.5 text-[15px] font-medium leading-snug text-ink outline-none focus:border-accent"
                         />
                       ) : (
-                        <input name="title" defaultValue={o.title} required maxLength={80} aria-label="Title" className={`${inputClass} h-10 text-[15px]`} />
+                        <input name="title" defaultValue={o.title} required maxLength={80} aria-label={t.decisionariaTitle} className={`${inputClass} h-10 text-[15px]`} />
                       )}
-                      <input name="note" defaultValue={o.note ?? ""} maxLength={140} placeholder="Note (optional)" className={`${inputClass} h-10 text-[15px] font-medium`} />
+                      <input name="note" defaultValue={o.note ?? ""} maxLength={140} placeholder={t.decisionnotePlaceholder} className={`${inputClass} h-10 text-[15px] font-medium`} />
                       <Button type="submit" variant="ghost" size="sm">
-                        Save option
+                        {t.decisionsaveOption}
                       </Button>
                     </form>
                   </details>
@@ -630,7 +637,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
           {!decided && alive.length ? (
             <form action={pickWinner} className="flex flex-col gap-2">
               <input type="hidden" name="decisionId" value={decision.id} />
-              <Field label="Just call it">
+              <Field label={t.decisionjustCallIt}>
                 <select name="optionId" className={`${inputClass} h-11 text-[15px]`}>
                   {alive.map((o) => (
                     <option key={o.id} value={o.id}>
@@ -640,7 +647,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
                 </select>
               </Field>
               <Button type="submit" variant="dark" size="sm">
-                Decide
+                {t.decisiondecide}
               </Button>
             </form>
           ) : null}
@@ -648,23 +655,23 @@ export default async function DecisionPage({ params, searchParams }: { params: P
             <form action={skipDecision}>
               <input type="hidden" name="decisionId" value={decision.id} />
               <Button type="submit" variant="danger" size="sm">
-                Set this decision aside
+                {t.decisionsetThisAside}
               </Button>
             </form>
           ) : null}
           <details>
-            <summary className="cursor-pointer list-none text-xs font-semibold text-ink-3 [&::-webkit-details-marker]:hidden">Delete this decision…</summary>
+            <summary className="cursor-pointer list-none text-xs font-semibold text-ink-3 [&::-webkit-details-marker]:hidden">{t.decisiondeleteThisDots}</summary>
             <form action={deleteDecision} className="mt-2 flex flex-col gap-2">
               <input type="hidden" name="decisionId" value={decision.id} />
               <label className="flex items-center gap-2 text-sm text-ink-2">
-                <input type="checkbox" name="confirm" /> Delete it and all its votes for good.
+                <input type="checkbox" name="confirm" /> {t.decisiondeleteConfirmAll}
               </label>
               <Button type="submit" variant="danger" size="sm">
-                Delete decision
+                {t.decisiondeleteDecision}
               </Button>
             </form>
           </details>
-          <p className="text-xs text-ink-3">These are for you and whoever asked the question. Everything here is written to the event’s log.</p>
+          <p className="text-xs text-ink-3">{t.decisionorganizerFooter}</p>
         </Card>
       ) : null}
     </Screen>

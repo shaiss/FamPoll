@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useSyncExternalStore } from "react";
+import { useMessages } from "@/components/locale-provider";
 
 type Choice = "tonight" | "24" | "72" | "168";
 
@@ -16,19 +17,20 @@ function tonightIso(): string {
 const subscribeNever = () => () => {};
 
 export function DeadlinePicker({ defaultChoice = "72" }: { defaultChoice?: Choice }) {
+  const t = useMessages();
   const [choice, setChoice] = useState<Choice>(defaultChoice);
   // The absolute time depends on the viewer's clock, so it only exists after hydration (the server renders "").
   const hydrated = useSyncExternalStore(subscribeNever, () => true, () => false);
   const iso = useMemo(() => (hydrated && choice === "tonight" ? tonightIso() : ""), [hydrated, choice]);
   const items: { value: Choice; label: string }[] = [
-    { value: "tonight", label: "Tonight" },
-    { value: "24", label: "1 day" },
-    { value: "72", label: "3 days" },
-    { value: "168", label: "1 week" },
+    { value: "tonight", label: t.cmptonight },
+    { value: "24", label: t.cmponeDay },
+    { value: "72", label: t.cmpthreeDays },
+    { value: "168", label: t.cmponeWeek },
   ];
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-[13px] font-semibold text-ink-2">Round 1 closes</span>
+      <span className="text-[13px] font-semibold text-ink-2">{t.cmpround1Closes}</span>
       <div className="flex gap-1 rounded-[12px] bg-sand-2 p-1">
         {items.map((it) => (
           <label key={it.value} className="flex-1 cursor-pointer">
@@ -39,7 +41,7 @@ export function DeadlinePicker({ defaultChoice = "72" }: { defaultChoice?: Choic
       </div>
       <input type="hidden" name="closesAtIso" value={iso} />
       <input type="hidden" name="roundHours" value={choice === "tonight" ? "24" : choice} />
-      <span className="text-xs text-ink-3">{choice === "tonight" ? "8pm your time. Later rounds get a day each." : "Later rounds get the same. A round also closes as soon as everyone has voted or skipped."}</span>
+      <span className="text-xs text-ink-3">{choice === "tonight" ? t.cmptonightHint : t.cmpdeadlineHint}</span>
     </div>
   );
 }

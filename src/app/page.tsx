@@ -4,7 +4,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Button, Icon, LinkButton } from "@/components/ui";
 import { Wordmark } from "@/components/wordmark";
-import { getLocale } from "@/lib/locale";
+import { getLocale } from "@/lib/locale-server";
 import { messages } from "@/lib/messages";
 import { hasClerk, hasDatabase } from "@/lib/env";
 import { isInAppBrowser } from "@/lib/ua";
