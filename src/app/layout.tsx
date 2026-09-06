@@ -2,7 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Bricolage_Grotesque, Figtree } from "next/font/google";
 import { brandFor } from "@/lib/brand";
-import { getLocale } from "@/lib/locale";
+import { getLocale } from "@/lib/locale-server";
+import { LocaleProvider } from "@/components/locale-provider";
 import { hasClerkPublishable } from "@/lib/env";
 import "./globals.css";
 
@@ -45,10 +46,12 @@ const clerkAppearance = {
   },
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const locale = await getLocale();
   return (
-    <html lang="en" className={`${bricolage.variable} ${figtree.variable}`}>
+    <html lang={locale} className={`${bricolage.variable} ${figtree.variable}`}>
       <body className="min-h-dvh">
+        <LocaleProvider locale={locale}>
         {hasClerkPublishable ? (
           <ClerkProvider appearance={clerkAppearance} signInUrl="/sign-in" signUpUrl="/sign-up" signInFallbackRedirectUrl="/app" signUpFallbackRedirectUrl="/app">
             {children}
@@ -56,6 +59,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         ) : (
           children
         )}
+        </LocaleProvider>
       </body>
     </html>
   );

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { castVote } from "@/lib/actions/decisions";
 import { Button, Icon } from "./ui";
+import { useMessages } from "@/components/locale-provider";
+import { interpolate } from "@/lib/messages";
 
 export type VoteOption = { id: string; title: string; byline: string; longText: boolean };
 
@@ -34,6 +36,7 @@ export function VoteForm({
   skipped: boolean;
   hiddenDefault: boolean;
 }) {
+  const t = useMessages();
   // An option removed mid-round can leave a ballot over the cap; start clean rather than stuck.
   const [picked, setPicked] = useState<string[]>(initial.length > maxPicks ? [] : initial);
   const [hidden, setHidden] = useState(hiddenDefault);
@@ -46,7 +49,7 @@ export function VoteForm({
       return p.length >= maxPicks ? p : [...p, id];
     });
   const expand = (id: string) => setExpanded((e) => (e.includes(id) ? e.filter((x) => x !== id) : [...e, id]));
-  const label = picked.length === 0 ? (single ? "Pick one" : `Pick up to ${maxPicks}`) : changed ? `Change my vote · ${picked.length} picked` : `Cast my vote · ${picked.length} picked`;
+  const label = picked.length === 0 ? (single ? t.cmppickOne : interpolate(t.cmppickUpTo, { max: maxPicks })) : changed ? interpolate(t.cmpchangeVote, { count: picked.length }) : interpolate(t.cmpcastVote, { count: picked.length });
 
   return (
     <div className="flex flex-col gap-2">
@@ -81,7 +84,7 @@ export function VoteForm({
             </button>
             {clampable ? (
               <Button type="button" variant="ghost" size="sm" className="self-start" onClick={() => expand(o.id)} aria-expanded={isExpanded}>
-                {isExpanded ? "Show less" : "Show more"}
+                {isExpanded ? t.cmpshowLess : t.cmpshowMore}
               </Button>
             ) : null}
           </div>
@@ -90,8 +93,8 @@ export function VoteForm({
       <label className="flex items-start gap-3 rounded-card border border-line bg-card p-3">
         <input type="checkbox" checked={hidden} onChange={(e) => setHidden(e.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-accent" />
         <span className="flex flex-col gap-0.5">
-          <span className="text-sm font-bold">Hide my vote</span>
-          <span className="text-[13px] text-ink-2">Still recorded under your name, just not shown to the family. If anyone hides, this round shows counts only.</span>
+          <span className="text-sm font-bold">{t.cmphideVote}</span>
+          <span className="text-[13px] text-ink-2">{t.cmphideVoteHint}</span>
         </span>
       </label>
       <Button type="submit" disabled={picked.length === 0}>
@@ -104,7 +107,7 @@ export function VoteForm({
       <input type="hidden" name="skip" value="1" />
       <input type="hidden" name="hidden" value={hidden ? "1" : "0"} />
       <button type="submit" className="h-9 rounded-[10px] px-3 text-sm font-semibold text-ink-2 hover:bg-sand">
-        {skipped ? "Skipped · whatever you all pick" : "Skip this one · whatever you all pick"}
+        {skipped ? t.cmpskipDone : t.cmpskip}
       </button>
     </form>
     </div>

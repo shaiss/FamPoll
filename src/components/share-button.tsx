@@ -1,9 +1,11 @@
 "use client";
 
+import { useMessages } from "@/components/locale-provider";
 import { Button, Icon } from "./ui";
 
 /** Uses the phone's share sheet (which is where Messenger lives) and falls back to copying. */
 export function ShareButton({ url, title, text }: { url: string; title: string; text?: string }) {
+  const t = useMessages();
   return (
     <Button
       type="button"
@@ -19,14 +21,14 @@ export function ShareButton({ url, title, text }: { url: string; title: string; 
         }
         try {
           await navigator.clipboard.writeText(url);
-          alert("Link copied. Paste it into Messenger.");
+          alert(t.cmplinkCopiedPaste);
         } catch {
-          window.prompt("Copy this link", url);
+          window.prompt(t.cmpcopyThisLinkPrompt, url);
         }
       }}
     >
       <Icon name="share" size={18} stroke={2.25} />
-      Share
+      {t.cmpshare}
     </Button>
   );
 }
