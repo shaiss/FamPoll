@@ -8,7 +8,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { joinFamily } from "@/lib/actions/family";
 import { getMembership, requireUser } from "@/lib/auth";
 import { brandFor } from "@/lib/brand";
-import { getLocale } from "@/lib/locale";
+import { getLocale } from "@/lib/locale-server";
 import { hasClerk, hasDatabase } from "@/lib/env";
 import { readError } from "@/lib/flash";
 import { plural } from "@/lib/format";

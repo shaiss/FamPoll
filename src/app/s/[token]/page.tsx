@@ -5,7 +5,7 @@ import { LocalTime } from "@/components/time";
 import { Card, Icon, LinkButton } from "@/components/ui";
 import { Wordmark } from "@/components/wordmark";
 import { brandFor } from "@/lib/brand";
-import { getLocale } from "@/lib/locale";
+import { getLocale } from "@/lib/locale-server";
 import { hasClerk, hasDatabase } from "@/lib/env";
 import { auth } from "@clerk/nextjs/server";
 import { getMembership } from "@/lib/auth";
