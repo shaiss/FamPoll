@@ -1,7 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Bricolage_Grotesque, Figtree } from "next/font/google";
-import { brand } from "@/lib/brand";
+import { brandFor } from "@/lib/brand";
+import { getLocale } from "@/lib/locale";
 import { hasClerkPublishable } from "@/lib/env";
 import "./globals.css";
 
@@ -17,10 +18,13 @@ const figtree = Figtree({
   weight: ["400", "500", "600", "700"],
 });
 
-export const metadata: Metadata = {
-  title: { default: brand.name, template: `%s · ${brand.name}` },
-  description: brand.tagline,
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const b = brandFor(await getLocale());
+  return {
+    title: { default: b.name, template: `%s · ${b.name}` },
+    description: b.tagline,
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: "#faf6f0",

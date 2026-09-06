@@ -1,6 +1,5 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { brand } from "@/lib/brand";
 import { avatarColor, initials } from "@/lib/format";
 
 export function Avatar({ name, size = 28, ring = "#faf6f0" }: { name: string; size?: number; ring?: string }) {
@@ -135,20 +134,6 @@ export const inputClass =
 
 export function Screen({ children, className = "" }: { children: ReactNode; className?: string }) {
   return <main className={`mx-auto flex w-full max-w-md flex-col gap-6 px-5 pb-16 pt-6 ${className}`}>{children}</main>;
-}
-
-export function Wordmark({ size = 22, href }: { size?: number; href?: string }) {
-  const inner = (
-    <span className="inline-flex items-center gap-2.5">
-      <span className="inline-flex items-center justify-center rounded-[10px] bg-accent text-white" style={{ width: size * 1.55, height: size * 1.55 }}>
-        <Icon name="poll" size={size * 0.9} stroke={2.5} />
-      </span>
-      <span className="font-display font-extrabold tracking-[-0.02em]" style={{ fontSize: size }}>
-        {brand.name}
-      </span>
-    </span>
-  );
-  return href ? <Link href={href}>{inner}</Link> : inner;
 }
 
 const paths: Record<string, ReactNode> = {

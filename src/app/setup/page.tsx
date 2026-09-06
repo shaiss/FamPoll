@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Card, Icon, Screen, Wordmark } from "@/components/ui";
+import { Card, Icon, Screen } from "@/components/ui";
+import { Wordmark } from "@/components/wordmark";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { isConfigured, setupStatus } from "@/lib/env";

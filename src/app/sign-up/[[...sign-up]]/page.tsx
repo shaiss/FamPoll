@@ -1,7 +1,7 @@
 import { SignUp } from "@clerk/nextjs";
 import { redirect } from "next/navigation";
 import { hasClerk } from "@/lib/env";
-import { Wordmark } from "@/components/ui";
+import { Wordmark } from "@/components/wordmark";
 
 export default function SignUpPage() {
   if (!hasClerk) redirect("/setup");

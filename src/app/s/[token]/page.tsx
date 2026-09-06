@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LocalTime } from "@/components/time";
-import { Card, Icon, LinkButton, Wordmark } from "@/components/ui";
-import { brand } from "@/lib/brand";
+import { Card, Icon, LinkButton } from "@/components/ui";
+import { Wordmark } from "@/components/wordmark";
+import { brandFor } from "@/lib/brand";
+import { getLocale } from "@/lib/locale";
 import { hasClerk, hasDatabase } from "@/lib/env";
 import { auth } from "@clerk/nextjs/server";
 import { getMembership } from "@/lib/auth";
@@ -15,6 +17,7 @@ export const dynamic = "force-dynamic";
 
 /** Text-only link preview for the family chat. Names and votes stay off it. */
 export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  const b = brandFor(await getLocale());
   if (!hasDatabase) return { title: "Summary" };
   const { token } = await params;
   const data = await summaryByToken(token);
@@ -25,7 +28,7 @@ export async function generateMetadata({ params }: { params: Promise<{ token: st
   if (open.length) parts.push(`${open.length === 1 ? open[0].decision.title : `${open.length} open`}${open.length === 1 && open[0].currentRound ? " · " + closesRelative(open[0].currentRound.closesAt) : ""}`);
   const title = `${data.event.title} · what we’ve decided`;
   const description = parts.join(" · ");
-  return { title, description, robots: { index: false }, openGraph: { title, description, siteName: brand.name, type: "website" } };
+  return { title, description, robots: { index: false }, openGraph: { title, description, siteName: b.name, type: "website" } };
 }
 
 export default async function PublicSummary({ params }: { params: Promise<{ token: string }> }) {
