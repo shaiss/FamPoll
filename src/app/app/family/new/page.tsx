@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { Button, Card, Field, inputClass, Screen, Wordmark } from "@/components/ui";
+import { Button, Card, Field, inputClass, Screen } from "@/components/ui";
+import { Wordmark } from "@/components/wordmark";
 import { createFamily, joinFamily } from "@/lib/actions/family";
 import { getMembership, requireUser } from "@/lib/auth";
 import { readError } from "@/lib/flash";

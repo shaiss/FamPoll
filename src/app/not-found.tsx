@@ -1,4 +1,5 @@
-import { LinkButton, Screen, Wordmark } from "@/components/ui";
+import { LinkButton, Screen } from "@/components/ui";
+import { Wordmark } from "@/components/wordmark";
 
 export default function NotFound() {
   return (
