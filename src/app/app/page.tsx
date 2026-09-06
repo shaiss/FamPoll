@@ -9,7 +9,7 @@ import { requireMembership } from "@/lib/auth";
 import { roundLabel } from "@/lib/engine/rounds";
 import { closesRelative, formatDate, formatDateRange } from "@/lib/format";
 import { homeData } from "@/lib/queries";
-import { getMessages } from "@/lib/locale-server";
+import { getLocale, getMessages } from "@/lib/locale-server";
 import { interpolate, type Messages } from "@/lib/messages";
 
 function openLabel(c: { openVotingRounds: number; openIdeasRounds: number; open: number }, t: Messages): string {
@@ -25,6 +25,7 @@ export default async function Home() {
   const { needsVote, events, members, seats } = await homeData(family.id, user.id);
   const base = await baseUrl();
   const t = await getMessages();
+  const locale = await getLocale();
   const KIND_LABEL: Record<string, string> = { trip: t.homeKindTrip, outing: t.homeKindOuting, meal: t.homeKindMeal, party: t.homeKindParty, other: t.homeKindEvent };
   const inviteUrl = `${base}/join/${family.inviteCode}`;
   const soloOrganizer = members.filter((m) => m.userId !== null).length === 1;
@@ -38,7 +39,7 @@ export default async function Home() {
       <div className="flex items-end justify-between">
         <div className="flex flex-col gap-0.5">
           <div className="text-sm font-medium text-ink-2">
-            <LocalTime iso={now.toISOString()} mode="weekday" fallback={formatDate(now, { month: "short", day: "numeric" })} />
+            <LocalTime iso={now.toISOString()} mode="weekday" fallback={formatDate(now, { month: "short", day: "numeric" }, locale)} />
           </div>
           <h1 className="font-display text-[30px] font-bold leading-[1.05] tracking-[-0.02em]">{interpolate(t.homeGreeting, { name: firstName })}</h1>
         </div>
@@ -80,7 +81,7 @@ export default async function Home() {
                 <div className="flex items-center justify-between">
                   <Pill tone="accent">
                     <Icon name="clock" size={12} stroke={2.5} />
-                    {ideas ? t.homeIdeasWanted : roundLabel(n.round, n.rounds, n.decision.plan)} · <LocalTime iso={n.round.closesAt.toISOString()} mode="closes" fallback={closesRelative(n.round.closesAt, now)} />
+                    {ideas ? t.homeIdeasWanted : roundLabel(t, n.round, n.rounds, n.decision.plan)} · <LocalTime iso={n.round.closesAt.toISOString()} mode="closes" fallback={closesRelative(n.round.closesAt, now, locale)} />
                   </Pill>
                   <Icon name="chevron-right" size={18} stroke={2.25} className="text-ink-3" />
                 </div>
@@ -139,7 +140,7 @@ export default async function Home() {
                   <Icon name={c.event.kind === "trip" ? "pin" : "calendar"} size={14} />
                   <span>
                     {KIND_LABEL[c.event.kind]}
-                    {c.event.startsOn ? ` · ${formatDateRange(c.event.startsOn, c.event.endsOn)}` : ""}
+                    {c.event.startsOn ? ` · ${formatDateRange(c.event.startsOn, c.event.endsOn, locale)}` : ""}
                   </span>
                 </div>
               </div>

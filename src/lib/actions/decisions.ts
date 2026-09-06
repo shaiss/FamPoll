@@ -11,7 +11,8 @@ import { fail } from "../flash";
 import { newId } from "../ids";
 import { applyOutcome, closeRoundAndAdvance, lockOpenRound, logActivity, maybeCloseEarly, openRound, settleDueRounds } from "../lifecycle";
 import { clipTitle, dateRangeTitle } from "../format";
-import { getMessages } from "@/lib/locale-server";
+import { getLocale, getMessages } from "@/lib/locale-server";
+import { type Locale } from "../locale";
 import { interpolate, type Messages } from "@/lib/messages";
 
 const planSchema = z.enum(["quick", "shortlist_final", "ideas_shortlist_final"]);
@@ -70,7 +71,7 @@ function tooFewOptionsMessage(t: Messages, min: number, format: Format, voteType
 const dateRe = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Pairs of start/end inputs from a dates form, validated and titled. */
-function cleanDateOptions(t: Messages, starts: FormDataEntryValue[], ends: FormDataEntryValue[]): { title: string; startsOn: string; endsOn: string }[] | string {
+function cleanDateOptions(t: Messages, locale: Locale, starts: FormDataEntryValue[], ends: FormDataEntryValue[]): { title: string; startsOn: string; endsOn: string }[] | string {
   const out: { title: string; startsOn: string; endsOn: string }[] = [];
   const seen = new Set<string>();
   for (let i = 0; i < starts.length; i++) {
@@ -84,7 +85,7 @@ function cleanDateOptions(t: Messages, starts: FormDataEntryValue[], ends: FormD
     if (seen.has(key)) continue;
     seen.add(key);
     // Pass null (not the start date) for a blank end so a single day titles as "Jul 11", not "Jul 11–11".
-    out.push({ title: dateRangeTitle(a, rawEnd || null), startsOn: a, endsOn: b });
+    out.push({ title: dateRangeTitle(a, rawEnd || null, locale), startsOn: a, endsOn: b });
   }
   return out;
 }
@@ -127,7 +128,7 @@ export async function createDecision(formData: FormData) {
   const setsEventDates = format === "date" && formData.get("setsEventDates") === "on";
   let optionRows: { title: string; startsOn: string | null; endsOn: string | null }[];
   if (format === "date") {
-    const parsed = cleanDateOptions(t, formData.getAll("dateStart"), formData.getAll("dateEnd"));
+    const parsed = cleanDateOptions(t, await getLocale(), formData.getAll("dateStart"), formData.getAll("dateEnd"));
     if (typeof parsed === "string") fail(back, parsed);
     optionRows = parsed;
   } else {
@@ -176,7 +177,7 @@ export async function addOption(formData: FormData) {
   let endsOn: string | null = null;
   const note = String(formData.get("note") ?? "").trim().slice(0, 140) || null;
   if (decision.format === "date") {
-    const parsed = cleanDateOptions(t, [formData.get("dateStart") ?? ""], [formData.get("dateEnd") ?? ""]);
+    const parsed = cleanDateOptions(t, await getLocale(), [formData.get("dateStart") ?? ""], [formData.get("dateEnd") ?? ""]);
     if (typeof parsed === "string") fail(back, parsed);
     if (parsed.length === 0) fail(back, t.errDecPickDatesFirst);
     ({ title, startsOn, endsOn } = parsed[0]);
@@ -596,7 +597,7 @@ export async function editOption(formData: FormData) {
   let startsOn: string | null = null;
   let endsOn: string | null = null;
   if (decision.format === "date") {
-    const parsed = cleanDateOptions(t, [formData.get("dateStart") ?? ""], [formData.get("dateEnd") ?? ""]);
+    const parsed = cleanDateOptions(t, await getLocale(), [formData.get("dateStart") ?? ""], [formData.get("dateEnd") ?? ""]);
     if (typeof parsed === "string") fail(back, parsed);
     if (parsed.length === 0) fail(back, t.errDecPickDatesFirst);
     ({ title, startsOn, endsOn } = parsed[0]);

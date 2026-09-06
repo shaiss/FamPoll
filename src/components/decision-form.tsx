@@ -9,13 +9,13 @@ import { useMessages } from "@/components/locale-provider";
 import { interpolate } from "@/lib/messages";
 import {
   effectivePicks,
-  FORMAT_LABEL,
+  formatLabel,
   FORMATS,
   optionCountRule,
   optionTitleLimit,
-  PLAN_LABEL,
+  planLabel,
   plansFor,
-  VOTE_TYPE_LABEL,
+  voteTypeLabel,
   VOTE_TYPES,
   type Format,
   type Plan,
@@ -206,12 +206,12 @@ export function DecisionForm({ eventId, defaultDeadline }: { eventId: string; de
       </Field>
 
       <Section label={t.cmpsectionFormat}>
-        <Segmented name="format" label={t.cmpsectionFormat} value={format} items={FORMATS.map((f) => ({ value: f, label: FORMAT_LABEL[f] }))} onChange={setFormat} />
+        <Segmented name="format" label={t.cmpsectionFormat} value={format} items={FORMATS.map((f) => ({ value: f, label: formatLabel(t, f) }))} onChange={setFormat} />
         <span className="text-xs text-ink-3">{FORMAT_HINT[format]}</span>
       </Section>
 
       <Section label={t.cmpsectionType}>
-        <Segmented name="voteType" label={t.cmpsectionType} value={voteType} items={VOTE_TYPES.map((t) => ({ value: t, label: VOTE_TYPE_LABEL[t] }))} onChange={chooseType} />
+        <Segmented name="voteType" label={t.cmpsectionType} value={voteType} items={VOTE_TYPES.map((vt) => ({ value: vt, label: voteTypeLabel(t, vt) }))} onChange={chooseType} />
         <span className="text-xs text-ink-3">
           {voteType === "ab" ? t.cmptypeHintAb : voteType === "single" ? t.cmptypeHintSingle : interpolate(t.cmptypeHintMulti, { picks })}
         </span>
@@ -252,7 +252,7 @@ export function DecisionForm({ eventId, defaultDeadline }: { eventId: string; de
                     <span className="h-2 w-2 rounded-full bg-transparent group-has-checked:bg-white" />
                   </span>
                   <span className="flex flex-col">
-                    <span className="text-[15px] font-bold">{PLAN_LABEL[p]}</span>
+                    <span className="text-[15px] font-bold">{planLabel(t, p)}</span>
                     <span className="text-[13px] text-ink-2">{PLAN_BODY[p]}</span>
                   </span>
                 </Card>

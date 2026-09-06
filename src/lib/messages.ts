@@ -522,6 +522,36 @@ export type Messages = {
   errDecDateToRange: string;
   errDecChangeClearedDates: string;
 
+  // engine + format labels
+  enginePlanQuick: string;
+  enginePlanShortlistFinal: string;
+  enginePlanIdeasShortlistFinal: string;
+  engineFormatText: string;
+  engineFormatLongText: string;
+  engineFormatDate: string;
+  engineVoteTypeAb: string;
+  engineVoteTypeSingle: string;
+  engineVoteTypeMulti: string;
+  engineRoundIdeas: string;
+  engineRoundShortlist: string;
+  engineRoundFinal: string;
+  engineRoundTiebreak: string;
+  engineRoundQuickVote: string;
+  engineRoundNofM: string;
+  engineInstructionIdeas: string;
+  engineInstructionPickOne: string;
+  engineInstructionPickUpTo: string;
+  engineInstructionShortlist: string;
+  engineInstructionFinal: string;
+  fmtClosingNow: string;
+  fmtClosesInMin: string;
+  fmtClosesInHours: string;
+  fmtClosesInDays: string;
+  fmtClosesWhen: string;
+  fmtJustNow: string;
+  fmtMinAgo: string;
+  fmtNightSingular: string;
+  fmtNightPlural: string;
 };
 
 const en: Messages = {
@@ -1040,6 +1070,36 @@ const en: Messages = {
   errDecDateToRange: " to {endsOn}",
   errDecChangeClearedDates: "cleared the dates",
 
+  // engine + format labels
+  enginePlanQuick: "Quick vote",
+  enginePlanShortlistFinal: "Shortlist, then final",
+  enginePlanIdeasShortlistFinal: "Ideas, shortlist, final",
+  engineFormatText: "Text",
+  engineFormatLongText: "Long text",
+  engineFormatDate: "Dates",
+  engineVoteTypeAb: "A or B",
+  engineVoteTypeSingle: "Multiple choice",
+  engineVoteTypeMulti: "Pick several",
+  engineRoundIdeas: "Ideas",
+  engineRoundShortlist: "Shortlist",
+  engineRoundFinal: "Final",
+  engineRoundTiebreak: "Tiebreak",
+  engineRoundQuickVote: "Quick vote",
+  engineRoundNofM: "Round {number} of {total} · {label}",
+  engineInstructionIdeas: "Add ideas. Nobody votes yet.",
+  engineInstructionPickOne: "Pick one.",
+  engineInstructionPickUpTo: "Pick up to {max}.",
+  engineInstructionShortlist: "{picks} The top {advanceCount} go to the final.",
+  engineInstructionFinal: "{picks} The most votes wins.",
+  fmtClosingNow: "closing now",
+  fmtClosesInMin: "closes in {n} min",
+  fmtClosesInHours: "closes in {n}h",
+  fmtClosesInDays: "closes in {n} days",
+  fmtClosesWhen: "closes {when}",
+  fmtJustNow: "just now",
+  fmtMinAgo: "{n} min ago",
+  fmtNightSingular: "{count} night",
+  fmtNightPlural: "{count} nights",
 };
 
 const es: Messages = {
@@ -1558,6 +1618,36 @@ const es: Messages = {
   errDecDateToRange: " a {endsOn}",
   errDecChangeClearedDates: "quitó las fechas",
 
+  // engine + format labels
+  enginePlanQuick: "Voto rápido",
+  enginePlanShortlistFinal: "Preselección y final",
+  enginePlanIdeasShortlistFinal: "Ideas, preselección, final",
+  engineFormatText: "Texto",
+  engineFormatLongText: "Texto largo",
+  engineFormatDate: "Fechas",
+  engineVoteTypeAb: "A o B",
+  engineVoteTypeSingle: "Opción múltiple",
+  engineVoteTypeMulti: "Elegir varias",
+  engineRoundIdeas: "Ideas",
+  engineRoundShortlist: "Preselección",
+  engineRoundFinal: "Final",
+  engineRoundTiebreak: "Desempate",
+  engineRoundQuickVote: "Voto rápido",
+  engineRoundNofM: "Ronda {number} de {total} · {label}",
+  engineInstructionIdeas: "Aporta ideas. Todavía nadie vota.",
+  engineInstructionPickOne: "Elige una.",
+  engineInstructionPickUpTo: "Elige hasta {max}.",
+  engineInstructionShortlist: "{picks} Las {advanceCount} con más votos pasan a la final.",
+  engineInstructionFinal: "{picks} Gana la más votada.",
+  fmtClosingNow: "cierra ahora",
+  fmtClosesInMin: "cierra en {n} min",
+  fmtClosesInHours: "cierra en {n}h",
+  fmtClosesInDays: "cierra en {n} días",
+  fmtClosesWhen: "cierra {when}",
+  fmtJustNow: "ahora mismo",
+  fmtMinAgo: "hace {n} min",
+  fmtNightSingular: "{count} noche",
+  fmtNightPlural: "{count} noches",
 };
 
 const ptBR: Messages = {
@@ -2076,6 +2166,36 @@ const ptBR: Messages = {
   errDecDateToRange: " a {endsOn}",
   errDecChangeClearedDates: "limpou as datas",
 
+  // engine + format labels
+  enginePlanQuick: "Votação rápida",
+  enginePlanShortlistFinal: "Pré-seleção e final",
+  enginePlanIdeasShortlistFinal: "Ideias, pré-seleção, final",
+  engineFormatText: "Texto",
+  engineFormatLongText: "Texto longo",
+  engineFormatDate: "Datas",
+  engineVoteTypeAb: "A ou B",
+  engineVoteTypeSingle: "Múltipla escolha",
+  engineVoteTypeMulti: "Escolher várias",
+  engineRoundIdeas: "Ideias",
+  engineRoundShortlist: "Pré-seleção",
+  engineRoundFinal: "Final",
+  engineRoundTiebreak: "Desempate",
+  engineRoundQuickVote: "Votação rápida",
+  engineRoundNofM: "Rodada {number} de {total} · {label}",
+  engineInstructionIdeas: "Adicione ideias. Ninguém vota ainda.",
+  engineInstructionPickOne: "Escolha uma.",
+  engineInstructionPickUpTo: "Escolha até {max}.",
+  engineInstructionShortlist: "{picks} As {advanceCount} mais votadas vão para a final.",
+  engineInstructionFinal: "{picks} A mais votada vence.",
+  fmtClosingNow: "fecha agora",
+  fmtClosesInMin: "fecha em {n} min",
+  fmtClosesInHours: "fecha em {n}h",
+  fmtClosesInDays: "fecha em {n} dias",
+  fmtClosesWhen: "fecha {when}",
+  fmtJustNow: "agora mesmo",
+  fmtMinAgo: "há {n} min",
+  fmtNightSingular: "{count} noite",
+  fmtNightPlural: "{count} noites",
 };
 
 const DICTS: Record<Locale, Messages> = { en, es, "pt-BR": ptBR };

@@ -11,7 +11,7 @@ import { requireMembership } from "@/lib/auth";
 import { roundLabel } from "@/lib/engine/rounds";
 import { clipTitle, closesRelative, formatDate, formatDateRange, nightsBetween } from "@/lib/format";
 import { readError } from "@/lib/flash";
-import { getMessages } from "@/lib/locale-server";
+import { getLocale, getMessages } from "@/lib/locale-server";
 import { interpolate } from "@/lib/messages";
 import { eventData } from "@/lib/queries";
 import { baseUrl } from "@/lib/url";
@@ -25,6 +25,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
   const { event, decisions, members, log } = data;
   const base = await baseUrl();
   const t = await getMessages();
+  const locale = await getLocale();
   // The version tag makes Messenger fetch a fresh preview instead of its cached one.
   const shareUrl = `${base}/s/${event.shareToken}?v=${(log[0]?.createdAt ?? event.createdAt).getTime()}`;
   const memberName = new Map(members.map((m) => [m.id, m.displayName]));
@@ -37,12 +38,12 @@ export default async function EventPage({ params, searchParams }: { params: Prom
     ? decided.map((d) => `${d.decision.title}: ${d.outcome ? clipTitle(d.outcome.title, d.decision.format) : t.eventsSummaryDecidedFallback}`).join("; ")
     : interpolate(t.eventsShareHelpDecide, { event: event.title });
   const summaryLines: CopyLine[] = [
-    { text: `${event.title}${event.startsOn ? ` (${formatDateRange(event.startsOn, event.endsOn)})` : ""}` },
+    { text: `${event.title}${event.startsOn ? ` (${formatDateRange(event.startsOn, event.endsOn, locale)})` : ""}` },
     ...decisions.map((d) => {
       const r = d.currentRound;
       if (d.decision.status === "decided") return { text: `• ${d.decision.title}: ${d.outcome ? clipTitle(d.outcome.title, d.decision.format) : t.eventsSummaryDecidedFallback}` };
       if (d.decision.status === "skipped") return { text: `• ${d.decision.title}: ${t.eventsSummarySetAside}` };
-      if (r && r.status === "open") return { text: `• ${d.decision.title}: ${r.kind === "ideas" ? t.eventsSummaryGatheringIdeas : roundLabel(r, d.rounds, d.decision.plan).toLowerCase()}, {closes}`, closesAtIso: r.closesAt.toISOString() };
+      if (r && r.status === "open") return { text: `• ${d.decision.title}: ${r.kind === "ideas" ? t.eventsSummaryGatheringIdeas : roundLabel(t, r, d.rounds, d.decision.plan).toLowerCase()}, {closes}`, closesAtIso: r.closesAt.toISOString() };
       return { text: `• ${d.decision.title}: ${t.eventsSummaryWaitingOrganizer}` };
     }),
     { text: interpolate(t.eventsSummarySeeItAll, { url: shareUrl }) },
@@ -71,7 +72,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
           <div className="flex items-center gap-3 text-[13px] font-medium text-ink-2">
             <span className="inline-flex items-center gap-1">
               <Icon name="calendar" size={14} />
-              {event.startsOn ? formatDateRange(event.startsOn, event.endsOn) : t.eventsDatesOpen}
+              {event.startsOn ? formatDateRange(event.startsOn, event.endsOn, locale) : t.eventsDatesOpen}
             </span>
             {!planning ? <span className="rounded-full bg-sand px-2 py-0.5 text-xs font-bold">{event.status}</span> : null}
           </div>
@@ -93,7 +94,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
               <div className="flex items-baseline justify-between gap-3">
                 <span className="text-sm font-medium text-teal-deep">{t.eventsWhenLabel}</span>
                 <span className="text-right font-display text-[17px] font-bold text-teal-ink">
-                  {formatDateRange(event.startsOn, event.endsOn)}
+                  {formatDateRange(event.startsOn, event.endsOn, locale)}
                   {nights ? ` · ${interpolate(t.eventsNightCount, { count: nights })}` : ""}
                 </span>
               </div>
@@ -130,7 +131,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                     <span className="flex min-w-0 flex-1 flex-col">
                       <span className="font-semibold">{d.decision.title}</span>
                       <span className="text-[13px] font-semibold text-accent-deep">
-                        {roundLabel(r, d.rounds, d.decision.plan).toLowerCase()} · <LocalTime iso={r.closesAt.toISOString()} mode="closes" fallback={closesRelative(r.closesAt)} />
+                        {roundLabel(t, r, d.rounds, d.decision.plan).toLowerCase()} · <LocalTime iso={r.closesAt.toISOString()} mode="closes" fallback={closesRelative(r.closesAt, undefined, locale)} />
                       </span>
                     </span>
                   </Link>
@@ -163,13 +164,13 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                     <span className="text-[13px] text-ink-2">
                       {isDecided ? (
                         <>
-                          {d.outcome ? clipTitle(d.outcome.title, d.decision.format) : t.eventsDecidedFallbackCap} · <LocalTime iso={(d.decision.decidedAt ?? d.decision.createdAt).toISOString()} mode="date" fallback={formatDate(d.decision.decidedAt ?? d.decision.createdAt)} />
+                          {d.outcome ? clipTitle(d.outcome.title, d.decision.format) : t.eventsDecidedFallbackCap} · <LocalTime iso={(d.decision.decidedAt ?? d.decision.createdAt).toISOString()} mode="date" fallback={formatDate(d.decision.decidedAt ?? d.decision.createdAt, undefined, locale)} />
                         </>
                       ) : skipped ? (
                         t.eventsSetAsideCap
                       ) : open && r ? (
                         <>
-                          {t.eventsGatheringIdeasCap} · {interpolate(t.eventsIdeaCount, { count: d.aliveCount })} {t.eventsSoFar} · <LocalTime iso={r.closesAt.toISOString()} mode="closes" fallback={closesRelative(r.closesAt)} />
+                          {t.eventsGatheringIdeasCap} · {interpolate(t.eventsIdeaCount, { count: d.aliveCount })} {t.eventsSoFar} · <LocalTime iso={r.closesAt.toISOString()} mode="closes" fallback={closesRelative(r.closesAt, undefined, locale)} />
                         </>
                       ) : planning ? (
                         t.eventsWaitingOrganizerCap
@@ -230,7 +231,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
           {log.slice(0, 8).map((a) => (
             <div key={a.id} className="flex gap-3 py-1">
               <div className="w-12 shrink-0 pt-0.5 text-xs font-semibold text-ink-3">
-                <LocalTime iso={a.createdAt.toISOString()} mode="date" fallback={formatDate(a.createdAt)} />
+                <LocalTime iso={a.createdAt.toISOString()} mode="date" fallback={formatDate(a.createdAt, undefined, locale)} />
               </div>
               <div className="text-sm leading-snug">{a.message}</div>
             </div>

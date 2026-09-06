@@ -7,11 +7,11 @@ import { CopyText } from "@/components/copy-text";
 import { baseUrl } from "@/lib/url";
 import { requireMembership } from "@/lib/auth";
 import type { Vote } from "@/lib/db/schema";
-import { FORMAT_LABEL, ROUND_LABEL, VOTE_TYPE_LABEL, effectivePicks, isTiebreak, peopleVoted, roundInstruction, roundLabel, roundSequence, tally, type Format, type RoundKind } from "@/lib/engine/rounds";
+import { formatLabel, roundKindLabel, voteTypeLabel, effectivePicks, isTiebreak, peopleVoted, roundInstruction, roundLabel, roundSequence, tally, type Format, type RoundKind } from "@/lib/engine/rounds";
 import { readError } from "@/lib/flash";
 import { clipTitle, closesRelative, formatDate } from "@/lib/format";
 import { decisionData, type OptionView, type RoundView } from "@/lib/queries";
-import { getMessages } from "@/lib/locale-server";
+import { getLocale, getMessages } from "@/lib/locale-server";
 import { interpolate } from "@/lib/messages";
 
 async function Stepper({ rounds, plan, decided }: { rounds: RoundView[]; plan: "quick" | "shortlist_final" | "ideas_shortlist_final"; decided: boolean }) {
@@ -20,13 +20,13 @@ async function Stepper({ rounds, plan, decided }: { rounds: RoundView[]; plan: "
   if (seq.length === 1 && rounds.length <= 1) return null;
   const done = rounds.map((r, i) => ({
     key: r.id,
-    label: isTiebreak(r, rounds) ? t.decisionstepTiebreak : ROUND_LABEL[r.kind],
+    label: isTiebreak(r, rounds) ? t.decisionstepTiebreak : roundKindLabel(t, r.kind),
     number: r.number,
     state: (r.status === "closed" ? "done" : i === rounds.length - 1 ? "current" : "done") as "done" | "current" | "todo",
   }));
   const lastKind = rounds[rounds.length - 1]?.kind;
   const remaining: RoundKind[] = decided || lastKind === "final" ? [] : seq.slice(seq.indexOf(lastKind ?? seq[0]) + 1);
-  const steps = [...done, ...remaining.map((kind, i) => ({ key: "todo-" + kind, label: ROUND_LABEL[kind], number: rounds.length + i + 1, state: "todo" as const }))];
+  const steps = [...done, ...remaining.map((kind, i) => ({ key: "todo-" + kind, label: roundKindLabel(t, kind), number: rounds.length + i + 1, state: "todo" as const }))];
   return (
     <div className="flex items-center">
       {steps.map((s, i) => (
@@ -116,6 +116,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
   const { decision, event, rounds, currentRound, options, members, seats, casterName, hiddenDefault } = data;
   const base = await baseUrl();
   const t = await getMessages();
+  const locale = await getLocale();
   const memberById = new Map(members.map((m) => [m.id, m]));
   /** "Eli (via Shai)" when someone else cast the vote for that seat; a seat that has left keeps its ballot, not its name. */
   const label = (v: Vote) => {
@@ -185,7 +186,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
         <h1 className="font-display text-[30px] font-bold leading-[1.05] tracking-[-0.025em]">{decision.title}</h1>
         <div className="flex flex-wrap items-center gap-2 text-[13px] text-ink-3">
           <span>
-            {VOTE_TYPE_LABEL[decision.voteType]} · {FORMAT_LABEL[decision.format]}
+            {voteTypeLabel(t, decision.voteType)} · {formatLabel(t, decision.format)}
           </span>
           {decision.anonymous ? <Pill>{t.decisionpillAskedAnonymously}</Pill> : null}
         </div>
@@ -193,11 +194,11 @@ export default async function DecisionPage({ params, searchParams }: { params: P
         {open ? (
           <div className="flex items-center justify-between gap-3 text-[13px] text-ink-2">
             <div>
-              <span className="font-bold text-ink">{roundLabel(open, rounds, decision.plan)}.</span> {roundInstruction(open.kind, pickCap, decision.advanceCount)}
+              <span className="font-bold text-ink">{roundLabel(t, open, rounds, decision.plan)}.</span> {roundInstruction(t, open.kind, pickCap, decision.advanceCount)}
             </div>
             <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-accent-deep">
               <Icon name="clock" size={13} stroke={2.5} />
-              <LocalTime iso={open.closesAt.toISOString()} mode="closes" fallback={closesRelative(open.closesAt)} />
+              <LocalTime iso={open.closesAt.toISOString()} mode="closes" fallback={closesRelative(open.closesAt, undefined, locale)} />
             </span>
           </div>
         ) : null}
@@ -210,7 +211,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
         <div className="flex flex-col gap-2 rounded-card bg-teal-tint p-4">
           <SectionLabel tone="teal">
             {t.decisiondecidedOn.split("{date}")[0]}
-            <LocalTime iso={(decision.decidedAt ?? decision.createdAt).toISOString()} mode="date" fallback={formatDate(decision.decidedAt ?? decision.createdAt)} />
+            <LocalTime iso={(decision.decidedAt ?? decision.createdAt).toISOString()} mode="date" fallback={formatDate(decision.decidedAt ?? decision.createdAt, undefined, locale)} />
             {t.decisiondecidedOn.split("{date}")[1]}
           </SectionLabel>
           {decision.format === "long_text" ? (
@@ -393,13 +394,13 @@ export default async function DecisionPage({ params, searchParams }: { params: P
           ) : null}
           <p className="text-center text-xs text-ink-3">
             {(open.kind === "ideas" ? t.decisionideasCloseNote : t.decisionchangeMindNote).split("{closes}")[0]}
-            <LocalTime iso={open.closesAt.toISOString()} mode="closes" fallback={closesRelative(open.closesAt)} />
+            <LocalTime iso={open.closesAt.toISOString()} mode="closes" fallback={closesRelative(open.closesAt, undefined, locale)} />
             {(open.kind === "ideas" ? t.decisionideasCloseNote : t.decisionchangeMindNote).split("{closes}")[1]}
           </p>
           <CopyText
             lines={[
               { text: `${decision.title} (${event.title})` },
-              { text: open.kind === "ideas" ? t.decisioncopyAddIdeas : interpolate(t.decisioncopyVote, { round: roundLabel(open, rounds, decision.plan) }), closesAtIso: open.closesAt.toISOString() },
+              { text: open.kind === "ideas" ? t.decisioncopyAddIdeas : interpolate(t.decisioncopyVote, { round: roundLabel(t, open, rounds, decision.plan) }), closesAtIso: open.closesAt.toISOString() },
               { text: `${base}/app/decisions/${decision.id}` },
               ...(open.kind !== "ideas" && waitingOn.length ? [{ text: interpolate(t.decisioncopyStillWaiting, { names: waitingOn.join(", ") }) }] : []),
             ]}
@@ -509,7 +510,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
               <div className="flex flex-wrap items-center gap-2">
                 <Pill tone="teal">
                   <Icon name="check" size={12} stroke={3} />
-                  {interpolate(t.decisionroundClosed, { round: roundLabel(r, rounds, decision.plan) })}
+                  {interpolate(t.decisionroundClosed, { round: roundLabel(t, r, rounds, decision.plan) })}
                 </Pill>
                 <span className="text-[13px] text-ink-2">
                   {r.closeReason === "everyone_voted" ? t.decisioncloseEveryoneVoted : r.closeReason === "deadline" ? t.decisioncloseDeadline : r.closeReason === "no_quorum" ? t.decisioncloseNoQuorum : t.decisioncloseByOrganizer}

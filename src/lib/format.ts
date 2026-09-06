@@ -1,21 +1,31 @@
+import { DEFAULT_LOCALE, type Locale } from "./locale";
+import { interpolate, messages } from "./messages";
+
 const day = 24 * 60 * 60 * 1000;
 
-export function formatDate(d: Date | string | null | undefined, opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" }): string {
+/** Locale tag Intl understands, per app locale. */
+const BCP47: Record<Locale, string> = { en: "en-US", es: "es", "pt-BR": "pt-BR" };
+
+export function formatDate(
+  d: Date | string | null | undefined,
+  opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" },
+  locale: Locale = DEFAULT_LOCALE,
+): string {
   if (!d) return "";
   const date = typeof d === "string" ? new Date(d.length === 10 ? d + "T00:00:00" : d) : d;
-  return new Intl.DateTimeFormat("en-US", opts).format(date);
+  return new Intl.DateTimeFormat(BCP47[locale], opts).format(date);
 }
 
-export function formatDateRange(start: string | null, end: string | null): string {
+export function formatDateRange(start: string | null, end: string | null, locale: Locale = DEFAULT_LOCALE): string {
   if (!start && !end) return "";
-  if (start && !end) return formatDate(start);
-  if (!start && end) return formatDate(end);
+  if (start && !end) return formatDate(start, undefined, locale);
+  if (!start && end) return formatDate(end, undefined, locale);
   const s = new Date(start + "T00:00:00");
   const e = new Date(end + "T00:00:00");
   if (s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()) {
-    return `${formatDate(s, { month: "short" })} ${s.getDate()}–${e.getDate()}`;
+    return `${formatDate(s, { month: "short" }, locale)} ${s.getDate()}–${e.getDate()}`;
   }
-  return `${formatDate(s)} – ${formatDate(e)}`;
+  return `${formatDate(s, undefined, locale)} – ${formatDate(e, undefined, locale)}`;
 }
 
 export function nightsBetween(start: string | null, end: string | null): number | null {
@@ -26,25 +36,28 @@ export function nightsBetween(start: string | null, end: string | null): number 
   return n > 0 ? n : null;
 }
 
-/** "closes Sun 8pm", "closes in 2h", "closed" */
-export function closesLabel(closesAt: Date, now = new Date()): string {
+/** "closes Sun 8pm", "closes in 2h", "closing now" — in the viewer's time zone. */
+export function closesLabel(closesAt: Date, now = new Date(), locale: Locale = DEFAULT_LOCALE): string {
+  const t = messages(locale);
   const diff = closesAt.getTime() - now.getTime();
-  if (diff <= 0) return "closing now";
-  if (diff < 60 * 60 * 1000) return `closes in ${Math.max(1, Math.round(diff / 60000))} min`;
-  if (diff < 12 * 60 * 60 * 1000) return `closes in ${Math.round(diff / 3600000)}h`;
+  if (diff <= 0) return t.fmtClosingNow;
+  if (diff < 60 * 60 * 1000) return interpolate(t.fmtClosesInMin, { n: Math.max(1, Math.round(diff / 60000)) });
+  if (diff < 12 * 60 * 60 * 1000) return interpolate(t.fmtClosesInHours, { n: Math.round(diff / 3600000) });
   if (diff < 6 * day) {
-    return "closes " + new Intl.DateTimeFormat("en-US", { weekday: "short", hour: "numeric" }).format(closesAt).replace(" AM", "am").replace(" PM", "pm");
+    const when = new Intl.DateTimeFormat(BCP47[locale], { weekday: "short", hour: "numeric" }).format(closesAt).replace(" AM", "am").replace(" PM", "pm");
+    return interpolate(t.fmtClosesWhen, { when });
   }
-  return "closes " + formatDate(closesAt);
+  return interpolate(t.fmtClosesWhen, { when: formatDate(closesAt, undefined, locale) });
 }
 
-export function relativeTime(d: Date, now = new Date()): string {
+export function relativeTime(d: Date, now = new Date(), locale: Locale = DEFAULT_LOCALE): string {
+  const t = messages(locale);
   const diff = now.getTime() - d.getTime();
-  if (diff < 60000) return "just now";
-  if (diff < 3600000) return `${Math.round(diff / 60000)} min ago`;
-  if (diff < day) return `${Math.round(diff / 3600000)}h ago`;
-  if (diff < 7 * day) return `${Math.round(diff / day)}d ago`;
-  return formatDate(d);
+  if (diff < 60000) return t.fmtJustNow;
+  if (diff < 3600000) return interpolate(t.fmtMinAgo, { n: Math.round(diff / 60000) });
+  if (diff < day) return interpolate(t.fmtHoursAgo, { n: Math.round(diff / 3600000) });
+  if (diff < 7 * day) return interpolate(t.fmtDaysAgo, { n: Math.round(diff / day) });
+  return formatDate(d, undefined, locale);
 }
 
 export function initials(name: string): string {
@@ -62,24 +75,24 @@ export function avatarColor(seed: string): string {
   return AVATAR_COLORS[h % AVATAR_COLORS.length];
 }
 
-export function plural(n: number, one: string, many = one + "s"): string {
-  return `${n} ${n === 1 ? one : many}`;
-}
-
 /** Time-zone-free version for server rendering: "closes in 3h", "closes in 2 days". */
-export function closesRelative(closesAt: Date, now = new Date()): string {
+export function closesRelative(closesAt: Date, now = new Date(), locale: Locale = DEFAULT_LOCALE): string {
+  const t = messages(locale);
   const diff = closesAt.getTime() - now.getTime();
-  if (diff <= 0) return "closing now";
-  if (diff < 60 * 60 * 1000) return `closes in ${Math.max(1, Math.round(diff / 60000))} min`;
-  if (diff < 36 * 60 * 60 * 1000) return `closes in ${Math.round(diff / 3600000)}h`;
-  return `closes in ${Math.round(diff / day)} days`;
+  if (diff <= 0) return t.fmtClosingNow;
+  if (diff < 60 * 60 * 1000) return interpolate(t.fmtClosesInMin, { n: Math.max(1, Math.round(diff / 60000)) });
+  if (diff < 36 * 60 * 60 * 1000) return interpolate(t.fmtClosesInHours, { n: Math.round(diff / 3600000) });
+  return interpolate(t.fmtClosesInDays, { n: Math.round(diff / day) });
 }
 
 /** "Jul 11–18 · 7 nights" for a date-range option. */
-export function dateRangeTitle(start: string, end: string | null): string {
-  const range = formatDateRange(start, end);
+export function dateRangeTitle(start: string, end: string | null, locale: Locale = DEFAULT_LOCALE): string {
+  const range = formatDateRange(start, end, locale);
   const n = nightsBetween(start, end ?? start);
-  return n ? `${range} · ${plural(n, "night")}` : range;
+  if (!n) return range;
+  const t = messages(locale);
+  const nights = interpolate(n === 1 ? t.fmtNightSingular : t.fmtNightPlural, { count: n });
+  return `${range} · ${nights}`;
 }
 
 /**

@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { useLocale } from "@/components/locale-provider";
 import { closesLabel, formatDate } from "@/lib/format";
 
 type Mode = "closes" | "date" | "weekday";
@@ -16,9 +17,10 @@ const useIsClient = () => useSyncExternalStore(noop, () => true, () => false);
  */
 export function LocalTime({ iso, mode, fallback }: { iso: string; mode: Mode; fallback: string }) {
   const isClient = useIsClient();
+  const locale = useLocale();
   if (!isClient) return <>{fallback}</>;
   const d = new Date(iso);
-  if (mode === "closes") return <>{closesLabel(d)}</>;
-  if (mode === "weekday") return <>{formatDate(d, { weekday: "long", month: "short", day: "numeric" })}</>;
-  return <>{formatDate(d)}</>;
+  if (mode === "closes") return <>{closesLabel(d, undefined, locale)}</>;
+  if (mode === "weekday") return <>{formatDate(d, { weekday: "long", month: "short", day: "numeric" }, locale)}</>;
+  return <>{formatDate(d, undefined, locale)}</>;
 }

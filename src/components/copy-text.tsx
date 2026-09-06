@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { closesLabel } from "@/lib/format";
-import { useMessages } from "@/components/locale-provider";
+import { useLocale, useMessages } from "@/components/locale-provider";
 import { Button, Icon } from "./ui";
 
 export type CopyLine = { text: string; closesAtIso?: string };
@@ -15,8 +15,9 @@ export type CopyLine = { text: string; closesAtIso?: string };
  */
 export function CopyText({ lines, label, variant = "secondary" }: { lines: CopyLine[]; label?: string; variant?: "secondary" | "dark" | "ghost" }) {
   const t = useMessages();
+  const locale = useLocale();
   const [state, setState] = useState<"idle" | "done" | "manual">("idle");
-  const text = lines.map((l) => (l.closesAtIso ? l.text.replace("{closes}", closesLabel(new Date(l.closesAtIso))) : l.text)).join("\n");
+  const text = lines.map((l) => (l.closesAtIso ? l.text.replace("{closes}", closesLabel(new Date(l.closesAtIso), undefined, locale)) : l.text)).join("\n");
   return (
     <div className="flex flex-col gap-2">
       <Button
