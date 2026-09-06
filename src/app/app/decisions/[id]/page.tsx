@@ -5,7 +5,7 @@ import { VoteForm } from "@/components/vote-form";
 import { addOption, closeRoundNow, deleteDecision, editOption, extendRound, pickWinner, removeOption, renameDecision, reopenRound, revealVotes, skipDecision, tiebreak, unskipDecision } from "@/lib/actions/decisions";
 import { CopyText } from "@/components/copy-text";
 import { baseUrl } from "@/lib/url";
-import { requireMembership } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import type { Vote } from "@/lib/db/schema";
 import { FORMAT_LABEL, ROUND_LABEL, VOTE_TYPE_LABEL, effectivePicks, isTiebreak, peopleVoted, roundInstruction, roundLabel, roundSequence, tally, type Format, type RoundKind } from "@/lib/engine/rounds";
 import { readError } from "@/lib/flash";
@@ -106,10 +106,10 @@ function ResultBars({ round, rounds, options, format, label, advancing, winnerId
 export default async function DecisionPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }) {
   const { id } = await params;
   const error = readError(await searchParams);
-  const { user, family, member } = await requireMembership();
-  const data = await decisionData(id, family.id, user.id);
+  const user = await requireUser();
+  const data = await decisionData(id, user.id);
   if (!data) notFound();
-  const { decision, event, rounds, currentRound, options, members, seats, casterName, hiddenDefault } = data;
+  const { decision, event, rounds, currentRound, options, members, seats, casterName, hiddenDefault, member } = data;
   const base = await baseUrl();
   const memberById = new Map(members.map((m) => [m.id, m]));
   /** "Eli (via Shai)" when someone else cast the vote for that seat; a seat that has left keeps its ballot, not its name. */

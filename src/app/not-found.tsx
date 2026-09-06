@@ -11,7 +11,7 @@ export default function NotFound() {
       </div>
       <div className="flex gap-2">
         <LinkButton href="/app" size="sm">
-          Go to my family
+          Go to my groups
         </LinkButton>
         <LinkButton href="/" variant="secondary" size="sm">
           Home

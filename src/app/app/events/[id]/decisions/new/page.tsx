@@ -1,14 +1,14 @@
 import { notFound } from "next/navigation";
 import { DecisionForm } from "@/components/decision-form";
 import { Screen, TopBar } from "@/components/ui";
-import { requireMembership } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { readError } from "@/lib/flash";
 import { eventData } from "@/lib/queries";
 
 export default async function NewDecision({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }) {
   const { id } = await params;
-  const { family } = await requireMembership();
-  const data = await eventData(id, family.id);
+  const user = await requireUser();
+  const data = await eventData(id, user.id);
   if (!data) notFound();
   const error = readError(await searchParams);
 

@@ -7,7 +7,7 @@ import { MoveButton } from "@/components/move-button";
 import { AvatarStack, Button, Card, Icon, LinkButton, Screen, SectionLabel, TopBar } from "@/components/ui";
 import { moveDecision } from "@/lib/actions/decisions";
 import { setEventStatus } from "@/lib/actions/events";
-import { requireMembership } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { roundLabel } from "@/lib/engine/rounds";
 import { clipTitle, closesRelative, formatDate, formatDateRange, nightsBetween, plural } from "@/lib/format";
 import { readError } from "@/lib/flash";
@@ -17,10 +17,10 @@ import { baseUrl } from "@/lib/url";
 export default async function EventPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }) {
   const { id } = await params;
   const error = readError(await searchParams);
-  const { user, family, member } = await requireMembership();
-  const data = await eventData(id, family.id);
+  const user = await requireUser();
+  const data = await eventData(id, user.id);
   if (!data) notFound();
-  const { event, decisions, members, log } = data;
+  const { event, decisions, members, log, member } = data;
   const base = await baseUrl();
   // The version tag makes Messenger fetch a fresh preview instead of its cached one.
   const shareUrl = `${base}/s/${event.shareToken}?v=${(log[0]?.createdAt ?? event.createdAt).getTime()}`;

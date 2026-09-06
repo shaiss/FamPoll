@@ -4,7 +4,7 @@ import { and, asc, desc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { requireMembership, seatsForUser } from "../auth";
+import { membershipFor, requireUser, seatsForUser } from "../auth";
 import { getDb, schema } from "../db";
 import { ballotsToSkip, closesAtFrom, effectivePicks, isPastDeadline, optionCountRule, optionTitleLimit, planRoundCount, plansFor, resolveFinal, roundSequence, tally, type Format, type Plan, type VoteType } from "../engine/rounds";
 import { fail } from "../flash";
@@ -16,16 +16,28 @@ const planSchema = z.enum(["quick", "shortlist_final", "ideas_shortlist_final"])
 const formatSchema = z.enum(["text", "long_text", "date"]);
 const voteTypeSchema = z.enum(["ab", "single", "multi"]);
 
-async function loadEventForFamily(eventId: string, familyId: string) {
+/**
+ * Load an event with the acting person's seat in the event's own group, so an
+ * event in any group they belong to can be acted on whichever group is active.
+ * Throws when the event is gone or they aren't a member of its group.
+ */
+async function loadEventAndMembership(eventId: string) {
+  const user = await requireUser();
   const event = await getDb().query.events.findFirst({ where: eq(schema.events.id, eventId) });
-  if (!event || event.familyId !== familyId) throw new Error("Event not found.");
-  return event;
+  if (!event) throw new Error("Event not found.");
+  const membership = await membershipFor(user.id, event.familyId);
+  if (!membership) throw new Error("Event not found.");
+  return { user, event, member: membership.member, family: membership.family };
 }
 
-async function loadDecisionForFamily(decisionId: string, familyId: string) {
+/** As loadEventAndMembership, resolved from a decision (and its event's group). */
+async function loadDecisionAndMembership(decisionId: string) {
+  const user = await requireUser();
   const decision = await getDb().query.decisions.findFirst({ where: eq(schema.decisions.id, decisionId), with: { event: true } });
-  if (!decision || decision.event.familyId !== familyId) throw new Error("Decision not found.");
-  return decision;
+  if (!decision) throw new Error("Decision not found.");
+  const membership = await membershipFor(user.id, decision.event.familyId);
+  if (!membership) throw new Error("Decision not found.");
+  return { user, decision, member: membership.member, family: membership.family };
 }
 
 /**
@@ -93,10 +105,9 @@ function revalidateDecision(decisionId: string, eventId: string) {
 }
 
 export async function createDecision(formData: FormData) {
-  const { family, member } = await requireMembership();
   const eventId = z.string().parse(formData.get("eventId"));
   const back = `/app/events/${eventId}/decisions/new`;
-  const event = await loadEventForFamily(eventId, family.id);
+  const { member, event } = await loadEventAndMembership(eventId);
   if (event.status !== "planning") fail(`/app/events/${eventId}`, "This event is closed. Reopen it to add decisions.");
 
   const title = String(formData.get("title") ?? "").trim().slice(0, 100);
@@ -162,10 +173,9 @@ export async function createDecision(formData: FormData) {
 }
 
 export async function addOption(formData: FormData) {
-  const { family, member } = await requireMembership();
   const decisionId = z.string().parse(formData.get("decisionId"));
   const back = `/app/decisions/${decisionId}`;
-  const decision = await loadDecisionForFamily(decisionId, family.id);
+  const { member, decision } = await loadDecisionAndMembership(decisionId);
   let title = optionTitleFrom(formData, decision.format);
   let startsOn: string | null = null;
   let endsOn: string | null = null;
@@ -213,7 +223,6 @@ export async function addOption(formData: FormData) {
 }
 
 export async function castVote(formData: FormData) {
-  const { user, family } = await requireMembership();
   const roundId = z.string().parse(formData.get("roundId"));
   const memberId = z.string().parse(formData.get("memberId"));
   const skip = formData.get("skip") === "1";
@@ -223,7 +232,7 @@ export async function castVote(formData: FormData) {
   const db = getDb();
   const round = await db.query.rounds.findFirst({ where: eq(schema.rounds.id, roundId) });
   if (!round) throw new Error("Round not found.");
-  const decision = await loadDecisionForFamily(round.decisionId, family.id);
+  const { user, decision, family } = await loadDecisionAndMembership(round.decisionId);
   const back = `/app/decisions/${decision.id}`;
 
   if (decision.status !== "open") fail(back, "This decision is already settled.");
@@ -275,8 +284,7 @@ export async function castVote(formData: FormData) {
  * log rows carry no member id either, so no later join can name anyone.
  */
 async function requireOrganizer(decisionId: string) {
-  const { family, member } = await requireMembership();
-  const decision = await loadDecisionForFamily(decisionId, family.id);
+  const { member, decision, family } = await loadDecisionAndMembership(decisionId);
   const organizer = member.role === "organizer" || decision.createdByMemberId === member.id;
   if (!organizer) fail(`/app/decisions/${decisionId}`, "Only the organizer, or whoever asked this, can do that.");
   const actorName = decision.anonymous ? "Someone" : member.displayName;
@@ -607,13 +615,12 @@ export async function editOption(formData: FormData) {
  * the round is over, because the reveal has already been seen.
  */
 export async function revealVotes(formData: FormData) {
-  const { user, family } = await requireMembership();
   const roundId = z.string().parse(formData.get("roundId"));
   const memberId = z.string().parse(formData.get("memberId"));
   const db = getDb();
   const round = await db.query.rounds.findFirst({ where: eq(schema.rounds.id, roundId) });
   if (!round) throw new Error("Round not found.");
-  const decision = await loadDecisionForFamily(round.decisionId, family.id);
+  const { user, decision, family } = await loadDecisionAndMembership(round.decisionId);
   const back = `/app/decisions/${decision.id}`;
   if (round.status !== "closed") fail(back, "You can show your hand once the round has closed.");
   const seats = await seatsForUser(family.id, user.id);

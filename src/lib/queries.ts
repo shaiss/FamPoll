@@ -1,6 +1,6 @@
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { cache } from "react";
-import { seatsForUser } from "./auth";
+import { membershipFor, seatsForUser } from "./auth";
 import { getDb, schema } from "./db";
 import type { Decision, Event, Member, Option, Round, Vote } from "./db/schema";
 import { effectivePicks, hiddenDefaultFor, seatsVoted } from "./engine/rounds";
@@ -79,6 +79,34 @@ export async function familyMembers(familyId: string): Promise<Member[]> {
   return getDb().query.members.findMany({ where: eq(schema.members.familyId, familyId), orderBy: [asc(schema.members.createdAt)] });
 }
 
+/**
+ * People you could add straight into a group: everyone who holds a seat in one
+ * of your other groups and is not already here. The trust is "you share a group
+ * already", which mirrors how proxy seats work — an organizer adds someone the
+ * family already knows.
+ */
+export async function invitableUsers(currentFamilyId: string, userId: string): Promise<{ userId: string; name: string; groups: string[] }[]> {
+  const db = getDb();
+  const mine = await db.query.members.findMany({ where: eq(schema.members.userId, userId), columns: { familyId: true } });
+  const otherFamilyIds = [...new Set(mine.map((m) => m.familyId))].filter((id) => id !== currentFamilyId);
+  if (otherFamilyIds.length === 0) return [];
+  const here = await db.query.members.findMany({ where: eq(schema.members.familyId, currentFamilyId), columns: { userId: true } });
+  const excluded = new Set<string>(here.map((m) => m.userId).filter((id): id is string => id !== null));
+  excluded.add(userId);
+  const others = await db.query.members.findMany({
+    where: and(inArray(schema.members.familyId, otherFamilyIds), isNotNull(schema.members.userId)),
+    with: { user: { columns: { id: true, name: true } }, family: { columns: { name: true } } },
+  });
+  const byUser = new Map<string, { userId: string; name: string; groups: string[] }>();
+  for (const m of others) {
+    if (!m.userId || excluded.has(m.userId)) continue;
+    const entry = byUser.get(m.userId) ?? { userId: m.userId, name: m.user?.name ?? m.displayName, groups: [] };
+    if (m.family?.name && !entry.groups.includes(m.family.name)) entry.groups.push(m.family.name);
+    byUser.set(m.userId, entry);
+  }
+  return [...byUser.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export async function homeData(familyId: string, userId: string) {
   await settleDueRounds(familyId);
   const db = getDb();
@@ -150,27 +178,38 @@ export async function homeData(familyId: string, userId: string) {
   return { needsVote, events: eventCards, members, seats };
 }
 
-export async function eventData(eventId: string, familyId: string) {
-  await settleDueRounds(familyId);
+/**
+ * Everything the event screen needs, scoped by the viewer's seat in the event's
+ * own group rather than their active group — so an event in any group they
+ * belong to opens correctly, whichever group is currently active. Null when the
+ * event is gone or they aren't a member of its group.
+ */
+export async function eventData(eventId: string, userId: string) {
   const db = getDb();
-  const event = await db.query.events.findFirst({ where: and(eq(schema.events.id, eventId), eq(schema.events.familyId, familyId)) });
+  const event = await db.query.events.findFirst({ where: eq(schema.events.id, eventId) });
   if (!event) return null;
+  const membership = await membershipFor(userId, event.familyId);
+  if (!membership) return null;
+  await settleDueRounds(event.familyId);
   const [cards, members, log] = await Promise.all([
     decisionCards([event.id]),
-    familyMembers(familyId),
+    familyMembers(event.familyId),
     db.query.activity.findMany({ where: eq(schema.activity.eventId, event.id), orderBy: [desc(schema.activity.createdAt)], limit: 30 }),
   ]);
-  return { event, decisions: cards.get(event.id) ?? [], members, log };
+  return { event, decisions: cards.get(event.id) ?? [], members, log, family: membership.family, member: membership.member };
 }
 
 /** A round as the decision page sees it. While open, `votes` holds only the viewer's own seats' ballots. */
 export type RoundView = Round & { votes: Vote[]; voterMemberIds: string[] };
 export type OptionView = Option & { addedBy: Member | null };
 
-export async function decisionData(decisionId: string, familyId: string, userId: string) {
+export async function decisionData(decisionId: string, userId: string) {
   const db = getDb();
   const found = await db.query.decisions.findFirst({ where: eq(schema.decisions.id, decisionId), with: { event: true } });
-  if (!found || found.event.familyId !== familyId) return null;
+  if (!found) return null;
+  const membership = await membershipFor(userId, found.event.familyId);
+  if (!membership) return null;
+  const familyId = found.event.familyId;
   await settleDueRounds(familyId);
   const [decision, allRounds, rawOptions, members, seats] = await Promise.all([
     db.query.decisions.findFirst({ where: eq(schema.decisions.id, decisionId) }),
@@ -201,7 +240,7 @@ export async function decisionData(decisionId: string, familyId: string, userId:
   const casterIds = [...new Set(rounds.flatMap((r) => r.votes.map((v) => v.castByUserId)))];
   const casters = casterIds.length ? await db.query.users.findMany({ where: inArray(schema.users.id, casterIds), columns: { id: true, name: true } }) : [];
   const casterName = new Map(casters.map((u) => [u.id, u.name.split(" ")[0]]));
-  return { decision, event: found.event, rounds, currentRound, options, members, seats, casterName, hiddenDefault };
+  return { decision, event: found.event, rounds, currentRound, options, members, seats, casterName, hiddenDefault, family: membership.family, member: membership.member };
 }
 
 /**

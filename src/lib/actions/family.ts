@@ -4,10 +4,11 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { getMembership, requireMembership, requireUser } from "../auth";
+import { membershipFor, requireUser } from "../auth";
 import { getDb, schema } from "../db";
 import type { Tx } from "../lifecycle";
 import { fail } from "../flash";
+import { clearActiveGroupId, setActiveGroupId } from "../group";
 import { newCode, newId } from "../ids";
 
 const MAX_PROXIES_PER_PERSON = 4;
@@ -15,6 +16,19 @@ const MAX_PROXIES_PER_PERSON = 4;
 function cleanName(v: FormDataEntryValue | null): string | null {
   const t = String(v ?? "").trim().slice(0, 60);
   return t.length ? t : null;
+}
+
+/**
+ * Resolve the acting person's seat in the group a People-page form names. Every
+ * management action carries a hidden `familyId`, so it acts on that exact group
+ * regardless of which group is currently active. Fails when they aren't in it.
+ */
+async function requireGroupMembership(formData: FormData) {
+  const user = await requireUser();
+  const familyId = z.string().parse(formData.get("familyId"));
+  const membership = await membershipFor(user.id, familyId);
+  if (!membership) fail("/app", "That group is gone.");
+  return { user, member: membership.member, family: membership.family };
 }
 
 /**
@@ -32,7 +46,7 @@ async function reassignHistory(tx: Tx, memberIds: string[], heirMemberId: string
 }
 
 /**
- * Remove seats from the family. Their ballots in rounds still open go with them
+ * Remove seats from the group. Their ballots in rounds still open go with them
  * (they are no longer eligible, and "everyone voted" must not wait on them);
  * ballots in closed rounds stay, with member_id set null by the foreign key,
  * so a settled round's counts never shift and a hidden vote in it is never
@@ -49,15 +63,15 @@ async function retireSeats(tx: Tx, memberIds: string[]) {
 
 export async function createFamily(formData: FormData) {
   const user = await requireUser();
-  if (await getMembership(user.id)) redirect("/app");
   const name = cleanName(formData.get("name"));
-  if (!name) fail("/app/family/new", "Give the family a name.");
+  if (!name) fail("/app/family/new", "Give the group a name.");
   const db = getDb();
+  const familyId = newId();
   await db.transaction(async (tx) => {
-    const familyId = newId();
     await tx.insert(schema.families).values({ id: familyId, name, inviteCode: newCode() + newCode(), createdByUserId: user.id });
     await tx.insert(schema.members).values({ id: newId(), familyId, userId: user.id, displayName: user.name, role: "organizer" });
   });
+  await setActiveGroupId(familyId);
   redirect("/app");
 }
 
@@ -70,15 +84,67 @@ export async function joinFamily(formData: FormData) {
   const db = getDb();
   const family = await db.query.families.findFirst({ where: eq(schema.families.inviteCode, code) });
   if (!family) fail(back, "That invite link is not valid any more. Ask for a fresh one.");
-  const existing = await getMembership(user.id);
-  if (existing && existing.family.id === family.id) redirect("/app");
-  if (existing) fail(back, `You're already in ${existing.family.name}. One family per person for now.`);
-  try {
-    await db.insert(schema.members).values({ id: newId(), familyId: family.id, userId: user.id, displayName: user.name, role: "member" });
-  } catch {
-    // The unique index on user_id caught a concurrent join; whichever won is fine.
+  const existing = await membershipFor(user.id, family.id);
+  if (!existing) {
+    try {
+      await db.insert(schema.members).values({ id: newId(), familyId: family.id, userId: user.id, displayName: user.name, role: "member" });
+    } catch {
+      // The unique index on (family_id, user_id) caught a concurrent join; whichever won is fine.
+    }
   }
+  await setActiveGroupId(family.id);
   redirect("/app");
+}
+
+/** Set which group is active (the switcher). */
+export async function switchGroup(formData: FormData) {
+  const user = await requireUser();
+  const familyId = z.string().parse(formData.get("familyId"));
+  const membership = await membershipFor(user.id, familyId);
+  if (!membership) fail("/app", "You're not in that group.");
+  await setActiveGroupId(familyId);
+  revalidatePath("/app");
+  redirect("/app");
+}
+
+/**
+ * Add someone you already share a group with straight into this group. Organizer
+ * only, and only for a person who holds a seat in one of your other groups — the
+ * same "the family already knows them" trust that lets an organizer mint a proxy
+ * seat. No invite link needed.
+ */
+export async function addExistingUserToGroup(formData: FormData) {
+  const { user, family, member } = await requireGroupMembership(formData);
+  if (member.role !== "organizer") fail("/app/family", "Only an organizer can add people.");
+  const targetUserId = z.string().parse(formData.get("userId"));
+  if (targetUserId === user.id) fail("/app/family", "You're already here.");
+  const db = getDb();
+  const targetSeats = await db.query.members.findMany({ where: eq(schema.members.userId, targetUserId), columns: { familyId: true } });
+  const targetFamilyIds = new Set(targetSeats.map((m) => m.familyId));
+  if (targetFamilyIds.has(family.id)) {
+    // Already a member here (perhaps added a moment ago).
+    revalidatePath("/app/family");
+    return;
+  }
+  const mySeats = await db.query.members.findMany({ where: eq(schema.members.userId, user.id), columns: { familyId: true } });
+  const shareAGroup = mySeats.some((m) => m.familyId !== family.id && targetFamilyIds.has(m.familyId));
+  if (!shareAGroup) fail("/app/family", "You can only add someone you already share a group with.");
+  const targetUser = await db.query.users.findFirst({ where: eq(schema.users.id, targetUserId) });
+  if (!targetUser) fail("/app/family", "That person isn't reachable any more.");
+  const here = await db.query.members.findMany({ where: eq(schema.members.familyId, family.id), columns: { displayName: true } });
+  const taken = new Set(here.map((m) => m.displayName.toLowerCase()));
+  let displayName = targetUser.name.slice(0, 60);
+  if (taken.has(displayName.toLowerCase())) {
+    let n = 2;
+    while (taken.has(`${targetUser.name} ${n}`.toLowerCase())) n++;
+    displayName = `${targetUser.name} ${n}`.slice(0, 60);
+  }
+  try {
+    await db.insert(schema.members).values({ id: newId(), familyId: family.id, userId: targetUserId, displayName, role: "member" });
+  } catch {
+    // The unique index on (family_id, user_id) caught a concurrent add; that's fine.
+  }
+  revalidatePath("/app/family");
 }
 
 /**
@@ -87,7 +153,7 @@ export async function joinFamily(formData: FormData) {
  * able to mint extra votes, and organizer is the app's "adult" role.
  */
 export async function addProxyMember(formData: FormData) {
-  const { user, family, member } = await requireMembership();
+  const { user, family, member } = await requireGroupMembership(formData);
   if (member.role !== "organizer") fail("/app/family", "Only an organizer can add a seat for someone. Ask them to make you an organizer.");
   const displayName = cleanName(formData.get("displayName"));
   if (!displayName) fail("/app/family", "Give them a name.");
@@ -101,7 +167,7 @@ export async function addProxyMember(formData: FormData) {
 }
 
 export async function removeProxyMember(formData: FormData) {
-  const { user, family, member } = await requireMembership();
+  const { user, family, member } = await requireGroupMembership(formData);
   const memberId = z.string().parse(formData.get("memberId"));
   const db = getDb();
   const target = await db.query.members.findFirst({ where: and(eq(schema.members.id, memberId), eq(schema.members.familyId, family.id), isNull(schema.members.userId)) });
@@ -113,12 +179,12 @@ export async function removeProxyMember(formData: FormData) {
 
 /** Organizer only: remove a signed-in member and the proxy seats they manage. */
 export async function removeMember(formData: FormData) {
-  const { family, member } = await requireMembership();
+  const { family, member } = await requireGroupMembership(formData);
   if (member.role !== "organizer") fail("/app/family", "Only an organizer can remove people.");
   const memberId = z.string().parse(formData.get("memberId"));
   const db = getDb();
   const target = await db.query.members.findFirst({ where: and(eq(schema.members.id, memberId), eq(schema.members.familyId, family.id)) });
-  if (!target) fail("/app/family", "That person is not in this family.");
+  if (!target) fail("/app/family", "That person is not in this group.");
   if (target.id === member.id) fail("/app/family", "You can't remove yourself.");
   if (target.role === "organizer") fail("/app/family", "Organizers can't be removed here.");
   await db.transaction(async (tx) => {
@@ -135,7 +201,7 @@ export async function removeMember(formData: FormData) {
 
 /** Organizer only: make another signed-in adult an organizer too (the co-parent case). */
 export async function makeOrganizer(formData: FormData) {
-  const { family, member } = await requireMembership();
+  const { family, member } = await requireGroupMembership(formData);
   if (member.role !== "organizer") fail("/app/family", "Only an organizer can do that.");
   const memberId = z.string().parse(formData.get("memberId"));
   const db = getDb();
@@ -146,40 +212,43 @@ export async function makeOrganizer(formData: FormData) {
 }
 
 /** Organizer only: a new invite link; the old one stops working immediately. */
-export async function rotateInviteCode() {
-  const { family, member } = await requireMembership();
+export async function rotateInviteCode(formData: FormData) {
+  const { family, member } = await requireGroupMembership(formData);
   if (member.role !== "organizer") fail("/app/family", "Only an organizer can change the invite link.");
   await getDb().update(schema.families).set({ inviteCode: newCode() + newCode() }).where(eq(schema.families.id, family.id));
   revalidatePath("/app/family");
 }
 
 export async function renameFamily(formData: FormData) {
-  const { family, member } = await requireMembership();
-  if (member.role !== "organizer") fail("/app/family", "Only an organizer can rename the family.");
+  const { family, member } = await requireGroupMembership(formData);
+  if (member.role !== "organizer") fail("/app/family", "Only an organizer can rename the group.");
   const name = cleanName(formData.get("name"));
-  if (!name) fail("/app/family", "Give the family a name.");
+  if (!name) fail("/app/family", "Give the group a name.");
   await getDb().update(schema.families).set({ name }).where(eq(schema.families.id, family.id));
   revalidatePath("/app");
   revalidatePath("/app/family");
 }
 
 /**
- * Leave the family. If you are the only signed-in member, the family is deleted
+ * Leave the group. If you are the only signed-in member, the group is deleted
  * outright (nobody is left to run it) — the cascade takes events, decisions and
  * the log with it. Otherwise your history moves to another organizer, and an
- * organizer can only leave once another organizer remains.
+ * organizer can only leave once another organizer remains. Afterwards the active
+ * group is forgotten, so home falls back to another group you belong to (or
+ * onboarding when you have none left).
  */
-export async function leaveFamily() {
-  const { user, family, member } = await requireMembership();
+export async function leaveFamily(formData: FormData) {
+  const { user, family, member } = await requireGroupMembership(formData);
   const db = getDb();
   const all = await db.query.members.findMany({ where: eq(schema.members.familyId, family.id) });
   const signedIn = all.filter((m) => m.userId !== null);
   if (signedIn.length <= 1) {
-    // A lone member (typically a test family). Deleting the family cascades cleanly:
+    // A lone member (typically a test group). Deleting the group cascades cleanly:
     // the no-action foreign keys are checked at statement end, by which point every
     // referencing row has gone too.
     await db.delete(schema.families).where(eq(schema.families.id, family.id));
-    redirect("/app/family/new");
+    await clearActiveGroupId();
+    redirect("/app");
   }
   const otherOrganizers = signedIn.filter((m) => m.id !== member.id && m.role === "organizer");
   if (member.role === "organizer" && otherOrganizers.length === 0) fail("/app/family", "Make someone else an organizer before you leave.");
@@ -190,18 +259,19 @@ export async function leaveFamily() {
     await reassignHistory(tx, goneIds, heir.id);
     await retireSeats(tx, goneIds);
   });
-  redirect("/app/family/new");
+  await clearActiveGroupId();
+  redirect("/app");
 }
 
 /** Organizer only: step someone (or yourself) down to a plain member. The last organizer can't. */
 export async function demoteOrganizer(formData: FormData) {
-  const { family, member } = await requireMembership();
+  const { family, member } = await requireGroupMembership(formData);
   if (member.role !== "organizer") fail("/app/family", "Only an organizer can do that.");
   const memberId = z.string().parse(formData.get("memberId"));
   const db = getDb();
   await db.transaction(async (tx) => {
-    // Lock this family's organizer rows so two concurrent demotions can't both
-    // pass the count check and leave the family with nobody in charge.
+    // Lock this group's organizer rows so two concurrent demotions can't both
+    // pass the count check and leave the group with nobody in charge.
     const organizers = await tx
       .select()
       .from(schema.members)
@@ -209,7 +279,7 @@ export async function demoteOrganizer(formData: FormData) {
       .for("update");
     const target = organizers.find((m) => m.id === memberId);
     if (!target) fail("/app/family", "They aren't an organizer.");
-    if (organizers.length <= 1) fail("/app/family", "Make someone else an organizer first — a family needs one.");
+    if (organizers.length <= 1) fail("/app/family", "Make someone else an organizer first — a group needs one.");
     await tx.update(schema.members).set({ role: "member" }).where(eq(schema.members.id, target.id));
   });
   revalidatePath("/app/family");
@@ -217,7 +287,7 @@ export async function demoteOrganizer(formData: FormData) {
 
 /** Organizer only: hand a proxy seat (a kid, a grandparent) to another organizer to manage. */
 export async function reassignProxy(formData: FormData) {
-  const { family, member } = await requireMembership();
+  const { family, member } = await requireGroupMembership(formData);
   if (member.role !== "organizer") fail("/app/family", "Only an organizer can move a seat.");
   const memberId = z.string().parse(formData.get("memberId"));
   const toMemberId = z.string().parse(formData.get("toMemberId"));
@@ -230,24 +300,25 @@ export async function reassignProxy(formData: FormData) {
   revalidatePath("/app/family");
 }
 
-/** Organizer only: delete the whole family, and everything in it, behind a confirm. */
+/** Organizer only: delete the whole group, and everything in it, behind a confirm. */
 export async function deleteFamily(formData: FormData) {
-  const { family, member } = await requireMembership();
-  if (member.role !== "organizer") fail("/app/family", "Only an organizer can delete the family.");
+  const { family, member } = await requireGroupMembership(formData);
+  if (member.role !== "organizer") fail("/app/family", "Only an organizer can delete the group.");
   if (formData.get("confirm") !== "on") fail("/app/family", "Tick the box to confirm you want to delete everything.");
   await getDb().delete(schema.families).where(eq(schema.families.id, family.id));
-  redirect("/app/family/new");
+  await clearActiveGroupId();
+  redirect("/app");
 }
 
 /** Your own display name, or (organizer) anyone's, proxies included. */
 export async function renameMember(formData: FormData) {
-  const { user, family, member } = await requireMembership();
+  const { user, family, member } = await requireGroupMembership(formData);
   const memberId = z.string().parse(formData.get("memberId"));
   const displayName = cleanName(formData.get("displayName"));
   if (!displayName) fail("/app/family", "Give them a name.");
   const db = getDb();
   const target = await db.query.members.findFirst({ where: and(eq(schema.members.id, memberId), eq(schema.members.familyId, family.id)) });
-  if (!target) fail("/app/family", "That person is not in this family.");
+  if (!target) fail("/app/family", "That person is not in this group.");
   if (target.userId !== user.id && member.role !== "organizer") fail("/app/family", "You can rename yourself; an organizer can rename anyone.");
   const members = await db.query.members.findMany({ where: eq(schema.members.familyId, family.id) });
   if (members.some((m) => m.id !== target.id && m.displayName.toLowerCase() === displayName.toLowerCase())) fail("/app/family", `There is already a ${displayName} here.`);
@@ -256,19 +327,18 @@ export async function renameMember(formData: FormData) {
   revalidatePath("/app");
 }
 
-
 /**
  * "Hide my votes by default": every ballot this seat casts starts hidden. Your
  * own seat, or a proxy seat you vote for. Privacy is personal, so an organizer
  * cannot flip it for anyone else.
  */
 export async function setVotePrivacy(formData: FormData) {
-  const { user, family } = await requireMembership();
+  const { user, family } = await requireGroupMembership(formData);
   const memberId = z.string().parse(formData.get("memberId"));
   const votesHidden = formData.get("votesHidden") === "1";
   const db = getDb();
   const target = await db.query.members.findFirst({ where: and(eq(schema.members.id, memberId), eq(schema.members.familyId, family.id)) });
-  if (!target) fail("/app/family", "That person is not in this family.");
+  if (!target) fail("/app/family", "That person is not in this group.");
   if (target.userId !== user.id && target.managedByUserId !== user.id) fail("/app/family", "Only that person, or whoever votes for them, can change this.");
   await db.update(schema.members).set({ votesHidden }).where(eq(schema.members.id, target.id));
   revalidatePath("/app/family");

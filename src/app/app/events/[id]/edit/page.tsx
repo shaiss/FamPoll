@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { Button, Card, Field, inputClass, Screen, TopBar } from "@/components/ui";
 import { deleteEvent, updateEvent } from "@/lib/actions/events";
-import { requireMembership } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { readError } from "@/lib/flash";
 import { eventData } from "@/lib/queries";
 
@@ -15,10 +15,10 @@ const KINDS = [
 
 export default async function EditEvent({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }) {
   const { id } = await params;
-  const { family, member } = await requireMembership();
-  const data = await eventData(id, family.id);
+  const user = await requireUser();
+  const data = await eventData(id, user.id);
   if (!data) notFound();
-  const { event } = data;
+  const { event, member } = data;
   const organizer = member.role === "organizer";
   const canEdit = organizer || event.createdByMemberId === member.id;
   if (!canEdit) notFound();

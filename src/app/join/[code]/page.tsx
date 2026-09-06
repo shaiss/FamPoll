@@ -6,7 +6,7 @@ import { AvatarStack, Button, Card, LinkButton, Screen } from "@/components/ui";
 import { Wordmark } from "@/components/wordmark";
 import { SubmitButton } from "@/components/submit-button";
 import { joinFamily } from "@/lib/actions/family";
-import { getMembership, requireUser } from "@/lib/auth";
+import { membershipFor, requireUser } from "@/lib/auth";
 import { brandFor } from "@/lib/brand";
 import { getLocale } from "@/lib/locale";
 import { hasClerk, hasDatabase } from "@/lib/env";
@@ -42,7 +42,7 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
           <h1 className="font-display text-2xl font-bold">That invite link isn’t valid.</h1>
           <p className="text-ink-2">It may have been replaced. Ask whoever sent it for a fresh one.</p>
           <LinkButton href={userId ? "/app" : "/"} variant="secondary">
-            {userId ? "Go to your family" : "Home"}
+            {userId ? "Go to your groups" : "Home"}
           </LinkButton>
         </Card>
       </Screen>
@@ -87,28 +87,21 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
   }
 
   const user = await requireUser();
-  const existing = await getMembership(user.id);
-  if (existing && existing.family.id === family.id) redirect("/app");
+  // Already a seat in this group? Straight to the app. You can still belong to
+  // other groups — joining one never blocks joining another.
+  const existing = await membershipFor(user.id, family.id);
+  if (existing) redirect("/app");
 
   return (
     <Screen className="pt-14">
       <Wordmark href="/" />
       <Card className="flex flex-col gap-4 p-5 shadow-card">
         {invite}
-        {existing ? (
-          <>
-            <p className="text-sm text-accent-deep">You’re already in {existing.family.name}. One family per person for now.</p>
-            <LinkButton href="/app" variant="secondary">
-              Go to {existing.family.name}
-            </LinkButton>
-          </>
-        ) : (
-          <form action={joinFamily} className="flex flex-col gap-3">
-            <input type="hidden" name="code" value={code} />
-            <input type="hidden" name="fromLink" value="1" />
-            <SubmitButton pendingLabel="Joining…">Join as {user.name}</SubmitButton>
-          </form>
-        )}
+        <form action={joinFamily} className="flex flex-col gap-3">
+          <input type="hidden" name="code" value={code} />
+          <input type="hidden" name="fromLink" value="1" />
+          <SubmitButton pendingLabel="Joining…">Join as {user.name}</SubmitButton>
+        </form>
         {error ? <p className="text-sm text-accent-deep">{error}</p> : null}
       </Card>
     </Screen>

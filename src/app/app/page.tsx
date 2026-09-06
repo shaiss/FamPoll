@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { LocalTime } from "@/components/time";
 import { AvatarStack, Card, Icon, LinkButton, Pill, Progress, SectionLabel, Screen } from "@/components/ui";
+import { GroupSwitcher } from "@/components/group-switcher";
 import { ShareButton } from "@/components/share-button";
 import { CopyButton } from "@/components/copy-button";
 import { brand } from "@/lib/brand";
@@ -21,7 +22,7 @@ function openLabel(c: { openVotingRounds: number; openIdeasRounds: number; open:
 }
 
 export default async function Home() {
-  const { user, family } = await requireMembership();
+  const { user, family, memberships } = await requireMembership();
   const { needsVote, events, members, seats } = await homeData(family.id, user.id);
   const base = await baseUrl();
   const inviteUrl = `${base}/join/${family.inviteCode}`;
@@ -40,10 +41,7 @@ export default async function Home() {
           </div>
           <h1 className="font-display text-[30px] font-bold leading-[1.05] tracking-[-0.02em]">Hi, {firstName}</h1>
         </div>
-        <Link href="/app/family" aria-label={family.name} className="flex items-center gap-2">
-          <AvatarStack names={members.map((m) => m.displayName)} size={30} max={4} />
-          <span className="text-[13px] font-semibold text-ink-2">People</span>
-        </Link>
+        <GroupSwitcher memberships={memberships} activeId={family.id} memberNames={members.map((m) => m.displayName)} />
       </div>
 
       <section className="flex flex-col gap-2.5">
