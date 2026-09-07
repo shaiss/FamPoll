@@ -578,6 +578,20 @@ export type Messages = {
   eventsQuietTitle: string;
   eventsQuietBody: string;
   decisionGridTitle: string;
+
+  // batch 2: ask again, duplicate event, undo, rotate link, hand-off
+  errDecLogAskedAgain: string;
+  errDecLogEventStartedFrom: string;
+  eventsCopyTitle: string;
+  decisionAskAgain: string;
+  decisionUndo: string;
+  decisionAddToCalendar: string;
+  decisionOpenInMaps: string;
+  eventsShareLinksTitle: string;
+  eventsRotateShareLink: string;
+  eventsRotateShareHint: string;
+  eventsDuplicate: string;
+  eventsDuplicateHint: string;
 };
 
 const en: Messages = {
@@ -1151,6 +1165,19 @@ const en: Messages = {
   eventsQuietTitle: "Quiet for a while",
   eventsQuietBody: "Nothing has happened here in {weeks} weeks. Wrap it up, or keep deciding?",
   decisionGridTitle: "Who can make which dates",
+
+  errDecLogAskedAgain: "{actor} asked “{title}” again.",
+  errDecLogEventStartedFrom: "{actor} started this event from “{title}”.",
+  eventsCopyTitle: "{title} (copy)",
+  decisionAskAgain: "Ask again",
+  decisionUndo: "Undo",
+  decisionAddToCalendar: "Add to calendar",
+  decisionOpenInMaps: "Open in Maps",
+  eventsShareLinksTitle: "Sharing",
+  eventsRotateShareLink: "Make a new share link",
+  eventsRotateShareHint: "The old read-only link stops working. Use this if it leaked.",
+  eventsDuplicate: "Duplicate as a new event",
+  eventsDuplicateHint: "Copies the decisions and their options as a fresh checklist, set aside so you open each when you’re ready. No votes carry over.",
 };
 
 const es: Messages = {
@@ -1724,6 +1751,19 @@ const es: Messages = {
   eventsQuietTitle: "Sin novedades",
   eventsQuietBody: "No ha pasado nada aquí en {weeks} semanas. ¿Lo cerramos o seguimos decidiendo?",
   decisionGridTitle: "Quién puede en cada fecha",
+
+  errDecLogAskedAgain: "{actor} volvió a preguntar «{title}».",
+  errDecLogEventStartedFrom: "{actor} creó este evento a partir de «{title}».",
+  eventsCopyTitle: "{title} (copia)",
+  decisionAskAgain: "Preguntar otra vez",
+  decisionUndo: "Deshacer",
+  decisionAddToCalendar: "Agregar al calendario",
+  decisionOpenInMaps: "Abrir en Maps",
+  eventsShareLinksTitle: "Compartir",
+  eventsRotateShareLink: "Crear un nuevo enlace",
+  eventsRotateShareHint: "El enlace de solo lectura anterior deja de funcionar. Úsalo si se filtró.",
+  eventsDuplicate: "Duplicar como nuevo evento",
+  eventsDuplicateHint: "Copia las decisiones y sus opciones como una lista nueva, apartadas para que abras cada una cuando quieras. No se copian los votos.",
 };
 
 const ptBR: Messages = {
@@ -2297,6 +2337,19 @@ const ptBR: Messages = {
   eventsQuietTitle: "Parado há um tempo",
   eventsQuietBody: "Nada aconteceu aqui há {weeks} semanas. Encerrar ou continuar decidindo?",
   decisionGridTitle: "Quem pode em cada data",
+
+  errDecLogAskedAgain: "{actor} perguntou “{title}” de novo.",
+  errDecLogEventStartedFrom: "{actor} criou este evento a partir de “{title}”.",
+  eventsCopyTitle: "{title} (cópia)",
+  decisionAskAgain: "Perguntar de novo",
+  decisionUndo: "Desfazer",
+  decisionAddToCalendar: "Adicionar à agenda",
+  decisionOpenInMaps: "Abrir no Maps",
+  eventsShareLinksTitle: "Compartilhar",
+  eventsRotateShareLink: "Gerar um novo link",
+  eventsRotateShareHint: "O link somente-leitura anterior para de funcionar. Use se ele vazou.",
+  eventsDuplicate: "Duplicar como novo evento",
+  eventsDuplicateHint: "Copia as decisões e suas opções como uma nova lista, deixadas de lado para você abrir cada uma quando quiser. Nenhum voto é copiado.",
 };
 
 const DICTS: Record<Locale, Messages> = { en, es, "pt-BR": ptBR };

@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { LocalTime } from "@/components/time";
 import { Avatar, AvatarStack, Button, Card, Field, Icon, inputClass, Pill, Screen, SectionLabel, TopBar } from "@/components/ui";
 import { VoteForm } from "@/components/vote-form";
-import { addOption, closeRoundNow, deleteDecision, editOption, extendRound, pickWinner, removeOption, renameDecision, reopenRound, revealVotes, skipDecision, tiebreak, unskipDecision } from "@/lib/actions/decisions";
+import { addOption, closeRoundNow, deleteDecision, duplicateDecision, editOption, extendRound, pickWinner, removeOption, renameDecision, reopenRound, revealVotes, skipDecision, tiebreak, unskipDecision } from "@/lib/actions/decisions";
 import { CopyText } from "@/components/copy-text";
 import { baseUrl } from "@/lib/url";
 import { requireUser } from "@/lib/auth";
@@ -198,6 +198,10 @@ export default async function DecisionPage({ params, searchParams }: { params: P
   // The plain-words trail for the decided card. A ranked final has no single pair of counts, so its margin is left off.
   const decidedTrail = decided ? roundTrail(t, rounds, decision.plan) : "";
   const marginLabel = decided && !decision.rankedFinal && winnerCount != null && winnerCount > 0 ? interpolate(t.trailWon, { winner: winnerCount, runnerUp: runnerUpCount }) : "";
+  // A fresh outcome (under ten minutes) offers a prominent one-tap Undo; later it is the plain "reopen".
+  const justDecided = decided && !!decision.decidedAt && new Date().getTime() - decision.decidedAt.getTime() < 10 * 60 * 1000;
+  // Hand-off links: a decided text pick opens in Maps; a decided date range downloads to the calendar.
+  const mapsUrl = outcome && decision.format === "text" ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(outcome.title)}` : null;
   const open = planning && currentRound && currentRound.status === "open" && decision.status === "open" ? currentRound : null;
   // The live pick cap: never everything on the ballot, so a pick-several final between two options is pick-one.
   const pickCap = open ? effectivePicks(open.maxPicks, alive.length) : 0;
@@ -302,14 +306,36 @@ export default async function DecisionPage({ params, searchParams }: { params: P
               { text: `${base}/app/decisions/${decision.id}` },
             ]}
           />
-          {organizer && planning ? (
-            <form action={reopenRound} className="pt-1">
-              <input type="hidden" name="decisionId" value={decision.id} />
-              <Button type="submit" variant="ghost" size="sm">
-                {t.decisionreopenChangedMinds}
-              </Button>
-            </form>
-          ) : null}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1">
+            {mapsUrl ? (
+              <a href={mapsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm font-semibold text-teal-deep hover:underline">
+                <Icon name="pin" size={16} stroke={2.25} />
+                {t.decisionOpenInMaps}
+              </a>
+            ) : null}
+            {decision.format === "date" && outcome?.startsOn ? (
+              <a href={`/app/decisions/${decision.id}/calendar`} className="inline-flex items-center gap-1.5 text-sm font-semibold text-teal-deep hover:underline">
+                <Icon name="calendar" size={16} stroke={2.25} />
+                {t.decisionAddToCalendar}
+              </a>
+            ) : null}
+            {planning ? (
+              <form action={duplicateDecision}>
+                <input type="hidden" name="decisionId" value={decision.id} />
+                <Button type="submit" variant="ghost" size="sm">
+                  {t.decisionAskAgain}
+                </Button>
+              </form>
+            ) : null}
+            {organizer && planning ? (
+              <form action={reopenRound}>
+                <input type="hidden" name="decisionId" value={decision.id} />
+                <Button type="submit" variant={justDecided ? "secondary" : "ghost"} size="sm">
+                  {justDecided ? t.decisionUndo : t.decisionreopenChangedMinds}
+                </Button>
+              </form>
+            ) : null}
+          </div>
         </div>
       ) : null}
 

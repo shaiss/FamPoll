@@ -177,6 +177,71 @@ export async function createDecision(formData: FormData) {
   redirect(`/app/decisions/${decisionId}`);
 }
 
+/**
+ * "Ask again": clone a decision — its wording, format, vote type, plan, settings
+ * and full option slate — into a fresh decision with round 1 open. No votes carry
+ * over. Makes a recurring question (Friday dinner) one tap, with no scheduler.
+ */
+export async function duplicateDecision(formData: FormData) {
+  const decisionId = z.string().parse(formData.get("decisionId"));
+  const { member, decision } = await loadDecisionAndMembership(decisionId);
+  const t = await getMessages();
+  if (decision.event.status !== "planning") fail(`/app/events/${decision.eventId}`, t.errDecEventClosedAddDecisions);
+  const db = getDb();
+  const newDecisionId = newId();
+  await db.transaction(async (tx) => {
+    const options = await tx.query.options.findMany({ where: eq(schema.options.decisionId, decision.id), orderBy: [asc(schema.options.createdAt)] });
+    const siblings = await tx.select({ id: schema.decisions.id }).from(schema.decisions).where(eq(schema.decisions.eventId, decision.eventId));
+    const [copy] = await tx
+      .insert(schema.decisions)
+      .values({
+        id: newDecisionId,
+        eventId: decision.eventId,
+        title: decision.title,
+        position: siblings.length + 1,
+        plan: decision.plan,
+        format: decision.format,
+        voteType: decision.voteType,
+        picks: decision.picks,
+        advanceCount: decision.advanceCount,
+        roundHours: decision.roundHours,
+        anyoneCanAddOptions: decision.anyoneCanAddOptions,
+        setsEventDates: decision.setsEventDates,
+        anonymous: decision.anonymous,
+        eligibilityScope: decision.eligibilityScope,
+        rankedFinal: decision.rankedFinal,
+        remindOrganizer: decision.remindOrganizer,
+        createdByMemberId: member.id,
+      })
+      .returning();
+    const round = await openRound(tx, copy, roundSequence(decision.plan)[0], 1, new Date());
+    if (options.length) {
+      await tx.insert(schema.options).values(
+        options.map((o) => ({
+          id: newId(),
+          decisionId: newDecisionId,
+          title: o.title,
+          note: o.note,
+          startsOn: o.startsOn,
+          endsOn: o.endsOn,
+          addedByMemberId: member.id,
+          anonymous: o.anonymous,
+          addedInRoundId: round.id,
+        })),
+      );
+    }
+    await logActivity(tx, {
+      eventId: decision.eventId,
+      decisionId: newDecisionId,
+      kind: "decision_created",
+      message: interpolate(t.errDecLogAskedAgain, { actor: decision.anonymous ? t.errDecActorSomeone : member.displayName, title: decision.title }),
+      actorMemberId: decision.anonymous ? null : member.id,
+    });
+  });
+  revalidatePath(`/app/events/${decision.eventId}`);
+  redirect(`/app/decisions/${newDecisionId}`);
+}
+
 export async function addOption(formData: FormData) {
   const decisionId = z.string().parse(formData.get("decisionId"));
   const back = `/app/decisions/${decisionId}`;
