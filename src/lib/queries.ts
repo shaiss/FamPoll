@@ -174,11 +174,13 @@ export async function homeData(familyId: string, userId: string) {
       else openVotingRounds++;
       if (event.status !== "planning") continue;
       const done = r.kind === "ideas" ? c.contributedMemberIds : c.votedMemberIds;
-      // Proxy seats can't add ideas, so they never "owe" one — don't nag their manager for them.
-      const eligibleSeats = r.kind === "ideas" ? seats.filter((s) => s.userId !== null) : seats;
+      // Proxy seats can't add ideas, and on an adults-only decision they never vote, so in
+      // both cases they never "owe" one — don't nag their manager for them or count them.
+      const excludeProxies = r.kind === "ideas" || c.decision.eligibilityScope === "adults";
+      const eligibleSeats = excludeProxies ? seats.filter((s) => s.userId !== null) : seats;
       const pendingSeats = eligibleSeats.filter((s) => !done.includes(s.id));
-      // Everyone on the roster still to act (proxy seats can't add ideas), for the nudge text.
-      const rosterEligible = r.kind === "ideas" ? members.filter((m) => m.userId !== null) : members;
+      // Everyone on the roster still to act, for the nudge text.
+      const rosterEligible = excludeProxies ? members.filter((m) => m.userId !== null) : members;
       const waitingNames = rosterEligible.filter((m) => !done.includes(m.id)).map((m) => m.displayName);
       if (pendingSeats.length > 0) {
         needsVote.push({
@@ -190,7 +192,7 @@ export async function homeData(familyId: string, userId: string) {
           pendingSeats,
           // Ideas: only name contributors who signed their idea.
           votedNames: (r.kind === "ideas" ? c.publicContributorIds : c.votedMemberIds).map((id) => memberName.get(id) ?? "?"),
-          totalSeats: r.kind === "ideas" ? members.filter((m) => m.userId !== null).length : members.length,
+          totalSeats: rosterEligible.length,
           picks: effectivePicks(r.maxPicks, c.aliveCount),
           waitingNames,
         });

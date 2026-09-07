@@ -7,11 +7,15 @@ import {
   isPastDeadline,
   nextStep,
   nominalPicks,
+  rankedBallots,
   resolveFinal,
+  resolveRankedFinal,
   roundSequence,
+  seatsInScope,
   seatsVoted,
   shouldAutoClose,
   tally,
+  type EligibilityScope,
   type NextStep,
   type RoundKind,
 } from "./engine/rounds";
@@ -108,11 +112,13 @@ export async function closeRoundAndAdvance(tx: Tx, roundId: string, reason: Clos
     picks.map((v) => ({ optionId: v.optionId })),
   );
 
-  // A deadline with too few seats heard from does not decide anything.
+  // A deadline with too few seats heard from does not decide anything. On an
+  // adults-only decision, only adult seats count toward the quorum.
   if (reason === "deadline" && round.kind !== "ideas") {
-    const distinct = seatsVoted(votes).size;
     const event = await tx.query.events.findFirst({ where: eq(schema.events.id, decision.eventId), columns: { familyId: true } });
-    const eligible = event ? await eligibleSeatCount(tx, event.familyId) : 0;
+    const eligibleIds = event ? await eligibleSeatIds(tx, event.familyId, decision.eligibilityScope) : new Set<string>();
+    const distinct = [...seatsVoted(votes)].filter((id) => eligibleIds.has(id)).length;
+    const eligible = eligibleIds.size;
     if (!hasQuorum(distinct, eligible)) {
       await tx.update(schema.rounds).set({ status: "closed", closedAt: now, closeReason: "no_quorum", tied: false }).where(eq(schema.rounds.id, round.id));
       await tx.insert(schema.activity).values({
@@ -136,7 +142,8 @@ export async function closeRoundAndAdvance(tx: Tx, roundId: string, reason: Clos
     }
     aliveIds = cut.advancing;
   } else if (round.kind === "final") {
-    finalResult = resolveFinal(rows);
+    // A ranked final is settled by instant-runoff; both resolvers return the same shape.
+    finalResult = decision.rankedFinal ? resolveRankedFinal(rankedBallots(votes), aliveIds) : resolveFinal(rows);
   }
 
   const step = nextStep(decision.plan, round.kind, aliveIds, decision.advanceCount, finalResult);
@@ -167,9 +174,11 @@ export async function closeRoundAndAdvance(tx: Tx, roundId: string, reason: Clos
         .where(eq(schema.decisions.id, decision.id));
       await applyOutcome(tx, decision, step.optionId);
       const detail =
-        round.kind === "final" && rows.length > 1
-          ? ` ${titleOf(step.optionId)} won ${rows[0].count}–${rows[1].count}.`
-          : ` ${titleOf(step.optionId)} was the only idea left.`;
+        round.kind === "final" && decision.rankedFinal
+          ? ` ${titleOf(step.optionId)} won the ranked vote.`
+          : round.kind === "final" && rows.length > 1
+            ? ` ${titleOf(step.optionId)} won ${rows[0].count}–${rows[1].count}.`
+            : ` ${titleOf(step.optionId)} was the only idea left.`;
       await log("decided", `${decision.title} decided: ${titleOf(step.optionId)}.${detail}`);
       break;
     }
@@ -211,10 +220,18 @@ export async function applyOutcome(tx: Tx | Db, decision: Decision, optionId: st
   });
 }
 
-/** Number of seats that may vote in this family: every member, proxies included. */
-export async function eligibleSeatCount(tx: Tx | Db, familyId: string): Promise<number> {
-  const rows = await tx.select({ id: schema.members.id }).from(schema.members).where(eq(schema.members.familyId, familyId));
-  return rows.length;
+/**
+ * The seats that may vote in this family under a decision's scope: every seat
+ * for "all", account seats only for "adults" (proxy/kid seats are advisory).
+ */
+export async function eligibleSeatIds(tx: Tx | Db, familyId: string, scope: EligibilityScope = "all"): Promise<Set<string>> {
+  const rows = await tx.select({ id: schema.members.id, userId: schema.members.userId }).from(schema.members).where(eq(schema.members.familyId, familyId));
+  return new Set(seatsInScope(rows, scope).map((r) => r.id));
+}
+
+/** How many seats may vote in this family under the given scope. */
+export async function eligibleSeatCount(tx: Tx | Db, familyId: string, scope: EligibilityScope = "all"): Promise<number> {
+  return (await eligibleSeatIds(tx, familyId, scope)).size;
 }
 
 /**
@@ -246,12 +263,13 @@ export async function settleDueRounds(familyId: string, now = new Date()): Promi
   return closed;
 }
 
-/** With the round locked: close it early when every seat has voted. */
+/** With the round locked: close it early when every eligible seat has voted. */
 export async function maybeCloseEarly(tx: Tx, round: Round, familyId: string, now: Date): Promise<boolean> {
+  const decision = await tx.query.decisions.findFirst({ where: eq(schema.decisions.id, round.decisionId), columns: { eligibilityScope: true } });
   const votes = await tx.select({ memberId: schema.votes.memberId }).from(schema.votes).where(eq(schema.votes.roundId, round.id));
-  const distinct = seatsVoted(votes).size;
-  const eligible = await eligibleSeatCount(tx, familyId);
-  if (shouldAutoClose(round.kind, distinct, eligible)) {
+  const eligibleIds = await eligibleSeatIds(tx, familyId, decision?.eligibilityScope ?? "all");
+  const distinct = [...seatsVoted(votes)].filter((id) => eligibleIds.has(id)).length;
+  if (shouldAutoClose(round.kind, distinct, eligibleIds.size)) {
     return (await closeRoundAndAdvance(tx, round.id, "everyone_voted", now)) !== null;
   }
   return false;

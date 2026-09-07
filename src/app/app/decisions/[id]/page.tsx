@@ -51,7 +51,7 @@ async function Stepper({ rounds, plan, decided }: { rounds: RoundView[]; plan: "
 type Picked = Vote & { optionId: string };
 const picks = (votes: Vote[]): Picked[] => votes.filter((v): v is Picked => v.optionId !== null);
 
-async function ResultBars({ round, rounds, options, format, label, advancing, winnerId }: { round: RoundView; rounds: RoundView[]; options: OptionView[]; format: Format; label: (v: Vote) => string; advancing: Set<string>; winnerId: string | null }) {
+async function ResultBars({ round, rounds, options, format, label, advancing, winnerId, ranked = false }: { round: RoundView; rounds: RoundView[]; options: OptionView[]; format: Format; label: (v: Vote) => string; advancing: Set<string>; winnerId: string | null; ranked?: boolean }) {
   const t = await getMessages();
   const numberOf = (roundId: string) => rounds.find((r) => r.id === roundId)?.number ?? Infinity;
   // Everything that was on this round's ballot: still alive, or knocked out in this round or a later one.
@@ -95,7 +95,7 @@ async function ResultBars({ round, rounds, options, format, label, advancing, wi
       })}
       <div className="text-center text-xs text-ink-3">
         {interpolate(t.decisionvotesFrom, { votes: interpolate(t.decisionvoteCount, { count: chosen.length }), people: interpolate(t.decisionpersonCount, { count: voters }) })}
-        {cap > 1 ? ` · ${interpolate(t.decisionpicksUpToEach, { cap })}` : ""}
+        {!ranked && cap > 1 ? ` · ${interpolate(t.decisionpicksUpToEach, { cap })}` : ""}
         {skippers.length ? (sealed ? ` · ${interpolate(t.decisionskippedCount, { count: skippers.length })}` : ` · ${interpolate(t.decisionskippedNames, { names: skippers.join(", ") })}`) : ""}
       </div>
       {sealed ? (
@@ -103,6 +103,7 @@ async function ResultBars({ round, rounds, options, format, label, advancing, wi
           {interpolate(t.decisionprivateVotesNote, { hidden: hiddenVoters, voters })}
         </div>
       ) : null}
+      {ranked ? <div className="text-center text-xs text-ink-3">{t.decisionRankedNote}</div> : null}
     </div>
   );
 }
@@ -176,6 +177,9 @@ export default async function DecisionPage({ params, searchParams }: { params: P
   const t = await getMessages();
   const locale = await getLocale();
   const memberById = new Map(members.map((m) => [m.id, m]));
+  // Adults-only: proxy (kid) seats follow along but don't vote or count toward participation.
+  const adultsOnly = decision.eligibilityScope === "adults";
+  const eligibleMembers = adultsOnly ? members.filter((m) => m.userId !== null) : members;
   /** "Eli (via Shai)" when someone else cast the vote for that seat; a seat that has left keeps its ballot, not its name. */
   const label = (v: Vote) => {
     if (v.memberId === null) return t.decisionvoterLeft;
@@ -194,7 +198,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
   const decidedCounts = finalRound ? tally(options.map((o) => o.id), picks(finalRound.votes).map((v) => ({ optionId: v.optionId }))) : [];
   const winnerCount = decidedCounts.find((r) => r.optionId === decision.outcomeOptionId)?.count;
   const runnerUpCount = decidedCounts.filter((r) => r.optionId !== decision.outcomeOptionId)[0]?.count ?? 0;
-  const decidedTally = winnerCount != null && winnerCount > 0 ? `, ${winnerCount}–${runnerUpCount}` : "";
+  const decidedTally = !decision.rankedFinal && winnerCount != null && winnerCount > 0 ? `, ${winnerCount}–${runnerUpCount}` : "";
   // The plain-words trail for the decided card. A ranked final has no single pair of counts, so its margin is left off.
   const decidedTrail = decided ? roundTrail(t, rounds, decision.plan) : "";
   const marginLabel = decided && !decision.rankedFinal && winnerCount != null && winnerCount > 0 ? interpolate(t.trailWon, { winner: winnerCount, runnerUp: runnerUpCount }) : "";
@@ -205,6 +209,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
   const open = planning && currentRound && currentRound.status === "open" && decision.status === "open" ? currentRound : null;
   // The live pick cap: never everything on the ballot, so a pick-several final between two options is pick-one.
   const pickCap = open ? effectivePicks(open.maxPicks, alive.length) : 0;
+  const rankedFinalOpen = !!open && open.kind === "final" && decision.rankedFinal;
   const closedRounds = rounds.filter((r) => r.status === "closed");
   const lastClosed = closedRounds[closedRounds.length - 1] ?? null;
   // The dates availability grid: the last closed voting round of a dates + pick-several decision, unless a hidden ballot sealed it.
@@ -229,7 +234,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
   const canAddIdeas = !!open && decision.voteType !== "ab" && !laterFinal && (laterShortlist ? organizer : decision.anyoneCanAddOptions || organizer);
   // Participation is public; the open round's `votes` holds only the viewer's own seats' ballots.
   const votersInOpen = open ? new Set(open.voterMemberIds) : new Set<string>();
-  const waitingOn = open ? members.filter((m) => !votersInOpen.has(m.id)).map((m) => m.displayName) : [];
+  const waitingOn = open ? eligibleMembers.filter((m) => !votersInOpen.has(m.id)).map((m) => m.displayName) : [];
   const tiedOptions = tied
     ? (() => {
         const rows = tally(
@@ -259,12 +264,13 @@ export default async function DecisionPage({ params, searchParams }: { params: P
             {voteTypeLabel(t, decision.voteType)} · {formatLabel(t, decision.format)}
           </span>
           {decision.anonymous ? <Pill>{t.decisionpillAskedAnonymously}</Pill> : null}
+          {adultsOnly ? <Pill tone="teal">{t.decisionAdultsPill}</Pill> : null}
         </div>
         <Stepper rounds={rounds} plan={decision.plan} decided={decided} />
         {open ? (
           <div className="flex items-center justify-between gap-3 text-[13px] text-ink-2">
             <div>
-              <span className="font-bold text-ink">{roundLabel(t, open, rounds, decision.plan)}.</span> {roundInstruction(t, open.kind, pickCap, decision.advanceCount)}
+              <span className="font-bold text-ink">{roundLabel(t, open, rounds, decision.plan)}.</span> {roundInstruction(t, open.kind, pickCap, decision.advanceCount, decision.rankedFinal)}
             </div>
             <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-accent-deep">
               <Icon name="clock" size={13} stroke={2.5} />
@@ -444,31 +450,41 @@ export default async function DecisionPage({ params, searchParams }: { params: P
 
       {open && open.kind !== "ideas"
         ? seats.map((seat) => {
+            const advisory = adultsOnly && seat.userId === null;
             const myVotes = open.votes.filter((v) => v.memberId === seat.id);
-            const mine = myVotes.map((v) => v.optionId).filter((id): id is string => id !== null);
+            // A ranked ballot is seeded in the seat's own preference order.
+            const mine = rankedFinalOpen
+              ? [...myVotes].filter((v) => v.optionId !== null).sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0)).map((v) => v.optionId as string)
+              : myVotes.map((v) => v.optionId).filter((id): id is string => id !== null);
             const skipped = myVotes.some((v) => v.optionId === null);
             const hidden = myVotes.some((v) => v.anonymous);
+            const statusRight = advisory ? undefined : mine.length ? (hidden ? t.decisionstatusVotedHidden : t.decisionstatusVoted) : skipped ? t.decisionstatusSkipped : t.decisionstatusNotYet;
             return (
               <section key={seat.id} className="flex flex-col gap-2.5">
                 {seats.length > 1 ? (
-                  <SectionLabel right={mine.length ? (hidden ? t.decisionstatusVotedHidden : t.decisionstatusVoted) : skipped ? t.decisionstatusSkipped : t.decisionstatusNotYet}>{seat.userId === user.id ? t.decisionyourVote : interpolate(t.decisionvotingFor, { name: seat.displayName })}</SectionLabel>
+                  <SectionLabel right={statusRight}>{seat.userId === user.id ? t.decisionyourVote : interpolate(t.decisionvotingFor, { name: seat.displayName })}</SectionLabel>
                 ) : null}
-                <VoteForm
-                  key={`${open.id}:${seat.id}:${alive.map((o) => o.id).join(",")}`}
-                  roundId={open.id}
-                  memberId={seat.id}
-                  maxPicks={pickCap}
-                  initial={mine}
-                  changed={mine.length > 0}
-                  skipped={skipped}
-                  hiddenDefault={hiddenDefault.get(seat.id) ?? false}
-                  options={alive.map((o) => ({
-                    id: o.id,
-                    title: o.title,
-                    byline: [o.addedBy ? interpolate(t.decisionpersonsIdea, { name: o.addedBy.displayName }) : null, o.note].filter(Boolean).join(" · "),
-                    longText: decision.format === "long_text",
-                  }))}
-                />
+                {advisory ? (
+                  <Card className="p-4 text-sm text-ink-2">{interpolate(t.decisionAdvisorySeat, { name: seat.displayName })}</Card>
+                ) : (
+                  <VoteForm
+                    key={`${open.id}:${seat.id}:${alive.map((o) => o.id).join(",")}`}
+                    roundId={open.id}
+                    memberId={seat.id}
+                    maxPicks={pickCap}
+                    ranked={rankedFinalOpen}
+                    initial={mine}
+                    changed={mine.length > 0}
+                    skipped={skipped}
+                    hiddenDefault={hiddenDefault.get(seat.id) ?? false}
+                    options={alive.map((o) => ({
+                      id: o.id,
+                      title: o.title,
+                      byline: [o.addedBy ? interpolate(t.decisionpersonsIdea, { name: o.addedBy.displayName }) : null, o.note].filter(Boolean).join(" · "),
+                      longText: decision.format === "long_text",
+                    }))}
+                  />
+                )}
               </section>
             );
           })
@@ -478,9 +494,9 @@ export default async function DecisionPage({ params, searchParams }: { params: P
         <div className="flex flex-col gap-2">
           {open.kind !== "ideas" ? (
             <div className="flex items-center justify-between">
-              <AvatarStack names={members.map((m) => m.displayName)} size={28} max={8} />
+              <AvatarStack names={eligibleMembers.map((m) => m.displayName)} size={28} max={8} />
               <div className="text-right text-xs text-ink-2">
-                {interpolate(t.decisionvotedOfTotal, { voted: votersInOpen.size, total: members.length })}
+                {interpolate(t.decisionvotedOfTotal, { voted: eligibleMembers.filter((m) => votersInOpen.has(m.id)).length, total: eligibleMembers.length })}
                 {waitingOn.length ? (
                   <>
                     <br />
@@ -619,7 +635,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
               {r.kind === "ideas" ? (
                 <Card className="p-3.5 text-sm text-ink-2">{interpolate(t.decisionideasCameIn, { ideas: interpolate(t.decisionideaCount, { count: options.filter((o) => o.addedInRoundId === r.id).length }) })}</Card>
               ) : (
-                <ResultBars round={r} rounds={rounds} options={options} format={decision.format} label={label} advancing={advancedFrom.get(r.id) ?? new Set()} winnerId={r.kind === "final" ? (decision.outcomeOptionId ?? null) : null} />
+                <ResultBars round={r} rounds={rounds} options={options} format={decision.format} label={label} advancing={advancedFrom.get(r.id) ?? new Set()} winnerId={r.kind === "final" ? (decision.outcomeOptionId ?? null) : null} ranked={decision.rankedFinal && r.kind === "final"} />
               )}
               {r.kind !== "ideas" && seats.some((seat) => r.votes.some((v) => v.memberId === seat.id && v.anonymous)) ? (
                 <div className="flex flex-wrap gap-2">

@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { membershipFor, requireUser, seatsForUser } from "../auth";
 import { getDb, schema } from "../db";
-import { ballotsToSkip, closesAtFrom, effectivePicks, isPastDeadline, optionCountRule, optionTitleLimit, planRoundCount, plansFor, resolveFinal, roundSequence, tally, type Format, type Plan, type VoteType } from "../engine/rounds";
+import { ballotsToSkip, closesAtFrom, effectivePicks, isPastDeadline, optionCountRule, optionTitleLimit, planRoundCount, plansFor, rankedBallots, resolveFinal, resolveRankedFinal, roundSequence, tally, type Format, type Plan, type VoteType } from "../engine/rounds";
 import { fail } from "../flash";
 import { newId } from "../ids";
 import { applyOutcome, closeRoundAndAdvance, lockOpenRound, logActivity, maybeCloseEarly, openRound, settleDueRounds } from "../lifecycle";
@@ -137,6 +137,9 @@ export async function createDecision(formData: FormData) {
   // A or B keeps its two options: nobody adds a third.
   const anyoneCanAddOptions = voteType !== "ab" && formData.getAll("anyoneCanAddOptions").map(String).includes("on");
   const setsEventDates = format === "date" && formData.get("setsEventDates") === "on";
+  // A or B settles in one round, so ranking never applies to it.
+  const rankedFinal = voteType !== "ab" && formData.get("rankedFinal") === "on";
+  const eligibilityScope: "all" | "adults" = formData.get("adultsOnly") === "on" ? "adults" : "all";
   let optionRows: { title: string; startsOn: string | null; endsOn: string | null }[];
   if (format === "date") {
     const parsed = cleanDateOptions(t, await getLocale(), formData.getAll("dateStart"), formData.getAll("dateEnd"));
@@ -156,7 +159,7 @@ export async function createDecision(formData: FormData) {
     const siblings = await tx.select({ id: schema.decisions.id }).from(schema.decisions).where(eq(schema.decisions.eventId, event.id));
     const [decision] = await tx
       .insert(schema.decisions)
-      .values({ id: decisionId, eventId: event.id, title, position: siblings.length + 1, plan, format, voteType, picks, anonymous, roundHours, anyoneCanAddOptions, setsEventDates, createdByMemberId: member.id })
+      .values({ id: decisionId, eventId: event.id, title, position: siblings.length + 1, plan, format, voteType, picks, anonymous, roundHours, anyoneCanAddOptions, setsEventDates, rankedFinal, eligibilityScope, createdByMemberId: member.id })
       .returning();
     const round = await openRound(tx, decision, roundSequence(plan)[0], 1, new Date(), undefined, firstClosesAt);
     if (optionRows.length) {
@@ -312,8 +315,12 @@ export async function castVote(formData: FormData) {
   const seats = await seatsForUser(family.id, user.id);
   const seat = seats.find((s) => s.id === memberId);
   if (!seat) fail(back, t.errDecCantVoteFromSeat);
+  // Adults-only: a proxy (kid) seat may follow along but never casts a ballot.
+  if (decision.eligibilityScope === "adults" && seat.userId === null) fail(back, t.errDecAdultsOnlySeat);
   if (round.kind === "ideas") fail(back, t.errDecNoVoteIdeasRound);
   if (!skip && optionIds.length === 0) fail(back, t.errDecPickOneOrSkip);
+  // A ranked final records the picks in order (rank 1..N) and lifts the pick cap; Set above kept insertion order.
+  const ranked = decision.rankedFinal && round.kind === "final";
 
   // Deadlines are settled in their own committed transaction first, so a
   // redirect below can never roll a close back.
@@ -330,13 +337,13 @@ export async function castVote(formData: FormData) {
     // The cap depends on how many options are alive, so it is checked under the same
     // lock that addOption and removeOption take.
     const cap = effectivePicks(fresh.maxPicks, alive.length);
-    if (optionIds.length > cap) return void (problem = cap === 1 ? t.errDecPickOne : interpolate(t.errDecPickUpTo, { cap }));
+    if (!ranked && optionIds.length > cap) return void (problem = cap === 1 ? t.errDecPickOne : interpolate(t.errDecPickUpTo, { cap }));
     const before = await tx.select({ id: schema.votes.id }).from(schema.votes).where(and(eq(schema.votes.roundId, roundId), eq(schema.votes.memberId, memberId)));
     await tx.delete(schema.votes).where(and(eq(schema.votes.roundId, roundId), eq(schema.votes.memberId, memberId)));
     if (skip) {
       await tx.insert(schema.votes).values({ id: newId(), roundId, optionId: null, memberId, castByUserId: user.id, anonymous: hidden });
     } else {
-      await tx.insert(schema.votes).values(optionIds.map((optionId) => ({ id: newId(), roundId, optionId, memberId, castByUserId: user.id, anonymous: hidden })));
+      await tx.insert(schema.votes).values(optionIds.map((optionId, i) => ({ id: newId(), roundId, optionId, memberId, castByUserId: user.id, anonymous: hidden, rank: ranked ? i + 1 : null })));
     }
     if (seat.userId === null && before.length === 0) {
       const me = seats.find((s) => s.userId === user.id);
@@ -502,7 +509,10 @@ export async function tiebreak(formData: FormData) {
       orderBy: [asc(schema.options.createdAt)],
     });
     const votes = await tx.query.votes.findMany({ where: eq(schema.votes.roundId, last.id) });
-    const result = resolveFinal(tally(alive.map((o) => o.id), votes.filter((v): v is typeof v & { optionId: string } => v.optionId !== null)));
+    // The finalists carried into the tiebreak must match how the round was counted.
+    const result = decision.rankedFinal
+      ? resolveRankedFinal(rankedBallots(votes), alive.map((o) => o.id))
+      : resolveFinal(tally(alive.map((o) => o.id), votes.filter((v): v is typeof v & { optionId: string } => v.optionId !== null)));
     if (result.tiedIds.length < 2) return void (problem = t.errDecNoTieToBreak);
     await tx.update(schema.rounds).set({ tied: false }).where(eq(schema.rounds.id, last.id));
     await openRound(tx, decision, "final", last.number + 1, now, { optionIds: result.tiedIds, stampRoundId: last.id });

@@ -25,6 +25,7 @@ export function VoteForm({
   changed,
   skipped,
   hiddenDefault,
+  ranked = false,
 }: {
   roundId: string;
   memberId: string;
@@ -35,21 +36,33 @@ export function VoteForm({
   changed: boolean;
   skipped: boolean;
   hiddenDefault: boolean;
+  /** A ranked final: tap in order of preference, no cap, picks travel as an ordered list. */
+  ranked?: boolean;
 }) {
   const t = useMessages();
-  // An option removed mid-round can leave a ballot over the cap; start clean rather than stuck.
-  const [picked, setPicked] = useState<string[]>(initial.length > maxPicks ? [] : initial);
+  // An option removed mid-round can leave a ballot over the cap; start clean rather than stuck. A ranked ballot has no cap.
+  const [picked, setPicked] = useState<string[]>(!ranked && initial.length > maxPicks ? [] : initial);
   const [hidden, setHidden] = useState(hiddenDefault);
   const [expanded, setExpanded] = useState<string[]>([]);
-  const single = maxPicks === 1;
+  const single = maxPicks === 1 && !ranked;
   const toggle = (id: string) =>
     setPicked((p) => {
+      if (ranked) return p.includes(id) ? p.filter((x) => x !== id) : [...p, id];
       if (single) return [id];
       if (p.includes(id)) return p.filter((x) => x !== id);
       return p.length >= maxPicks ? p : [...p, id];
     });
   const expand = (id: string) => setExpanded((e) => (e.includes(id) ? e.filter((x) => x !== id) : [...e, id]));
-  const label = picked.length === 0 ? (single ? t.cmppickOne : interpolate(t.cmppickUpTo, { max: maxPicks })) : changed ? interpolate(t.cmpchangeVote, { count: picked.length }) : interpolate(t.cmpcastVote, { count: picked.length });
+  const label =
+    picked.length === 0
+      ? ranked
+        ? t.cmprankEmpty
+        : single
+          ? t.cmppickOne
+          : interpolate(t.cmppickUpTo, { max: maxPicks })
+      : changed
+        ? interpolate(t.cmpchangeVote, { count: picked.length })
+        : interpolate(t.cmpcastVote, { count: picked.length });
 
   return (
     <div className="flex flex-col gap-2">
@@ -62,7 +75,7 @@ export function VoteForm({
       ))}
       {options.map((o) => {
         const on = picked.includes(o.id);
-        const full = !single && !on && picked.length >= maxPicks;
+        const full = !single && !ranked && !on && picked.length >= maxPicks;
         const clampable = o.longText && needsClamp(o.title);
         const isExpanded = expanded.includes(o.id);
         return (
@@ -78,8 +91,8 @@ export function VoteForm({
                 <span className={o.longText ? `whitespace-pre-line text-[15px] font-semibold leading-snug ${clampable && !isExpanded ? "line-clamp-4" : ""}` : "font-bold"}>{o.title}</span>
                 {o.byline ? <span className="text-[13px] text-ink-2">{o.byline}</span> : null}
               </span>
-              <span className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 ${on ? "border-accent bg-accent text-white" : "border-line-2 text-transparent"}`}>
-                <Icon name="check" size={16} stroke={3} />
+              <span className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 text-sm font-bold ${on ? "border-accent bg-accent text-white" : "border-line-2 text-transparent"}`}>
+                {ranked && on ? picked.indexOf(o.id) + 1 : <Icon name="check" size={16} stroke={3} />}
               </span>
             </button>
             {clampable ? (
@@ -90,6 +103,7 @@ export function VoteForm({
           </div>
         );
       })}
+      {ranked ? <p className="px-1 text-[13px] text-ink-2">{t.cmprankChoiceHint}</p> : null}
       <label className="flex items-start gap-3 rounded-card border border-line bg-card p-3">
         <input type="checkbox" checked={hidden} onChange={(e) => setHidden(e.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-accent" />
         <span className="flex flex-col gap-0.5">

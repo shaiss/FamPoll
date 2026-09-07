@@ -592,6 +592,19 @@ export type Messages = {
   eventsRotateShareHint: string;
   eventsDuplicate: string;
   eventsDuplicateHint: string;
+
+  // batch 3: ranked-choice finals (D4) + adults-only decisions (E2)
+  cmprankedFinalTitle: string;
+  cmprankedFinalBody: string;
+  cmprankEmpty: string;
+  cmprankChoiceHint: string;
+  decisionRankedNote: string;
+  engineInstructionRankedFinal: string;
+  cmpadultsOnlyTitle: string;
+  cmpadultsOnlyBody: string;
+  decisionAdultsPill: string;
+  decisionAdvisorySeat: string;
+  errDecAdultsOnlySeat: string;
 };
 
 const en: Messages = {
@@ -1178,6 +1191,18 @@ const en: Messages = {
   eventsRotateShareHint: "The old read-only link stops working. Use this if it leaked.",
   eventsDuplicate: "Duplicate as a new event",
   eventsDuplicateHint: "Copies the decisions and their options as a fresh checklist, set aside so you open each when you’re ready. No votes carry over.",
+
+  cmprankedFinalTitle: "Ranked final round",
+  cmprankedFinalBody: "In the final, everyone ranks the options; the lowest drops until one has a majority.",
+  cmprankEmpty: "Tap the options in your order — favorite first.",
+  cmprankChoiceHint: "Tap to rank; tap a ranked one to remove it.",
+  decisionRankedNote: "Counted by instant-runoff: the lowest choice drops until one has a majority.",
+  engineInstructionRankedFinal: "Rank them. The lowest drops until one has a majority.",
+  cmpadultsOnlyTitle: "Adults decide",
+  cmpadultsOnlyBody: "Kids’ seats can follow along but don’t count toward this one.",
+  decisionAdultsPill: "Adults decide",
+  decisionAdvisorySeat: "This one’s for the adults. {name} can follow along, but the vote won’t count.",
+  errDecAdultsOnlySeat: "This decision is for adults, so that seat can’t vote on it.",
 };
 
 const es: Messages = {
@@ -1764,6 +1789,18 @@ const es: Messages = {
   eventsRotateShareHint: "El enlace de solo lectura anterior deja de funcionar. Úsalo si se filtró.",
   eventsDuplicate: "Duplicar como nuevo evento",
   eventsDuplicateHint: "Copia las decisiones y sus opciones como una lista nueva, apartadas para que abras cada una cuando quieras. No se copian los votos.",
+
+  cmprankedFinalTitle: "Ronda final por orden",
+  cmprankedFinalBody: "En la final, cada quien ordena las opciones; la más baja se elimina hasta que una tenga mayoría.",
+  cmprankEmpty: "Toca las opciones en tu orden: la favorita primero.",
+  cmprankChoiceHint: "Toca para ordenar; toca una ya ordenada para quitarla.",
+  decisionRankedNote: "Contado por segunda vuelta instantánea: la opción más baja se elimina hasta que una tenga mayoría.",
+  engineInstructionRankedFinal: "Ordénalas. La más baja se elimina hasta que una tenga mayoría.",
+  cmpadultsOnlyTitle: "Deciden los adultos",
+  cmpadultsOnlyBody: "Los asientos de los niños pueden seguir la decisión, pero no cuentan aquí.",
+  decisionAdultsPill: "Deciden los adultos",
+  decisionAdvisorySeat: "Esta es para los adultos. {name} puede seguirla, pero su voto no cuenta.",
+  errDecAdultsOnlySeat: "Esta decisión es para adultos, así que ese asiento no puede votar.",
 };
 
 const ptBR: Messages = {
@@ -2350,6 +2387,18 @@ const ptBR: Messages = {
   eventsRotateShareHint: "O link somente-leitura anterior para de funcionar. Use se ele vazou.",
   eventsDuplicate: "Duplicar como novo evento",
   eventsDuplicateHint: "Copia as decisões e suas opções como uma nova lista, deixadas de lado para você abrir cada uma quando quiser. Nenhum voto é copiado.",
+
+  cmprankedFinalTitle: "Rodada final por ordem",
+  cmprankedFinalBody: "Na final, cada um ordena as opções; a mais baixa cai até uma ter maioria.",
+  cmprankEmpty: "Toque nas opções na sua ordem — a favorita primeiro.",
+  cmprankChoiceHint: "Toque para ordenar; toque em uma já ordenada para remover.",
+  decisionRankedNote: "Apurado por segundo turno instantâneo: a opção mais baixa cai até uma ter maioria.",
+  engineInstructionRankedFinal: "Ordene-as. A mais baixa cai até uma ter maioria.",
+  cmpadultsOnlyTitle: "Os adultos decidem",
+  cmpadultsOnlyBody: "Os assentos das crianças podem acompanhar, mas não contam aqui.",
+  decisionAdultsPill: "Os adultos decidem",
+  decisionAdvisorySeat: "Esta é para os adultos. {name} pode acompanhar, mas o voto não conta.",
+  errDecAdultsOnlySeat: "Esta decisão é para adultos, então esse assento não pode votar.",
 };
 
 const DICTS: Record<Locale, Messages> = { en, es, "pt-BR": ptBR };
