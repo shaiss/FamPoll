@@ -193,16 +193,19 @@ export function resolveFinal(rows: TallyRow[]): FinalResult {
  * A skip (optionId null) contributes nothing; a seat that ranked fewer options
  * simply has a shorter list, so its lower choices exhaust during the runoff.
  */
-export function rankedBallots(votes: { memberId: string | null; optionId: string | null; rank: number | null }[]): string[][] {
-  const bySeat = new Map<string, { optionId: string; rank: number }[]>();
+export function rankedBallots(votes: { memberId: string | null; optionId: string | null; rank: number | null; castByUserId: string }[]): string[][] {
+  const byBallot = new Map<string, { optionId: string; rank: number }[]>();
   for (const v of votes) {
-    if (v.memberId === null || v.optionId === null) continue;
-    const list = bySeat.get(v.memberId) ?? [];
+    if (v.optionId === null) continue;
+    // A seat that has left keeps its closed-round rows (memberId null) so the count
+    // never shifts; group those by whoever cast them — the durable identity peopleVoted uses.
+    const key = v.memberId ?? `cast:${v.castByUserId}`;
+    const list = byBallot.get(key) ?? [];
     list.push({ optionId: v.optionId, rank: v.rank ?? 0 });
-    bySeat.set(v.memberId, list);
+    byBallot.set(key, list);
   }
   const out: string[][] = [];
-  for (const list of bySeat.values()) {
+  for (const list of byBallot.values()) {
     list.sort((a, b) => a.rank - b.rank);
     out.push(list.map((x) => x.optionId));
   }

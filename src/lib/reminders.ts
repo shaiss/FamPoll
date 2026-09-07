@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull } from "drizzle-orm";
 import { getDb, schema } from "./db";
 import { env, hasMailer } from "./env";
 import { DEFAULT_LOCALE } from "./locale";
@@ -14,6 +14,8 @@ async function sendEmail(to: string, subject: string, text: string): Promise<boo
     method: "POST",
     headers: { Authorization: `Bearer ${env.resendApiKey}`, "content-type": "application/json" },
     body: JSON.stringify({ from: env.resendFromEmail, to, subject, text }),
+    // A stalled request must not block the sequential sweep; a timeout lands in the caller's catch, which releases the claim.
+    signal: AbortSignal.timeout(10000),
   });
   return res.ok;
 }
@@ -38,8 +40,9 @@ export async function runReminderSweep(now = new Date()): Promise<{ claimed: num
     // Claim: only the tick that flips reminder_sent_at from null owns this round.
     const [got] = await db
       .update(schema.rounds)
+      // Re-check at claim time: a round can close or pass its deadline between the read and this loop.
       .set({ reminderSentAt: now })
-      .where(and(eq(schema.rounds.id, target.roundId), isNull(schema.rounds.reminderSentAt)))
+      .where(and(eq(schema.rounds.id, target.roundId), isNull(schema.rounds.reminderSentAt), eq(schema.rounds.status, "open"), gt(schema.rounds.closesAt, now)))
       .returning({ id: schema.rounds.id });
     if (!got) continue;
     const subject = interpolate(t.reminderEmailSubject, { title: target.decisionTitle });

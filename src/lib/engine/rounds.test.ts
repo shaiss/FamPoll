@@ -393,17 +393,28 @@ describe("resolveRankedFinal", () => {
 });
 
 describe("rankedBallots", () => {
-  it("orders each seat's picks by rank and drops skips", () => {
+  it("orders each seat's picks by rank, drops skips, and keeps a departed seat's ballot", () => {
     assert.deepEqual(
       rankedBallots([
-        { memberId: "m1", optionId: "a", rank: 2 },
-        { memberId: "m1", optionId: "b", rank: 1 },
-        { memberId: "m2", optionId: "c", rank: 1 },
-        { memberId: "m3", optionId: null, rank: null },
-        { memberId: null, optionId: "a", rank: 1 },
+        { memberId: "m1", optionId: "a", rank: 2, castByUserId: "u1" },
+        { memberId: "m1", optionId: "b", rank: 1, castByUserId: "u1" },
+        { memberId: "m2", optionId: "c", rank: 1, castByUserId: "u2" },
+        { memberId: "m3", optionId: null, rank: null, castByUserId: "u3" },
+        // A seat that has left: memberId nulled, grouped by its caster so it still counts.
+        { memberId: null, optionId: "d", rank: 2, castByUserId: "u9" },
+        { memberId: null, optionId: "a", rank: 1, castByUserId: "u9" },
       ]),
-      [["b", "a"], ["c"]],
+      [["b", "a"], ["c"], ["a", "d"]],
     );
+  });
+  it("still counts a departed seat's ballot in the ranked result", () => {
+    const votes = [
+      { memberId: "m1", optionId: "a", rank: 1, castByUserId: "u1" },
+      { memberId: "m2", optionId: "b", rank: 1, castByUserId: "u2" },
+      // Without this departed ballot a and b tie; with it, b has the majority.
+      { memberId: null, optionId: "b", rank: 1, castByUserId: "u9" },
+    ];
+    assert.deepEqual(resolveRankedFinal(rankedBallots(votes), ["a", "b"]), { winnerId: "b", tiedIds: [] });
   });
 });
 

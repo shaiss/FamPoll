@@ -17,13 +17,14 @@ function secretMatches(provided: string, expected: string): boolean {
  * cron-job.org) hitting this URL every N minutes with the shared secret.
  * Inert without config: no CRON_SECRET (or no database) → it does nothing and
  * still returns 200, so a secret-less deployment stays green. The secret is
- * passed as `Authorization: Bearer <secret>` or `?key=<secret>`.
+ * passed only as `Authorization: Bearer <secret>` — never in the URL, which
+ * would leak it into request/proxy logs.
  */
 export async function GET(req: Request) {
   if (!env.cronSecret || !hasDatabase) {
     return NextResponse.json({ ok: true, skipped: "not configured" });
   }
-  const provided = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? new URL(req.url).searchParams.get("key") ?? "";
+  const provided = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
   if (!secretMatches(provided, env.cronSecret)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }

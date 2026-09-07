@@ -75,7 +75,9 @@ async function decisionCards(eventIds: string[]): Promise<Map<string, DecisionCa
         );
         const winner = rows.find((r) => r.optionId === d.outcomeOptionId)?.count ?? 0;
         const runnerUp = rows.filter((r) => r.optionId !== d.outcomeOptionId)[0]?.count ?? 0;
-        if (winner > 0) decidedMargin = { winner, runnerUp, roundNumber: finalClosed.number };
+        // Only an automatic, clear win gets a margin: a tie or low-turnout round that an
+        // organizer later called by hand must not read "won 2–2".
+        if (winner > runnerUp && finalClosed.closeReason !== "no_quorum") decidedMargin = { winner, runnerUp, roundNumber: finalClosed.number };
       }
     }
     const list = out.get(d.eventId) ?? [];

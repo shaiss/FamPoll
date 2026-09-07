@@ -156,6 +156,8 @@ export async function createDecision(formData: FormData) {
   const db = getDb();
   const decisionId = newId();
   await db.transaction(async (tx) => {
+    // Lock the event so concurrent creates can't read the same sibling count and collide on position.
+    await tx.select({ id: schema.events.id }).from(schema.events).where(eq(schema.events.id, event.id)).for("update");
     const siblings = await tx.select({ id: schema.decisions.id }).from(schema.decisions).where(eq(schema.decisions.eventId, event.id));
     const [decision] = await tx
       .insert(schema.decisions)
@@ -193,6 +195,8 @@ export async function duplicateDecision(formData: FormData) {
   const db = getDb();
   const newDecisionId = newId();
   await db.transaction(async (tx) => {
+    // Lock the event so concurrent creates can't read the same sibling count and collide on position.
+    await tx.select({ id: schema.events.id }).from(schema.events).where(eq(schema.events.id, decision.eventId)).for("update");
     const options = await tx.query.options.findMany({ where: eq(schema.options.decisionId, decision.id), orderBy: [asc(schema.options.createdAt)] });
     const siblings = await tx.select({ id: schema.decisions.id }).from(schema.decisions).where(eq(schema.decisions.eventId, decision.eventId));
     const [copy] = await tx
