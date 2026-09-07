@@ -236,6 +236,38 @@ export const activity = pgTable(
   (t) => [index("activity_event_idx").on(t.eventId)],
 );
 
+/**
+ * In-app feature requests and feedback, on their way to becoming public GitHub
+ * issues. Nothing here is posted automatically: a row lands `queued`, the app
+ * owner reviews the exact text on a gated page, and only an approval posts it —
+ * authored by one machine identity, carrying no reporter information. The
+ * columns that name the submitter (`createdByUserId`, `familyId`) are kept for
+ * rights only — rate-limiting, de-duplication, abuse response — and never enter
+ * the issue payload, the same "recorded under the seat, never attributed" split
+ * the app already applies to hidden votes. Both null out when the person leaves,
+ * mirroring `votes.member_id` (migration 0004), so the record survives them.
+ */
+export const feedback = pgTable(
+  "feedback",
+  {
+    id: text("id").primaryKey(),
+    createdByUserId: text("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    familyId: text("family_id").references(() => families.id, { onDelete: "set null" }),
+    /** bug | idea | other. Plain text validated in the action, like activity.kind. */
+    kind: text("kind").notNull().default("other"),
+    /** Server-sanitized text: what a reviewer sees and, once approved, what becomes public. */
+    message: text("message").notNull(),
+    /** queued | posted | rejected | failed. Public only once an owner review moves it to "posted". */
+    status: text("status").notNull().default("queued"),
+    githubIssueNumber: integer("github_issue_number"),
+    githubIssueUrl: text("github_issue_url"),
+    reviewedByUserId: text("reviewed_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("feedback_status_idx").on(t.status), index("feedback_user_idx").on(t.createdByUserId)],
+);
+
 export const usersRelations = relations(users, ({ many }) => ({
   memberships: many(members),
 }));
@@ -285,6 +317,12 @@ export const activityRelations = relations(activity, ({ one }) => ({
   actor: one(members, { fields: [activity.actorMemberId], references: [members.id] }),
 }));
 
+export const feedbackRelations = relations(feedback, ({ one }) => ({
+  createdBy: one(users, { fields: [feedback.createdByUserId], references: [users.id] }),
+  family: one(families, { fields: [feedback.familyId], references: [families.id] }),
+  reviewedBy: one(users, { fields: [feedback.reviewedByUserId], references: [users.id] }),
+}));
+
 export type User = typeof users.$inferSelect;
 export type Family = typeof families.$inferSelect;
 export type Member = typeof members.$inferSelect;
@@ -294,3 +332,4 @@ export type Round = typeof rounds.$inferSelect;
 export type Option = typeof options.$inferSelect;
 export type Vote = typeof votes.$inferSelect;
 export type Activity = typeof activity.$inferSelect;
+export type Feedback = typeof feedback.$inferSelect;

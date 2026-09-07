@@ -568,6 +568,46 @@ export type Messages = {
   errFamPersonUnreachable: string;
   errFamOrganizerOnlyRenameGroup: string;
 
+  // Feedback → GitHub
+  feedbackEntryLink: string;
+  feedbackBackHome: string;
+  feedbackTitle: string;
+  feedbackSubtitle: string;
+  feedbackKindLabel: string;
+  feedbackKindBug: string;
+  feedbackKindIdea: string;
+  feedbackKindOther: string;
+  feedbackMessageLabel: string;
+  feedbackMessagePlaceholder: string;
+  feedbackPrivacyNote: string;
+  feedbackSubmit: string;
+  feedbackSubmitPending: string;
+  feedbackSentTitle: string;
+  feedbackSentBody: string;
+  feedbackSendAnother: string;
+  feedbackReviewLinkOwner: string;
+  feedbackReviewTitle: string;
+  feedbackReviewSubtitle: string;
+  feedbackReviewEmpty: string;
+  feedbackReviewNotConnected: string;
+  feedbackReviewFrom: string;
+  feedbackReviewInternal: string;
+  feedbackReviewEditHint: string;
+  feedbackReviewApprove: string;
+  feedbackReviewApprovePending: string;
+  feedbackReviewReject: string;
+  feedbackReviewPostedBanner: string;
+  feedbackReviewRejectedBanner: string;
+  feedbackReviewFailedNote: string;
+  feedbackReviewRecentLabel: string;
+  feedbackReviewPostedPill: string;
+  feedbackReviewRejectedPill: string;
+  feedbackReviewViewIssue: string;
+  errFeedbackTooShort: string;
+  errFeedbackTooMany: string;
+  errFeedbackGone: string;
+  errFeedbackNotConnected: string;
+  errFeedbackPostFailed: string;
   // batch 1: the record, nudges, trail, stale events, dates grid
   homeCopyNudge: string;
   homeDecidedLink: string;
@@ -1188,6 +1228,45 @@ const en: Messages = {
   errFamPersonUnreachable: "That person isn't reachable any more.",
   errFamOrganizerOnlyRenameGroup: "Only an organizer can rename the group.",
 
+  feedbackEntryLink: "Send feedback",
+  feedbackBackHome: "Home",
+  feedbackTitle: "Send feedback",
+  feedbackSubtitle: "An idea, a bug, or something you wish worked differently. If we take it up it becomes a public issue we can track — posted without your name.",
+  feedbackKindLabel: "What kind?",
+  feedbackKindBug: "Something's broken",
+  feedbackKindIdea: "An idea",
+  feedbackKindOther: "Something else",
+  feedbackMessageLabel: "Your feedback",
+  feedbackMessagePlaceholder: "What would you change?",
+  feedbackPrivacyNote: "Please leave out names, emails and links — this is posted publicly without your name, and personal details and links are stripped automatically.",
+  feedbackSubmit: "Send",
+  feedbackSubmitPending: "Sending…",
+  feedbackSentTitle: "Thanks — got it.",
+  feedbackSentBody: "We read every one. If we act on it, it becomes a public issue, never with your name.",
+  feedbackSendAnother: "Send another",
+  feedbackReviewLinkOwner: "Review the queue",
+  feedbackReviewTitle: "Feedback queue",
+  feedbackReviewSubtitle: "Read the exact text, edit if needed, then post it anonymously to the tracker. Nothing here is public yet.",
+  feedbackReviewEmpty: "Nothing waiting. New feedback lands here for review before anything is posted.",
+  feedbackReviewNotConnected: "GitHub isn't connected, so nothing can be posted yet. Set GITHUB_FEEDBACK_TOKEN and GITHUB_FEEDBACK_REPO to turn posting on.",
+  feedbackReviewFrom: "From {who}",
+  feedbackReviewInternal: "Shown to you for review only — never posted to the issue.",
+  feedbackReviewEditHint: "Edit before posting if anything needs trimming. Links and personal details are stripped again on post.",
+  feedbackReviewApprove: "Post to GitHub",
+  feedbackReviewApprovePending: "Posting…",
+  feedbackReviewReject: "Reject",
+  feedbackReviewPostedBanner: "Posted to GitHub.",
+  feedbackReviewRejectedBanner: "Rejected — it won't be posted.",
+  feedbackReviewFailedNote: "The last attempt to post this failed. Try again.",
+  feedbackReviewRecentLabel: "Recently handled",
+  feedbackReviewPostedPill: "Posted",
+  feedbackReviewRejectedPill: "Rejected",
+  feedbackReviewViewIssue: "View issue #{number}",
+  errFeedbackTooShort: "Add a little more detail first.",
+  errFeedbackTooMany: "That's a lot of feedback for one day — try again tomorrow.",
+  errFeedbackGone: "That item is no longer in the queue.",
+  errFeedbackNotConnected: "GitHub isn't connected, so this can't be posted yet.",
+  errFeedbackPostFailed: "Couldn't post to GitHub just now. It's saved — try again.",
   homeCopyNudge: "Copy nudge",
   homeDecidedLink: "Decided",
   decidedTitle: "What we’ve decided",
@@ -1803,6 +1882,45 @@ const es: Messages = {
   errFamPersonUnreachable: "Ya no se puede acceder a esa persona.",
   errFamOrganizerOnlyRenameGroup: "Solo un organizador puede cambiar el nombre del grupo.",
 
+  feedbackEntryLink: "Enviar comentarios",
+  feedbackBackHome: "Inicio",
+  feedbackTitle: "Enviar comentarios",
+  feedbackSubtitle: "Una idea, un error o algo que te gustaría que funcionara distinto. Si lo tomamos, se convierte en una incidencia pública que podemos seguir, publicada sin tu nombre.",
+  feedbackKindLabel: "¿De qué tipo?",
+  feedbackKindBug: "Algo no funciona",
+  feedbackKindIdea: "Una idea",
+  feedbackKindOther: "Otra cosa",
+  feedbackMessageLabel: "Tus comentarios",
+  feedbackMessagePlaceholder: "¿Qué cambiarías?",
+  feedbackPrivacyNote: "Por favor, no incluyas nombres, correos ni enlaces: esto se publica sin tu nombre, y los datos personales y enlaces se eliminan automáticamente.",
+  feedbackSubmit: "Enviar",
+  feedbackSubmitPending: "Enviando…",
+  feedbackSentTitle: "Gracias, recibido.",
+  feedbackSentBody: "Leemos todos. Si lo tomamos, se convierte en una incidencia pública, nunca con tu nombre.",
+  feedbackSendAnother: "Enviar otro",
+  feedbackReviewLinkOwner: "Revisar la cola",
+  feedbackReviewTitle: "Cola de comentarios",
+  feedbackReviewSubtitle: "Lee el texto exacto, edítalo si hace falta y publícalo de forma anónima en el rastreador. Aquí nada es público todavía.",
+  feedbackReviewEmpty: "Nada en espera. Los comentarios nuevos llegan aquí para revisarse antes de publicarse.",
+  feedbackReviewNotConnected: "GitHub no está conectado, así que aún no se puede publicar nada. Define GITHUB_FEEDBACK_TOKEN y GITHUB_FEEDBACK_REPO para activarlo.",
+  feedbackReviewFrom: "De {who}",
+  feedbackReviewInternal: "Solo para tu revisión: nunca se publica en la incidencia.",
+  feedbackReviewEditHint: "Edítalo antes de publicar si hay que recortar algo. Los enlaces y datos personales se vuelven a eliminar al publicar.",
+  feedbackReviewApprove: "Publicar en GitHub",
+  feedbackReviewApprovePending: "Publicando…",
+  feedbackReviewReject: "Rechazar",
+  feedbackReviewPostedBanner: "Publicado en GitHub.",
+  feedbackReviewRejectedBanner: "Rechazado: no se publicará.",
+  feedbackReviewFailedNote: "El último intento de publicarlo falló. Inténtalo de nuevo.",
+  feedbackReviewRecentLabel: "Gestionado recientemente",
+  feedbackReviewPostedPill: "Publicado",
+  feedbackReviewRejectedPill: "Rechazado",
+  feedbackReviewViewIssue: "Ver incidencia n.º {number}",
+  errFeedbackTooShort: "Añade un poco más de detalle primero.",
+  errFeedbackTooMany: "Son muchos comentarios por un día; inténtalo mañana.",
+  errFeedbackGone: "Ese elemento ya no está en la cola.",
+  errFeedbackNotConnected: "GitHub no está conectado, así que esto aún no se puede publicar.",
+  errFeedbackPostFailed: "No se pudo publicar en GitHub ahora mismo. Se guardó; inténtalo de nuevo.",
   homeCopyNudge: "Copiar recordatorio",
   homeDecidedLink: "Decidido",
   decidedTitle: "Lo que decidimos",
@@ -2418,6 +2536,45 @@ const ptBR: Messages = {
   errFamPersonUnreachable: "Não é mais possível acessar essa pessoa.",
   errFamOrganizerOnlyRenameGroup: "Só um organizador pode renomear o grupo.",
 
+  feedbackEntryLink: "Enviar feedback",
+  feedbackBackHome: "Início",
+  feedbackTitle: "Enviar feedback",
+  feedbackSubtitle: "Uma ideia, um problema ou algo que você gostaria que funcionasse diferente. Se adotarmos, vira uma issue pública que podemos acompanhar, publicada sem o seu nome.",
+  feedbackKindLabel: "De que tipo?",
+  feedbackKindBug: "Algo está quebrado",
+  feedbackKindIdea: "Uma ideia",
+  feedbackKindOther: "Outra coisa",
+  feedbackMessageLabel: "Seu feedback",
+  feedbackMessagePlaceholder: "O que você mudaria?",
+  feedbackPrivacyNote: "Por favor, não inclua nomes, e-mails nem links: isto é publicado sem o seu nome, e dados pessoais e links são removidos automaticamente.",
+  feedbackSubmit: "Enviar",
+  feedbackSubmitPending: "Enviando…",
+  feedbackSentTitle: "Valeu — recebido.",
+  feedbackSentBody: "Lemos todos. Se agirmos sobre ele, vira uma issue pública, nunca com o seu nome.",
+  feedbackSendAnother: "Enviar outro",
+  feedbackReviewLinkOwner: "Revisar a fila",
+  feedbackReviewTitle: "Fila de feedback",
+  feedbackReviewSubtitle: "Leia o texto exato, edite se precisar e publique de forma anônima no rastreador. Aqui nada é público ainda.",
+  feedbackReviewEmpty: "Nada aguardando. Feedbacks novos aparecem aqui para revisão antes de serem publicados.",
+  feedbackReviewNotConnected: "O GitHub não está conectado, então nada pode ser publicado ainda. Defina GITHUB_FEEDBACK_TOKEN e GITHUB_FEEDBACK_REPO para ativar.",
+  feedbackReviewFrom: "De {who}",
+  feedbackReviewInternal: "Mostrado só para sua revisão — nunca publicado na issue.",
+  feedbackReviewEditHint: "Edite antes de publicar se algo precisar ser cortado. Links e dados pessoais são removidos novamente ao publicar.",
+  feedbackReviewApprove: "Publicar no GitHub",
+  feedbackReviewApprovePending: "Publicando…",
+  feedbackReviewReject: "Rejeitar",
+  feedbackReviewPostedBanner: "Publicado no GitHub.",
+  feedbackReviewRejectedBanner: "Rejeitado — não será publicado.",
+  feedbackReviewFailedNote: "A última tentativa de publicar falhou. Tente de novo.",
+  feedbackReviewRecentLabel: "Tratado recentemente",
+  feedbackReviewPostedPill: "Publicado",
+  feedbackReviewRejectedPill: "Rejeitado",
+  feedbackReviewViewIssue: "Ver issue #{number}",
+  errFeedbackTooShort: "Adicione um pouco mais de detalhe primeiro.",
+  errFeedbackTooMany: "É muito feedback para um dia só — tente amanhã.",
+  errFeedbackGone: "Esse item não está mais na fila.",
+  errFeedbackNotConnected: "O GitHub não está conectado, então isto ainda não pode ser publicado.",
+  errFeedbackPostFailed: "Não foi possível publicar no GitHub agora. Foi salvo; tente de novo.",
   homeCopyNudge: "Copiar lembrete",
   homeDecidedLink: "Decidido",
   decidedTitle: "O que já decidimos",

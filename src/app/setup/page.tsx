@@ -38,6 +38,21 @@ const STEPS: { key: keyof ReturnType<typeof setupStatus>; label: string; how: st
     label: "CRON_SECRET",
     how: "Optional. A shared secret an external scheduler (a GitHub Actions cron or cron-job.org) passes to /api/tick every few minutes to send due reminders.",
   },
+  {
+    key: "githubFeedbackToken",
+    label: "GITHUB_FEEDBACK_TOKEN",
+    how: "Optional. A fine-grained GitHub token (Issues: read and write on one repo), under a dedicated machine account, so in-app feedback can post issues under a single bot identity. Server-side only.",
+  },
+  {
+    key: "githubFeedbackRepo",
+    label: "GITHUB_FEEDBACK_REPO",
+    how: "Optional. The repo feedback posts to, as owner/repo. Optionally set GITHUB_FEEDBACK_LABELS (comma-separated) too.",
+  },
+  {
+    key: "feedbackAdminEmails",
+    label: "FEEDBACK_ADMIN_EMAILS",
+    how: "Optional. Comma-separated emails allowed to open the feedback review queue and post to GitHub. Until set, no one can review, so nothing is posted.",
+  },
 ];
 
 export default async function SetupPage() {
