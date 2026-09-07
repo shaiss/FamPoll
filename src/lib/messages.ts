@@ -605,6 +605,16 @@ export type Messages = {
   decisionAdultsPill: string;
   decisionAdvisorySeat: string;
   errDecAdultsOnlySeat: string;
+
+  // batch 4: guest seats (E3)
+  familyGuestPill: string;
+  familyGuestToggle: string;
+  familyGuestExplain: string;
+  familyGuestMark: string;
+  familyGuestUnmark: string;
+  familyRemoveGuests: string;
+  errFamOrganizerOnlyGuests: string;
+  errFamGuestNotOrganizer: string;
 };
 
 const en: Messages = {
@@ -1203,6 +1213,15 @@ const en: Messages = {
   decisionAdultsPill: "Adults decide",
   decisionAdvisorySeat: "This one’s for the adults. {name} can follow along, but the vote won’t count.",
   errDecAdultsOnlySeat: "This decision is for adults, so that seat can’t vote on it.",
+
+  familyGuestPill: "Guest",
+  familyGuestToggle: "Guest access",
+  familyGuestExplain: "A one-event visitor. They vote and count like anyone while they’re here; remove all guests in one tap when the event is over.",
+  familyGuestMark: "Mark as a guest",
+  familyGuestUnmark: "No longer a guest",
+  familyRemoveGuests: "Remove all guests ({count})",
+  errFamOrganizerOnlyGuests: "Only an organizer can manage guests.",
+  errFamGuestNotOrganizer: "An organizer can’t be a guest.",
 };
 
 const es: Messages = {
@@ -1801,6 +1820,15 @@ const es: Messages = {
   decisionAdultsPill: "Deciden los adultos",
   decisionAdvisorySeat: "Esta es para los adultos. {name} puede seguirla, pero su voto no cuenta.",
   errDecAdultsOnlySeat: "Esta decisión es para adultos, así que ese asiento no puede votar.",
+
+  familyGuestPill: "Invitado",
+  familyGuestToggle: "Acceso de invitado",
+  familyGuestExplain: "Una visita para un solo evento. Vota y cuenta como cualquiera mientras está; quita a todos los invitados de un toque cuando termine el evento.",
+  familyGuestMark: "Marcar como invitado",
+  familyGuestUnmark: "Ya no es invitado",
+  familyRemoveGuests: "Quitar a todos los invitados ({count})",
+  errFamOrganizerOnlyGuests: "Solo un organizador puede gestionar invitados.",
+  errFamGuestNotOrganizer: "Un organizador no puede ser invitado.",
 };
 
 const ptBR: Messages = {
@@ -2399,6 +2427,15 @@ const ptBR: Messages = {
   decisionAdultsPill: "Os adultos decidem",
   decisionAdvisorySeat: "Esta é para os adultos. {name} pode acompanhar, mas o voto não conta.",
   errDecAdultsOnlySeat: "Esta decisão é para adultos, então esse assento não pode votar.",
+
+  familyGuestPill: "Convidado",
+  familyGuestToggle: "Acesso de convidado",
+  familyGuestExplain: "Uma visita para um só evento. Vota e conta como qualquer um enquanto está aqui; remova todos os convidados com um toque quando o evento acabar.",
+  familyGuestMark: "Marcar como convidado",
+  familyGuestUnmark: "Não é mais convidado",
+  familyRemoveGuests: "Remover todos os convidados ({count})",
+  errFamOrganizerOnlyGuests: "Só um organizador pode gerenciar convidados.",
+  errFamGuestNotOrganizer: "Um organizador não pode ser convidado.",
 };
 
 const DICTS: Record<Locale, Messages> = { en, es, "pt-BR": ptBR };

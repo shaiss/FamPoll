@@ -225,6 +225,47 @@ export async function removeMember(formData: FormData) {
   revalidatePath("/app/family");
 }
 
+/** Organizer only: flag or unflag a seat as a one-event guest (a removable visitor). */
+export async function setGuest(formData: FormData) {
+  const { family, member } = await requireGroupMembership(formData);
+  const t = await getMessages();
+  if (member.role !== "organizer") fail("/app/family", t.errFamOrganizerOnlyGuests);
+  const memberId = z.string().parse(formData.get("memberId"));
+  const isGuest = formData.get("isGuest") === "1";
+  const db = getDb();
+  const target = await db.query.members.findFirst({ where: and(eq(schema.members.id, memberId), eq(schema.members.familyId, family.id)) });
+  if (!target) fail("/app/family", t.errFampersonNotInFamily);
+  if (target.role === "organizer") fail("/app/family", t.errFamGuestNotOrganizer);
+  await db.update(schema.members).set({ isGuest }).where(eq(schema.members.id, target.id));
+  revalidatePath("/app/family");
+}
+
+/**
+ * Organizer only: clear out every guest seat in one tap when an event is over.
+ * Mirrors removeMember — a guest's history moves to the acting organizer and any
+ * proxy seats a signed-in guest manages go with them, so nothing is orphaned;
+ * closed-round ballots survive (member_id nulled) so settled counts never shift.
+ */
+export async function removeGuests(formData: FormData) {
+  const { family, member } = await requireGroupMembership(formData);
+  const t = await getMessages();
+  if (member.role !== "organizer") fail("/app/family", t.errFamorganizerOnlyRemovePeople);
+  const db = getDb();
+  await db.transaction(async (tx) => {
+    const guests = await tx.query.members.findMany({ where: and(eq(schema.members.familyId, family.id), eq(schema.members.isGuest, true)) });
+    const removable = guests.filter((g) => g.role !== "organizer" && g.id !== member.id);
+    if (removable.length === 0) return;
+    const guestUserIds = removable.map((g) => g.userId).filter((id): id is string => id !== null);
+    const managed = guestUserIds.length
+      ? await tx.query.members.findMany({ where: and(eq(schema.members.familyId, family.id), inArray(schema.members.managedByUserId, guestUserIds)) })
+      : [];
+    const goneIds = [...new Set([...removable.map((g) => g.id), ...managed.map((m) => m.id)])];
+    await reassignHistory(tx, goneIds, member.id);
+    await retireSeats(tx, goneIds);
+  });
+  revalidatePath("/app/family");
+}
+
 /** Organizer only: make another signed-in adult an organizer too (the co-parent case). */
 export async function makeOrganizer(formData: FormData) {
   const { family, member } = await requireGroupMembership(formData);
