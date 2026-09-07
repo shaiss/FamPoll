@@ -19,8 +19,9 @@ describe("sanitizeFeedback", () => {
     assert.equal(sanitizeFeedback("opening /s/xyz789abc broke it"), "opening [link removed] broke it");
   });
 
-  it("removes email addresses", () => {
+  it("removes email addresses, including internationalized ones", () => {
     assert.equal(sanitizeFeedback("reach me at jo.doe@example.com ok"), "reach me at [email removed] ok");
+    assert.equal(sanitizeFeedback("write josé@example.com please"), "write [email removed] please");
   });
 
   it("redacts standalone capability secrets but spares ordinary words", () => {

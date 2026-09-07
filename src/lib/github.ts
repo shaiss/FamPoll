@@ -41,8 +41,10 @@ export function sanitizeFeedback(raw: string): string {
   // Remove bare capability paths even when not written as a full URL.
   text = text.replace(/\/(?:s|join)\/[A-Za-z0-9._~-]+/g, "[link removed]");
 
-  // Remove email addresses.
-  text = text.replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, "[email removed]");
+  // Remove email addresses. Unicode-safe and conservative: it also catches
+  // internationalized local parts/domains (e.g. josé@example.com) that an
+  // ASCII-only pattern would leak into a public issue.
+  text = text.replace(/[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+/gu, "[email removed]");
 
   // Remove standalone capability secrets: invite codes are 16 chars and share
   // tokens 14 (see src/lib/ids.ts), lowercase alnum. Requiring at least one digit

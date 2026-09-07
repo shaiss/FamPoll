@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, gte, inArray } from "drizzle-orm";
+import { and, eq, gte, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -36,24 +36,35 @@ export async function submitFeedback(formData: FormData) {
   if (message.length < MIN_FEEDBACK) fail(SUBMIT_PATH, t.errFeedbackTooShort);
 
   const db = getDb();
-  // Rate-limit by person (they are authenticated), never by IP.
-  const since = new Date(Date.now() - RATE_WINDOW_HOURS * 3_600_000);
-  const recent = await db
-    .select({ id: schema.feedback.id })
-    .from(schema.feedback)
-    .where(and(eq(schema.feedback.createdByUserId, user.id), gte(schema.feedback.createdAt, since)));
-  if (recent.length >= RATE_MAX) fail(SUBMIT_PATH, t.errFeedbackTooMany);
-
   // Coarse, internal-only context; nullable so a group deletion never erases feedback.
   const membership = await getMembership(user.id);
-  await db.insert(schema.feedback).values({
-    id: newId(),
-    createdByUserId: user.id,
-    familyId: membership?.family.id ?? null,
-    kind,
-    message,
-    status: "queued",
+  const since = new Date(Date.now() - RATE_WINDOW_HOURS * 3_600_000);
+
+  // Count-then-insert must be atomic per person, or parallel submits could all
+  // pass the check and blow past RATE_MAX. A per-user transaction advisory lock
+  // (released when the transaction ends) serializes one person's submissions
+  // without blocking anyone else. Rate-limit by person, never by IP.
+  let tooMany = false;
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${user.id}))`);
+    const recent = await tx
+      .select({ id: schema.feedback.id })
+      .from(schema.feedback)
+      .where(and(eq(schema.feedback.createdByUserId, user.id), gte(schema.feedback.createdAt, since)));
+    if (recent.length >= RATE_MAX) {
+      tooMany = true;
+      return;
+    }
+    await tx.insert(schema.feedback).values({
+      id: newId(),
+      createdByUserId: user.id,
+      familyId: membership?.family.id ?? null,
+      kind,
+      message,
+      status: "queued",
+    });
   });
+  if (tooMany) fail(SUBMIT_PATH, t.errFeedbackTooMany);
   redirect(`${SUBMIT_PATH}?sent=1`);
 }
 
@@ -66,8 +77,11 @@ async function requireFeedbackAdmin() {
 
 /**
  * Owner reviews the exact would-be-public text (optionally editing it), then
- * posts. The edit is saved first so a failed push keeps the reviewed text, and
- * the final text is scrubbed again as a belt-and-braces pass before it goes out.
+ * posts. The row is claimed atomically first — flipped from queued/failed to a
+ * transient "posting" lease — so two approvals can't both read "queued" and post
+ * the same feedback twice, and a rejected or already-posted row can't be revived
+ * by a stale approval. The (re-scrubbed) edit is saved on the claim, so a failed
+ * push keeps the reviewed text and the item returns to the queue as "failed".
  */
 export async function approveFeedback(formData: FormData) {
   const user = await requireFeedbackAdmin();
@@ -75,22 +89,29 @@ export async function approveFeedback(formData: FormData) {
   const id = z.string().parse(formData.get("id"));
   const edited = sanitizeFeedback(String(formData.get("message") ?? ""));
   if (edited.length < MIN_FEEDBACK) fail(REVIEW_PATH, t.errFeedbackTooShort);
-
-  const db = getDb();
-  const row = await db.query.feedback.findFirst({ where: eq(schema.feedback.id, id) });
-  if (!row || row.status === "posted") fail(REVIEW_PATH, t.errFeedbackGone);
   if (!hasGithubFeedback) fail(REVIEW_PATH, t.errFeedbackNotConnected);
 
-  await db.update(schema.feedback).set({ message: edited }).where(eq(schema.feedback.id, id));
+  const db = getDb();
+  // Claim the row: only queued/failed rows can be taken, and only the request
+  // whose UPDATE matches proceeds. This both excludes posted/rejected rows and
+  // serializes concurrent approvals of the same item.
+  const claimed = await db
+    .update(schema.feedback)
+    .set({ status: "posting", message: edited, reviewedByUserId: user.id })
+    .where(and(eq(schema.feedback.id, id), inArray(schema.feedback.status, ["queued", "failed"])))
+    .returning();
+  if (claimed.length === 0) fail(REVIEW_PATH, t.errFeedbackGone);
+  const row = claimed[0];
+
   let issue: PostedIssue;
   try {
     issue = await postFeedbackIssue({ kind: row.kind, message: edited });
   } catch {
-    // Keep the row; the owner can retry. Production hides thrown error text, so
-    // route the reason back through fail() instead of letting it 500.
+    // Release the claim back to the queue as "failed" so the owner can retry.
+    // Production hides thrown error text, so route the reason through fail().
     await db
       .update(schema.feedback)
-      .set({ status: "failed", reviewedByUserId: user.id, reviewedAt: new Date() })
+      .set({ status: "failed", reviewedAt: new Date() })
       .where(eq(schema.feedback.id, id));
     fail(REVIEW_PATH, t.errFeedbackPostFailed);
   }
@@ -100,7 +121,6 @@ export async function approveFeedback(formData: FormData) {
       status: "posted",
       githubIssueNumber: issue.number,
       githubIssueUrl: issue.url,
-      reviewedByUserId: user.id,
       reviewedAt: new Date(),
     })
     .where(eq(schema.feedback.id, id));
