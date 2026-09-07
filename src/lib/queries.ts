@@ -268,3 +268,25 @@ export const familyByCode = cache(async function familyByCode(code: string) {
     with: { members: { columns: { id: true, displayName: true, userId: true } } },
   });
 });
+
+/**
+ * The feedback awaiting review (queued, plus any that failed to post). Owner-only
+ * surface, so the submitter's name and group are included for abuse context —
+ * they are internal and never enter the public issue.
+ */
+export async function feedbackQueue() {
+  return getDb().query.feedback.findMany({
+    where: inArray(schema.feedback.status, ["queued", "failed"]),
+    orderBy: [asc(schema.feedback.createdAt)],
+    with: { createdBy: { columns: { name: true } }, family: { columns: { name: true } } },
+  });
+}
+
+/** Recently decided items (posted or rejected), newest first, for the review page's tail. */
+export async function feedbackRecent(limit = 20) {
+  return getDb().query.feedback.findMany({
+    where: inArray(schema.feedback.status, ["posted", "rejected"]),
+    orderBy: [desc(schema.feedback.reviewedAt)],
+    limit,
+  });
+}

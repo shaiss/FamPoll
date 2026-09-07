@@ -28,6 +28,21 @@ const STEPS: { key: keyof ReturnType<typeof setupStatus>; label: string; how: st
     label: "NEXT_PUBLIC_APP_URL",
     how: "The public address of this deployment, used in share links. Optional: falls back to the request URL.",
   },
+  {
+    key: "githubFeedbackToken",
+    label: "GITHUB_FEEDBACK_TOKEN",
+    how: "Optional. A fine-grained GitHub token (Issues: read and write on one repo), under a dedicated machine account, so in-app feedback can post issues under a single bot identity. Server-side only.",
+  },
+  {
+    key: "githubFeedbackRepo",
+    label: "GITHUB_FEEDBACK_REPO",
+    how: "Optional. The repo feedback posts to, as owner/repo. Optionally set GITHUB_FEEDBACK_LABELS (comma-separated) too.",
+  },
+  {
+    key: "feedbackAdminEmails",
+    label: "FEEDBACK_ADMIN_EMAILS",
+    how: "Optional. Comma-separated emails allowed to open the feedback review queue and post to GitHub. Until set, no one can review, so nothing is posted.",
+  },
 ];
 
 export default async function SetupPage() {

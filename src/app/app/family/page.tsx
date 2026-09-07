@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
 import { CopyButton } from "@/components/copy-button";
 import { GroupSwitcher } from "@/components/group-switcher";
@@ -244,6 +245,10 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
           </form>
         </details>
       ) : null}
+
+      <Link href="/app/feedback" className="text-center text-xs font-semibold text-ink-3 hover:text-ink">
+        {t.feedbackEntryLink}
+      </Link>
     </Screen>
   );
 }
