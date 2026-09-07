@@ -567,6 +567,17 @@ export type Messages = {
   errFamShareGroupToAdd: string;
   errFamPersonUnreachable: string;
   errFamOrganizerOnlyRenameGroup: string;
+
+  // batch 1: the record, nudges, trail, stale events, dates grid
+  homeCopyNudge: string;
+  homeDecidedLink: string;
+  decidedTitle: string;
+  decidedEmpty: string;
+  decidedInEvent: string;
+  trailWon: string;
+  eventsQuietTitle: string;
+  eventsQuietBody: string;
+  decisionGridTitle: string;
 };
 
 const en: Messages = {
@@ -1130,6 +1141,16 @@ const en: Messages = {
   errFamShareGroupToAdd: "You can only add someone you already share a group with.",
   errFamPersonUnreachable: "That person isn't reachable any more.",
   errFamOrganizerOnlyRenameGroup: "Only an organizer can rename the group.",
+
+  homeCopyNudge: "Copy nudge",
+  homeDecidedLink: "Decided",
+  decidedTitle: "What we’ve decided",
+  decidedEmpty: "Nothing decided yet. Settled decisions collect here as the family makes them.",
+  decidedInEvent: "in {event}",
+  trailWon: "won {winner}–{runnerUp}",
+  eventsQuietTitle: "Quiet for a while",
+  eventsQuietBody: "Nothing has happened here in {weeks} weeks. Wrap it up, or keep deciding?",
+  decisionGridTitle: "Who can make which dates",
 };
 
 const es: Messages = {
@@ -1693,6 +1714,16 @@ const es: Messages = {
   errFamShareGroupToAdd: "Solo puedes agregar a alguien con quien ya compartes un grupo.",
   errFamPersonUnreachable: "Ya no se puede acceder a esa persona.",
   errFamOrganizerOnlyRenameGroup: "Solo un organizador puede cambiar el nombre del grupo.",
+
+  homeCopyNudge: "Copiar recordatorio",
+  homeDecidedLink: "Decidido",
+  decidedTitle: "Lo que decidimos",
+  decidedEmpty: "Nada decidido todavía. Las decisiones resueltas se juntan aquí a medida que la familia las toma.",
+  decidedInEvent: "en {event}",
+  trailWon: "ganó {winner}–{runnerUp}",
+  eventsQuietTitle: "Sin novedades",
+  eventsQuietBody: "No ha pasado nada aquí en {weeks} semanas. ¿Lo cerramos o seguimos decidiendo?",
+  decisionGridTitle: "Quién puede en cada fecha",
 };
 
 const ptBR: Messages = {
@@ -2256,6 +2287,16 @@ const ptBR: Messages = {
   errFamShareGroupToAdd: "Você só pode adicionar alguém com quem já compartilha um grupo.",
   errFamPersonUnreachable: "Não é mais possível acessar essa pessoa.",
   errFamOrganizerOnlyRenameGroup: "Só um organizador pode renomear o grupo.",
+
+  homeCopyNudge: "Copiar lembrete",
+  homeDecidedLink: "Decidido",
+  decidedTitle: "O que já decidimos",
+  decidedEmpty: "Nada decidido ainda. As decisões resolvidas se reúnem aqui conforme a família as toma.",
+  decidedInEvent: "em {event}",
+  trailWon: "venceu {winner}–{runnerUp}",
+  eventsQuietTitle: "Parado há um tempo",
+  eventsQuietBody: "Nada aconteceu aqui há {weeks} semanas. Encerrar ou continuar decidindo?",
+  decisionGridTitle: "Quem pode em cada data",
 };
 
 const DICTS: Record<Locale, Messages> = { en, es, "pt-BR": ptBR };

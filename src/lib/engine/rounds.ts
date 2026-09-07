@@ -249,6 +249,18 @@ export function roundLabel(t: Messages, round: RoundRef, all: RoundRef[], plan: 
 }
 
 /**
+ * A compact "how we got here" trail from the rounds a decision actually played:
+ * "Quick vote", or "Ideas → Shortlist → Final", with a repeated final read as a
+ * tiebreak. Pure; the margin ("won 5–1") is appended by the caller.
+ */
+export function roundTrail(t: Messages, rounds: RoundRef[], plan: Plan): string {
+  if (rounds.length === 0) return "";
+  const seq = roundSequence(plan);
+  if (rounds.length === 1 && rounds[0].kind === "final" && seq.length === 1) return t.engineRoundQuickVote;
+  return rounds.map((r) => (isTiebreak(r, rounds) ? t.engineRoundTiebreak : roundKindLabel(t, r.kind))).join(" → ");
+}
+
+/**
  * Quorum for an automatic outcome at a deadline: at least half the seats
  * took part (a Skip counts as taking part). Below it the round closes and
  * waits for the organizer instead of deciding on a handful of votes.

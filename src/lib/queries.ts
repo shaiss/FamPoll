@@ -3,7 +3,7 @@ import { cache } from "react";
 import { membershipFor, seatsForUser } from "./auth";
 import { getDb, schema } from "./db";
 import type { Decision, Event, Member, Option, Round, Vote } from "./db/schema";
-import { effectivePicks, hiddenDefaultFor, seatsVoted } from "./engine/rounds";
+import { effectivePicks, hiddenDefaultFor, seatsVoted, tally } from "./engine/rounds";
 import { settleDueRounds } from "./lifecycle";
 
 export type DecisionCard = {
@@ -19,6 +19,8 @@ export type DecisionCard = {
   /** The contributors who can be named: anonymous ideas keep their author out of every avatar stack. */
   publicContributorIds: string[];
   outcome: Option | null;
+  /** For a decided decision: the winning and runner-up counts in the deciding final round, for "won 5–1". Null for ranked or organizer-called outcomes. */
+  decidedMargin: { winner: number; runnerUp: number; roundNumber: number } | null;
 };
 
 export type EventCard = { event: Event; decided: number; open: number; total: number; openVotingRounds: number; openIdeasRounds: number };
@@ -36,6 +38,8 @@ export type NeedsVote = {
   totalSeats: number;
   /** The live pick cap for a voting round (0 for ideas). */
   picks: number;
+  /** Every roster seat still to act, by name — for the "still waiting on …" nudge the organizer pastes into the chat. */
+  waitingNames: string[];
 };
 
 async function decisionCards(eventIds: string[]): Promise<Map<string, DecisionCard[]>> {
@@ -45,7 +49,7 @@ async function decisionCards(eventIds: string[]): Promise<Map<string, DecisionCa
   const decisions = await db.query.decisions.findMany({
     where: inArray(schema.decisions.eventId, eventIds),
     orderBy: [asc(schema.decisions.position), asc(schema.decisions.createdAt)],
-    with: { rounds: { orderBy: [asc(schema.rounds.number)], with: { votes: { columns: { memberId: true } } } }, options: true },
+    with: { rounds: { orderBy: [asc(schema.rounds.number)], with: { votes: { columns: { memberId: true, optionId: true } } } }, options: true },
   });
   for (const d of decisions) {
     const rounds: Round[] = d.rounds.map((r) => {
@@ -59,6 +63,21 @@ async function decisionCards(eventIds: string[]): Promise<Map<string, DecisionCa
     const added = last ? d.options.filter((o) => o.addedInRoundId === last.id && o.addedByMemberId) : [];
     const contributedMemberIds = [...new Set(added.map((o) => o.addedByMemberId as string))];
     const publicContributorIds = [...new Set(added.filter((o) => !o.anonymous).map((o) => o.addedByMemberId as string))];
+    // The margin of the deciding final round ("won 5–1"), for share text and the trail. Plurality
+    // only: a ranked or organizer-called outcome has no single pair of counts, so it stays null.
+    let decidedMargin: DecisionCard["decidedMargin"] = null;
+    if (d.status === "decided" && d.outcomeOptionId && !d.rankedFinal) {
+      const finalClosed = [...d.rounds].reverse().find((r) => r.kind === "final" && r.status === "closed");
+      if (finalClosed) {
+        const rows = tally(
+          d.options.map((o) => o.id),
+          finalClosed.votes.filter((v): v is typeof v & { optionId: string } => v.optionId !== null).map((v) => ({ optionId: v.optionId })),
+        );
+        const winner = rows.find((r) => r.optionId === d.outcomeOptionId)?.count ?? 0;
+        const runnerUp = rows.filter((r) => r.optionId !== d.outcomeOptionId)[0]?.count ?? 0;
+        if (winner > 0) decidedMargin = { winner, runnerUp, roundNumber: finalClosed.number };
+      }
+    }
     const list = out.get(d.eventId) ?? [];
     list.push({
       decision: d,
@@ -69,6 +88,7 @@ async function decisionCards(eventIds: string[]): Promise<Map<string, DecisionCa
       contributedMemberIds,
       publicContributorIds,
       outcome: d.outcomeOptionId ? (d.options.find((o) => o.id === d.outcomeOptionId) ?? null) : null,
+      decidedMargin,
     });
     out.set(d.eventId, list);
   }
@@ -144,6 +164,7 @@ export async function homeData(familyId: string, userId: string) {
             votedNames: c.votedMemberIds.map((id) => memberName.get(id) ?? "?"),
             totalSeats: members.length,
             picks: effectivePicks(r.maxPicks, c.aliveCount),
+            waitingNames: [],
           });
         }
         continue;
@@ -156,6 +177,9 @@ export async function homeData(familyId: string, userId: string) {
       // Proxy seats can't add ideas, so they never "owe" one — don't nag their manager for them.
       const eligibleSeats = r.kind === "ideas" ? seats.filter((s) => s.userId !== null) : seats;
       const pendingSeats = eligibleSeats.filter((s) => !done.includes(s.id));
+      // Everyone on the roster still to act (proxy seats can't add ideas), for the nudge text.
+      const rosterEligible = r.kind === "ideas" ? members.filter((m) => m.userId !== null) : members;
+      const waitingNames = rosterEligible.filter((m) => !done.includes(m.id)).map((m) => m.displayName);
       if (pendingSeats.length > 0) {
         needsVote.push({
           kind: r.kind === "ideas" ? "ideas" : "vote",
@@ -168,6 +192,7 @@ export async function homeData(familyId: string, userId: string) {
           votedNames: (r.kind === "ideas" ? c.publicContributorIds : c.votedMemberIds).map((id) => memberName.get(id) ?? "?"),
           totalSeats: r.kind === "ideas" ? members.filter((m) => m.userId !== null).length : members.length,
           picks: effectivePicks(r.maxPicks, c.aliveCount),
+          waitingNames,
         });
       }
     }
@@ -176,6 +201,38 @@ export async function homeData(familyId: string, userId: string) {
   const order = { organizer: 0, vote: 1, ideas: 2 };
   needsVote.sort((a, b) => (a.kind === b.kind ? a.round.closesAt.getTime() - b.round.closesAt.getTime() : order[a.kind] - order[b.kind]));
   return { needsVote, events: eventCards, members, seats };
+}
+
+export type DecidedItem = {
+  decision: Decision;
+  event: Pick<Event, "id" | "title" | "kind">;
+  outcome: Option;
+  decidedMargin: DecisionCard["decidedMargin"];
+  rounds: Round[];
+};
+
+/**
+ * Every settled decision across a group's events, newest first — the family's
+ * running record of what it has decided. The one read model that spans events.
+ */
+export async function decidedHistory(familyId: string): Promise<DecidedItem[]> {
+  await settleDueRounds(familyId);
+  const db = getDb();
+  const events = await db.query.events.findMany({ where: eq(schema.events.familyId, familyId), columns: { id: true, title: true, kind: true } });
+  if (events.length === 0) return [];
+  const cards = await decisionCards(events.map((e) => e.id));
+  const eventById = new Map(events.map((e) => [e.id, e]));
+  const out: DecidedItem[] = [];
+  for (const [eventId, list] of cards) {
+    const event = eventById.get(eventId);
+    if (!event) continue;
+    for (const c of list) {
+      if (c.decision.status !== "decided" || !c.outcome) continue;
+      out.push({ decision: c.decision, event, outcome: c.outcome, decidedMargin: c.decidedMargin, rounds: c.rounds });
+    }
+  }
+  out.sort((a, b) => (b.decision.decidedAt?.getTime() ?? 0) - (a.decision.decidedAt?.getTime() ?? 0));
+  return out;
 }
 
 /**

@@ -7,7 +7,7 @@ import { CopyText } from "@/components/copy-text";
 import { baseUrl } from "@/lib/url";
 import { requireUser } from "@/lib/auth";
 import type { Vote } from "@/lib/db/schema";
-import { formatLabel, roundKindLabel, voteTypeLabel, effectivePicks, isTiebreak, peopleVoted, roundInstruction, roundLabel, roundSequence, tally, type Format, type RoundKind } from "@/lib/engine/rounds";
+import { formatLabel, roundKindLabel, voteTypeLabel, effectivePicks, isTiebreak, peopleVoted, roundInstruction, roundLabel, roundSequence, roundTrail, tally, type Format, type RoundKind } from "@/lib/engine/rounds";
 import { readError } from "@/lib/flash";
 import { clipTitle, closesRelative, formatDate } from "@/lib/format";
 import { decisionData, type OptionView, type RoundView } from "@/lib/queries";
@@ -107,6 +107,64 @@ async function ResultBars({ round, rounds, options, format, label, advancing, wi
   );
 }
 
+/**
+ * For a dates decision voted "pick several", a Doodle-style grid of who can make
+ * which ranges — built from a closed round's ballots, so it never leaks a live
+ * vote. A round with any hidden ballot is skipped (counts-only, by the seal rule).
+ */
+async function DatesGrid({ round, rounds, options, label }: { round: RoundView; rounds: RoundView[]; options: OptionView[]; label: (v: Vote) => string }) {
+  const t = await getMessages();
+  const numberOf = (rid: string) => rounds.find((r) => r.id === rid)?.number ?? Infinity;
+  const cols = options.filter((o) => !o.eliminatedInRoundId || numberOf(o.eliminatedInRoundId) >= round.number);
+  const chosen = round.votes.filter((v): v is Vote & { optionId: string; memberId: string } => v.optionId !== null && v.memberId !== null);
+  const seatIds = [...new Set(chosen.map((v) => v.memberId))];
+  if (cols.length === 0 || seatIds.length === 0) return null;
+  const nameOf = (sid: string) => label(chosen.find((v) => v.memberId === sid)!);
+  const countFor = (oid: string) => chosen.filter((v) => v.optionId === oid).length;
+  const best = Math.max(...cols.map((c) => countFor(c.id)));
+  return (
+    <section className="flex flex-col gap-2">
+      <SectionLabel>{t.decisionGridTitle}</SectionLabel>
+      <Card className="overflow-x-auto p-2">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr>
+              <th className="p-2" />
+              {cols.map((c) => (
+                <th key={c.id} className={`p-2 text-center align-bottom text-xs font-bold ${countFor(c.id) === best && best > 0 ? "text-teal-deep" : "text-ink-2"}`}>
+                  <span className="inline-block max-w-[88px] leading-tight">{c.title}</span>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {seatIds.map((sid) => (
+              <tr key={sid} className="border-t border-line">
+                <td className="whitespace-nowrap p-2 pr-3 text-left font-semibold">{nameOf(sid)}</td>
+                {cols.map((c) => (
+                  <td key={c.id} className="p-2 text-center">
+                    {chosen.some((v) => v.memberId === sid && v.optionId === c.id) ? (
+                      <Icon name="check" size={16} stroke={3} className="mx-auto text-teal-deep" />
+                    ) : (
+                      <span className="text-ink-3">·</span>
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ))}
+            <tr className="border-t-2 border-line-2">
+              <td className="p-2" />
+              {cols.map((c) => (
+                <td key={c.id} className={`p-2 text-center font-display font-extrabold ${countFor(c.id) === best && best > 0 ? "text-teal-deep" : "text-ink-2"}`}>{countFor(c.id)}</td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </Card>
+    </section>
+  );
+}
+
 export default async function DecisionPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }) {
   const { id } = await params;
   const error = readError(await searchParams);
@@ -137,11 +195,19 @@ export default async function DecisionPage({ params, searchParams }: { params: P
   const winnerCount = decidedCounts.find((r) => r.optionId === decision.outcomeOptionId)?.count;
   const runnerUpCount = decidedCounts.filter((r) => r.optionId !== decision.outcomeOptionId)[0]?.count ?? 0;
   const decidedTally = winnerCount != null && winnerCount > 0 ? `, ${winnerCount}–${runnerUpCount}` : "";
+  // The plain-words trail for the decided card. A ranked final has no single pair of counts, so its margin is left off.
+  const decidedTrail = decided ? roundTrail(t, rounds, decision.plan) : "";
+  const marginLabel = decided && !decision.rankedFinal && winnerCount != null && winnerCount > 0 ? interpolate(t.trailWon, { winner: winnerCount, runnerUp: runnerUpCount }) : "";
   const open = planning && currentRound && currentRound.status === "open" && decision.status === "open" ? currentRound : null;
   // The live pick cap: never everything on the ballot, so a pick-several final between two options is pick-one.
   const pickCap = open ? effectivePicks(open.maxPicks, alive.length) : 0;
   const closedRounds = rounds.filter((r) => r.status === "closed");
   const lastClosed = closedRounds[closedRounds.length - 1] ?? null;
+  // The dates availability grid: the last closed voting round of a dates + pick-several decision, unless a hidden ballot sealed it.
+  const gridRound =
+    decision.format === "date" && decision.voteType === "multi"
+      ? ([...closedRounds].reverse().find((r) => r.kind !== "ideas" && r.votes.length > 0 && !r.votes.some((v) => v.anonymous)) ?? null)
+      : null;
   const tied = !open && !decided && decision.status === "open" && currentRound?.tied ? currentRound : null;
   const stalled = planning && !open && !decided && !tied && decision.status === "open";
   const lowTurnout = stalled && lastClosed?.closeReason === "no_quorum" ? lastClosed : null;
@@ -221,6 +287,12 @@ export default async function DecisionPage({ params, searchParams }: { params: P
           )}
           {outcome.note ? <div className="text-sm text-teal-deep">{outcome.note}</div> : null}
           {decision.setsEventDates ? <div className="text-sm text-teal-deep">{t.decisioneventDatesSet}</div> : null}
+          {decidedTrail ? (
+            <div className="text-sm text-teal-deep">
+              {decidedTrail}
+              {marginLabel ? ` · ${marginLabel}` : ""}
+            </div>
+          ) : null}
           <CopyText
             variant="ghost"
             label={t.decisioncopyForMessenger}
@@ -501,6 +573,8 @@ export default async function DecisionPage({ params, searchParams }: { params: P
           ) : null}
         </Card>
       ) : null}
+
+      {gridRound ? <DatesGrid round={gridRound} rounds={rounds} options={options} label={label} /> : null}
 
       {closedRounds.length ? (
         <section className="flex flex-col gap-3">
