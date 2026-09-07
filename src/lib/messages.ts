@@ -947,7 +947,7 @@ const en: Messages = {
   familynewTitle: "Who's deciding together?",
   familynewSubtitle: "Start your first group, then send everyone one invite link.",
   familynameFieldLabel: "Group name",
-  familynamePlaceholder: "The Kalmans",
+  familynamePlaceholder: "The Smiths",
   familystartButton: "Start the group",
   familyjoinCodeLabel: "Have an invite code?",
   familyjoinCodeHint: "It's the last part of the invite link someone sent you.",
