@@ -58,9 +58,12 @@ async function ResultBars({ round, rounds, options, format, label, advancing, wi
   // Everything that was on this round's ballot: still alive, or knocked out in this round or a later one.
   const inPlay = options.filter((o) => !o.eliminatedInRoundId || numberOf(o.eliminatedInRoundId) >= round.number);
   const chosen = picks(round.votes);
+  // A ranked final's bars are first choices only. Tallying every rank row would let a
+  // lower-ranked-but-widely-listed option out-score the actual instant-runoff winner.
+  const counted = ranked ? chosen.filter((v) => v.rank === 1) : chosen;
   const rows = tally(
     inPlay.map((o) => o.id),
-    chosen.map((v) => ({ optionId: v.optionId })),
+    counted.map((v) => ({ optionId: v.optionId })),
   );
   const max = Math.max(1, ...rows.map((r) => r.count));
   const voters = peopleVoted(round.votes);
@@ -77,7 +80,7 @@ async function ResultBars({ round, rounds, options, format, label, advancing, wi
         const out = o?.eliminatedInRoundId === round.id;
         const won = r.optionId === winnerId;
         const adv = advancing.has(r.optionId);
-        const names = sealed ? [] : chosen.filter((v) => v.optionId === r.optionId).map(label);
+        const names = sealed ? [] : counted.filter((v) => v.optionId === r.optionId).map(label);
         return (
           <Card key={r.optionId} className={`flex flex-col gap-2 p-3.5 ${out ? "opacity-70" : ""}`}>
             <div className="flex items-center justify-between gap-2">
@@ -95,7 +98,7 @@ async function ResultBars({ round, rounds, options, format, label, advancing, wi
         );
       })}
       <div className="text-center text-xs text-ink-3">
-        {interpolate(t.decisionvotesFrom, { votes: interpolate(t.decisionvoteCount, { count: chosen.length }), people: interpolate(t.decisionpersonCount, { count: voters }) })}
+        {interpolate(t.decisionvotesFrom, { votes: interpolate(t.decisionvoteCount, { count: counted.length }), people: interpolate(t.decisionpersonCount, { count: voters }) })}
         {!ranked && cap > 1 ? ` · ${interpolate(t.decisionpicksUpToEach, { cap })}` : ""}
         {skippers.length ? (sealed ? ` · ${interpolate(t.decisionskippedCount, { count: skippers.length })}` : ` · ${interpolate(t.decisionskippedNames, { names: skippers.join(", ") })}`) : ""}
       </div>
@@ -118,10 +121,13 @@ async function DatesGrid({ round, rounds, options, label }: { round: RoundView; 
   const t = await getMessages();
   const numberOf = (rid: string) => rounds.find((r) => r.id === rid)?.number ?? Infinity;
   const cols = options.filter((o) => !o.eliminatedInRoundId || numberOf(o.eliminatedInRoundId) >= round.number);
-  const chosen = round.votes.filter((v): v is Vote & { optionId: string; memberId: string } => v.optionId !== null && v.memberId !== null);
-  const seatIds = [...new Set(chosen.map((v) => v.memberId))];
+  const chosen = round.votes.filter((v): v is Vote & { optionId: string } => v.optionId !== null);
+  // Rows name current seats; a departed seat keeps its closed-round ballot (memberId null) so it stays in the counts.
+  const named = chosen.filter((v): v is Vote & { optionId: string; memberId: string } => v.memberId !== null);
+  const seatIds = [...new Set(named.map((v) => v.memberId))];
   if (cols.length === 0 || seatIds.length === 0) return null;
-  const nameOf = (sid: string) => label(chosen.find((v) => v.memberId === sid)!);
+  const nameOf = (sid: string) => label(named.find((v) => v.memberId === sid)!);
+  // Totals and the "best" highlight count every closed-round ballot, so they match the settled tally and winner.
   const countFor = (oid: string) => chosen.filter((v) => v.optionId === oid).length;
   const best = Math.max(...cols.map((c) => countFor(c.id)));
   return (
@@ -145,7 +151,7 @@ async function DatesGrid({ round, rounds, options, label }: { round: RoundView; 
                 <td className="whitespace-nowrap p-2 pr-3 text-left font-semibold">{nameOf(sid)}</td>
                 {cols.map((c) => (
                   <td key={c.id} className="p-2 text-center">
-                    {chosen.some((v) => v.memberId === sid && v.optionId === c.id) ? (
+                    {named.some((v) => v.memberId === sid && v.optionId === c.id) ? (
                       <Icon name="check" size={16} stroke={3} className="mx-auto text-teal-deep" />
                     ) : (
                       <span className="text-ink-3">·</span>
