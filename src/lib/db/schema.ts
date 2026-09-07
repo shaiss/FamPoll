@@ -22,6 +22,8 @@ export const voteType = pgEnum("vote_type", ["ab", "single", "multi"]);
 export const decisionStatus = pgEnum("decision_status", ["open", "decided", "skipped"]);
 export const roundKind = pgEnum("round_kind", ["ideas", "shortlist", "final"]);
 export const roundStatus = pgEnum("round_status", ["open", "closed"]);
+/** Who counts on a decision: everyone, or adults only (proxy/kid seats are advisory). */
+export const eligibilityScope = pgEnum("eligibility_scope", ["all", "adults"]);
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 
@@ -62,6 +64,8 @@ export const members = pgTable(
     role: memberRole("role").notNull().default("member"),
     /** Seat preference: every ballot this seat casts starts with "hide my vote" ticked. */
     votesHidden: boolean("votes_hidden").notNull().default(false),
+    /** A one-event guest an organizer can clear out afterwards (removeGuests). Counts and votes like anyone while present. */
+    isGuest: boolean("is_guest").notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [
@@ -121,6 +125,12 @@ export const decisions = pgTable(
     setsEventDates: boolean("sets_event_dates").notNull().default(false),
     /** Asked anonymously: the asker is recorded but never named in the UI or the log. */
     anonymous: boolean("anonymous").notNull().default(false),
+    /** Who counts on this decision: 'all' seats, or 'adults' only (proxy/kid seats advisory). */
+    eligibilityScope: eligibilityScope("eligibility_scope").notNull().default("all"),
+    /** When true, the final round is ranked (instant-runoff) instead of pick-one. */
+    rankedFinal: boolean("ranked_final").notNull().default(false),
+    /** The organizer opted in to email reminders for this decision's open rounds (sent only if a mail provider is configured). */
+    remindOrganizer: boolean("remind_organizer").notNull().default(false),
     outcomeOptionId: text("outcome_option_id"),
     decidedAt: timestamp("decided_at", { withTimezone: true }),
     createdByMemberId: text("created_by_member_id")
@@ -150,6 +160,8 @@ export const rounds = pgTable(
     closeReason: text("close_reason"),
     /** Set when a final round ended in a tie that the organizer must resolve. */
     tied: boolean("tied").notNull().default(false),
+    /** When the organizer was last emailed about this round closing (dedupe for reminders). Null = never. */
+    reminderSentAt: timestamp("reminder_sent_at", { withTimezone: true }),
   },
   (t) => [uniqueIndex("rounds_decision_number_unique").on(t.decisionId, t.number)],
 );
@@ -197,6 +209,8 @@ export const votes = pgTable(
       .references(() => users.id),
     /** A hidden ballot: counted like any other, never attributed in the UI. */
     anonymous: boolean("anonymous").notNull().default(false),
+    /** Position on a ranked ballot (1 = first choice). Null for ordinary pick-one / pick-several ballots. */
+    rank: integer("rank"),
     createdAt: createdAt(),
   },
   (t) => [

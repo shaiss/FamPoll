@@ -15,10 +15,14 @@ import {
   optionTitleLimit,
   peopleVoted,
   plansFor,
+  rankedBallots,
   resolveFinal,
+  resolveRankedFinal,
   roundInstruction,
   roundLabel,
   roundSequence,
+  roundTrail,
+  seatsInScope,
   seatsVoted,
   shouldAutoClose,
   tally,
@@ -354,5 +358,83 @@ describe("hiddenDefaultFor", () => {
     assert.equal(hiddenDefaultFor([{ roundNumber: 1, createdAt: t(1), anonymous: true }, { roundNumber: 2, createdAt: t(0), anonymous: false }], true), false);
     assert.equal(hiddenDefaultFor([{ roundNumber: 1, createdAt: t(1), anonymous: true }, { roundNumber: 1, createdAt: t(5), anonymous: false }], true), false);
     assert.equal(hiddenDefaultFor([{ roundNumber: 1, createdAt: t(1), anonymous: false }, { roundNumber: 1, createdAt: t(5), anonymous: true }], false), true);
+  });
+});
+
+describe("resolveRankedFinal", () => {
+  it("declares a first-round majority winner", () => {
+    assert.deepEqual(resolveRankedFinal([["a"], ["a"], ["a"], ["b"], ["c"]], ["a", "b", "c"]), { winnerId: "a", tiedIds: [] });
+  });
+  it("transfers votes off an eliminated option", () => {
+    // c is fewest (1); its ballot's next choice a wins 3 of 5.
+    assert.deepEqual(resolveRankedFinal([["a"], ["a"], ["b"], ["b"], ["c", "a"]], ["a", "b", "c"]), { winnerId: "a", tiedIds: [] });
+  });
+  it("shrinks the denominator as ballots exhaust", () => {
+    // a=3 of 7 (no majority); drop c, its two bullet ballots exhaust; a=3 of 5 wins.
+    assert.deepEqual(resolveRankedFinal([["a"], ["a"], ["a"], ["b"], ["b"], ["c"], ["c"]], ["a", "b", "c"]), { winnerId: "a", tiedIds: [] });
+  });
+  it("breaks an elimination tie by dropping the last option in order", () => {
+    // b and c tie for fewest (1 each); c (last) is dropped first, then b; a wins.
+    assert.deepEqual(
+      resolveRankedFinal([["a"], ["a"], ["a"], ["a"], ["b"], ["c"], ["d"], ["d"], ["d"]], ["a", "b", "c", "d"]),
+      { winnerId: "a", tiedIds: [] },
+    );
+  });
+  it("returns both when the final two tie", () => {
+    assert.deepEqual(resolveRankedFinal([["a"], ["b"]], ["a", "b"]), { winnerId: null, tiedIds: ["a", "b"] });
+  });
+  it("wins a lone option with a vote, ties it with none", () => {
+    assert.deepEqual(resolveRankedFinal([["a"]], ["a"]), { winnerId: "a", tiedIds: [] });
+    assert.deepEqual(resolveRankedFinal([[], []], ["a", "b"]), { winnerId: null, tiedIds: ["a", "b"] });
+  });
+  it("handles no options", () => {
+    assert.deepEqual(resolveRankedFinal([["a"]], []), { winnerId: null, tiedIds: [] });
+  });
+});
+
+describe("rankedBallots", () => {
+  it("orders each seat's picks by rank, drops skips, and keeps a departed seat's ballot", () => {
+    assert.deepEqual(
+      rankedBallots([
+        { memberId: "m1", optionId: "a", rank: 2, castByUserId: "u1" },
+        { memberId: "m1", optionId: "b", rank: 1, castByUserId: "u1" },
+        { memberId: "m2", optionId: "c", rank: 1, castByUserId: "u2" },
+        { memberId: "m3", optionId: null, rank: null, castByUserId: "u3" },
+        // A seat that has left: memberId nulled, grouped by its caster so it still counts.
+        { memberId: null, optionId: "d", rank: 2, castByUserId: "u9" },
+        { memberId: null, optionId: "a", rank: 1, castByUserId: "u9" },
+      ]),
+      [["b", "a"], ["c"], ["a", "d"]],
+    );
+  });
+  it("still counts a departed seat's ballot in the ranked result", () => {
+    const votes = [
+      { memberId: "m1", optionId: "a", rank: 1, castByUserId: "u1" },
+      { memberId: "m2", optionId: "b", rank: 1, castByUserId: "u2" },
+      // Without this departed ballot a and b tie; with it, b has the majority.
+      { memberId: null, optionId: "b", rank: 1, castByUserId: "u9" },
+    ];
+    assert.deepEqual(resolveRankedFinal(rankedBallots(votes), ["a", "b"]), { winnerId: "b", tiedIds: [] });
+  });
+});
+
+describe("seatsInScope", () => {
+  it("keeps everyone for 'all' and only account seats for 'adults'", () => {
+    const seats = [{ userId: "u1" }, { userId: null }, { userId: "u2" }];
+    assert.deepEqual(seatsInScope(seats, "all"), seats);
+    assert.deepEqual(seatsInScope(seats, "adults"), [{ userId: "u1" }, { userId: "u2" }]);
+    assert.deepEqual(seatsInScope([], "adults"), []);
+  });
+});
+
+describe("roundTrail", () => {
+  it("names a single-round quick vote", () => {
+    assert.equal(roundTrail(en, [{ kind: "final", number: 1 }], "quick"), en.engineRoundQuickVote);
+  });
+  it("joins the stages of a longer plan", () => {
+    assert.equal(roundTrail(en, [{ kind: "shortlist", number: 1 }, { kind: "final", number: 2 }], "shortlist_final"), `${en.engineRoundShortlist} → ${en.engineRoundFinal}`);
+  });
+  it("reads a repeated final as a tiebreak", () => {
+    assert.equal(roundTrail(en, [{ kind: "final", number: 1 }, { kind: "final", number: 2 }], "quick"), `${en.engineRoundFinal} → ${en.engineRoundTiebreak}`);
   });
 });

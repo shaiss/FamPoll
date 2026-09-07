@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { Button, Card, Field, inputClass, Screen, TopBar } from "@/components/ui";
-import { deleteEvent, updateEvent } from "@/lib/actions/events";
+import { deleteEvent, duplicateEvent, rotateShareToken, updateEvent } from "@/lib/actions/events";
 import { requireUser } from "@/lib/auth";
 import { readError } from "@/lib/flash";
 import { getMessages } from "@/lib/locale-server";
@@ -58,6 +58,32 @@ export default async function EditEvent({ params, searchParams }: { params: Prom
             </Field>
           </div>
           <Button type="submit">{t.eventsSaveChanges}</Button>
+        </form>
+      </Card>
+
+      <Card className="flex flex-col gap-3 p-5">
+        <div className="flex flex-col gap-1">
+          <div className="font-display text-lg font-bold">{t.eventsShareLinksTitle}</div>
+          <p className="text-sm text-ink-2">{t.eventsRotateShareHint}</p>
+        </div>
+        <form action={rotateShareToken} className="self-start">
+          <input type="hidden" name="eventId" value={event.id} />
+          <Button type="submit" variant="secondary" size="sm">
+            {t.eventsRotateShareLink}
+          </Button>
+        </form>
+      </Card>
+
+      <Card className="flex flex-col gap-3 p-5">
+        <div className="flex flex-col gap-1">
+          <div className="font-display text-lg font-bold">{t.eventsDuplicate}</div>
+          <p className="text-sm text-ink-2">{t.eventsDuplicateHint}</p>
+        </div>
+        <form action={duplicateEvent} className="self-start">
+          <input type="hidden" name="eventId" value={event.id} />
+          <Button type="submit" variant="secondary" size="sm">
+            {t.eventsDuplicate}
+          </Button>
         </form>
       </Card>
 

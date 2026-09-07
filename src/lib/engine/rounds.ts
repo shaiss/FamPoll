@@ -35,6 +35,8 @@ export type Plan = "quick" | "shortlist_final" | "ideas_shortlist_final";
 export type RoundKind = "ideas" | "shortlist" | "final";
 export type Format = "text" | "long_text" | "date";
 export type VoteType = "ab" | "single" | "multi";
+/** Who counts on a decision: every seat, or adult (account) seats only. */
+export type EligibilityScope = "all" | "adults";
 
 export type TallyRow = { optionId: string; count: number };
 
@@ -186,6 +188,65 @@ export function resolveFinal(rows: TallyRow[]): FinalResult {
   return { winnerId: null, tiedIds: leaders };
 }
 
+/**
+ * Group ranked-ballot vote rows into one ordered list of option ids per seat.
+ * A skip (optionId null) contributes nothing; a seat that ranked fewer options
+ * simply has a shorter list, so its lower choices exhaust during the runoff.
+ */
+export function rankedBallots(votes: { memberId: string | null; optionId: string | null; rank: number | null; castByUserId: string }[]): string[][] {
+  const byBallot = new Map<string, { optionId: string; rank: number }[]>();
+  for (const v of votes) {
+    if (v.optionId === null) continue;
+    // A seat that has left keeps its closed-round rows (memberId null) so the count
+    // never shifts; group those by whoever cast them — the durable identity peopleVoted uses.
+    const key = v.memberId ?? `cast:${v.castByUserId}`;
+    const list = byBallot.get(key) ?? [];
+    list.push({ optionId: v.optionId, rank: v.rank ?? 0 });
+    byBallot.set(key, list);
+  }
+  const out: string[][] = [];
+  for (const list of byBallot.values()) {
+    list.sort((a, b) => a.rank - b.rank);
+    out.push(list.map((x) => x.optionId));
+  }
+  return out;
+}
+
+/**
+ * Instant-runoff for a ranked final. Returns the same shape as resolveFinal, so
+ * everything downstream (nextStep, decide/tie writes) is unchanged. A majority is
+ * over the ballots still counting each round; when nobody's top choice remains,
+ * that ballot exhausts. Elimination is deterministic — the option with the fewest
+ * votes goes, and a tie for fewest drops the one that appears last in option
+ * (creation) order, keeping earlier ideas alive as tally/cut/resolveFinal all do.
+ * No randomness, so a reopen replays identically.
+ */
+export function resolveRankedFinal(ballots: string[][], options: string[]): FinalResult {
+  let continuing = [...options];
+  if (continuing.length === 0) return { winnerId: null, tiedIds: [] };
+  // Each pass removes exactly one option, so this terminates.
+  for (;;) {
+    const counts = new Map(continuing.map((id) => [id, 0]));
+    let counting = 0;
+    for (const ballot of ballots) {
+      const top = ballot.find((id) => counts.has(id));
+      if (top !== undefined) {
+        counts.set(top, (counts.get(top) ?? 0) + 1);
+        counting++;
+      }
+    }
+    if (counting === 0) return { winnerId: null, tiedIds: [...continuing] };
+    for (const id of continuing) {
+      if ((counts.get(id) ?? 0) * 2 > counting) return { winnerId: id, tiedIds: [] };
+    }
+    if (continuing.length <= 2) return { winnerId: null, tiedIds: [...continuing] };
+    const fewest = Math.min(...continuing.map((id) => counts.get(id) ?? 0));
+    const lowest = continuing.filter((id) => (counts.get(id) ?? 0) === fewest);
+    const victim = lowest[lowest.length - 1];
+    continuing = continuing.filter((id) => id !== victim);
+  }
+}
+
 export type NextStep =
   | { kind: "round"; round: RoundKind }
   | { kind: "decided"; optionId: string }
@@ -220,8 +281,9 @@ export function nextStep(plan: Plan, closed: RoundKind, alive: string[], advance
 }
 
 /** The instruction line under a round title. `maxPicks` is the effective cap. */
-export function roundInstruction(t: Messages, kind: RoundKind, maxPicks: number, advanceCount: number): string {
+export function roundInstruction(t: Messages, kind: RoundKind, maxPicks: number, advanceCount: number, ranked = false): string {
   if (kind === "ideas") return t.engineInstructionIdeas;
+  if (kind === "final" && ranked) return t.engineInstructionRankedFinal;
   const picks = maxPicks === 1 ? t.engineInstructionPickOne : interpolate(t.engineInstructionPickUpTo, { max: maxPicks });
   if (kind === "shortlist") return interpolate(t.engineInstructionShortlist, { picks, advanceCount });
   return interpolate(t.engineInstructionFinal, { picks });
@@ -249,6 +311,18 @@ export function roundLabel(t: Messages, round: RoundRef, all: RoundRef[], plan: 
 }
 
 /**
+ * A compact "how we got here" trail from the rounds a decision actually played:
+ * "Quick vote", or "Ideas → Shortlist → Final", with a repeated final read as a
+ * tiebreak. Pure; the margin ("won 5–1") is appended by the caller.
+ */
+export function roundTrail(t: Messages, rounds: RoundRef[], plan: Plan): string {
+  if (rounds.length === 0) return "";
+  const seq = roundSequence(plan);
+  if (rounds.length === 1 && rounds[0].kind === "final" && seq.length === 1) return t.engineRoundQuickVote;
+  return rounds.map((r) => (isTiebreak(r, rounds) ? t.engineRoundTiebreak : roundKindLabel(t, r.kind))).join(" → ");
+}
+
+/**
  * Quorum for an automatic outcome at a deadline: at least half the seats
  * took part (a Skip counts as taking part). Below it the round closes and
  * waits for the organizer instead of deciding on a handful of votes.
@@ -256,6 +330,15 @@ export function roundLabel(t: Messages, round: RoundRef, all: RoundRef[], plan: 
 export function hasQuorum(distinctVoters: number, eligibleSeats: number): boolean {
   if (eligibleSeats <= 0) return false;
   return distinctVoters * 2 >= eligibleSeats;
+}
+
+/**
+ * The seats that count on a decision. "adults" keeps only account seats, so a
+ * proxy (kid) seat is shown but left out of the tally, the quorum denominator
+ * and the everyone-voted close. The single source of truth for that filter.
+ */
+export function seatsInScope<T extends { userId: string | null }>(seats: T[], scope: EligibilityScope): T[] {
+  return scope === "adults" ? seats.filter((s) => s.userId !== null) : seats;
 }
 
 export type BallotRef = { memberId: string | null; optionId: string | null; castByUserId: string };

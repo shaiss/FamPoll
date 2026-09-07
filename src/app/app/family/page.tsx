@@ -3,7 +3,7 @@ import { CopyButton } from "@/components/copy-button";
 import { GroupSwitcher } from "@/components/group-switcher";
 import { ShareButton } from "@/components/share-button";
 import { Avatar, Button, Card, Field, inputClass, Pill, SectionLabel, Screen, TopBar } from "@/components/ui";
-import { addExistingUserToGroup, addProxyMember, deleteFamily, demoteOrganizer, leaveFamily, makeOrganizer, reassignProxy, removeMember, renameMember, removeProxyMember, renameFamily, rotateInviteCode, setVotePrivacy } from "@/lib/actions/family";
+import { addExistingUserToGroup, addProxyMember, deleteFamily, demoteOrganizer, leaveFamily, makeOrganizer, reassignProxy, removeGuests, removeMember, renameMember, removeProxyMember, renameFamily, rotateInviteCode, setGuest, setVotePrivacy } from "@/lib/actions/family";
 import { brand } from "@/lib/brand";
 import { requireMembership } from "@/lib/auth";
 import { readError } from "@/lib/flash";
@@ -21,6 +21,7 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
   const organizer = member.role === "organizer";
   const organizers = members.filter((m) => m.role === "organizer" && m.userId !== null);
   const canDemote = organizer && organizers.length > 1;
+  const guestCount = members.filter((m) => m.isGuest).length;
 
   return (
     <Screen>
@@ -77,7 +78,10 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
                   {m.displayName}
                   {mine ? t.familyyouSuffix : ""}
                 </div>
-                <div className="text-xs text-ink-2">{m.role === "organizer" ? t.familyroleOrganizer : proxy ? t.familyroleProxyDesc : t.familyroleMember}</div>
+                <div className="flex items-center gap-1.5 text-xs text-ink-2">
+                  <span>{m.role === "organizer" ? t.familyroleOrganizer : proxy ? t.familyroleProxyDesc : t.familyroleMember}</span>
+                  {m.isGuest ? <Pill>{t.familyGuestPill}</Pill> : null}
+                </div>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
                 {organizer && !proxy && m.role !== "organizer" ? (
@@ -143,6 +147,22 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
                 </div>
               </details>
             ) : null}
+            {organizer && !proxy && m.role !== "organizer" ? (
+              <details>
+                <summary className="cursor-pointer list-none text-xs font-semibold text-ink-3 [&::-webkit-details-marker]:hidden">{t.familyGuestToggle}</summary>
+                <div className="mt-2 flex flex-col gap-2">
+                  <p className="text-xs text-ink-3">{t.familyGuestExplain}</p>
+                  <form action={setGuest}>
+                    <input type="hidden" name="familyId" value={family.id} />
+                    <input type="hidden" name="memberId" value={m.id} />
+                    <input type="hidden" name="isGuest" value={m.isGuest ? "0" : "1"} />
+                    <Button type="submit" variant="ghost" size="sm">
+                      {m.isGuest ? t.familyGuestUnmark : t.familyGuestMark}
+                    </Button>
+                  </form>
+                </div>
+              </details>
+            ) : null}
             {organizer && proxy && organizers.length > 1 ? (
               <details>
                 <summary className="cursor-pointer list-none text-xs font-semibold text-ink-3 [&::-webkit-details-marker]:hidden">{t.familyproxyManagerToggle}</summary>
@@ -167,6 +187,15 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
           );
         })}
       </section>
+
+      {organizer && guestCount > 0 ? (
+        <form action={removeGuests} className="flex justify-center">
+          <input type="hidden" name="familyId" value={family.id} />
+          <Button type="submit" variant="ghost" size="sm">
+            {interpolate(t.familyRemoveGuests, { count: guestCount })}
+          </Button>
+        </form>
+      ) : null}
 
       {organizer ? (
         <Card className="p-4">

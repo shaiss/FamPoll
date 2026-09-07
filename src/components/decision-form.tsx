@@ -266,6 +266,8 @@ export function DecisionForm({ eventId, defaultDeadline }: { eventId: string; de
 
       {ab ? null : <Toggle name="anyoneCanAddOptions" title={t.cmptoggleAddIdeasTitle} body={t.cmptoggleAddIdeasBody} defaultChecked />}
       {format === "date" ? <Toggle name="setsEventDates" title={t.cmptoggleWinnerDatesTitle} body={t.cmptoggleWinnerDatesBody} defaultChecked /> : null}
+      {ab ? null : <Toggle name="rankedFinal" title={t.cmprankedFinalTitle} body={t.cmprankedFinalBody} />}
+      <Toggle name="adultsOnly" title={t.cmpadultsOnlyTitle} body={t.cmpadultsOnlyBody} />
       <Toggle name="anonymous" title={t.cmptoggleAnonTitle} body={t.cmptoggleAnonBody} />
 
       <SubmitButton pendingLabel={t.cmpstartingPending}>{plan === "ideas_shortlist_final" ? t.cmpstartRound1Ideas : t.cmpstartRound1}</SubmitButton>

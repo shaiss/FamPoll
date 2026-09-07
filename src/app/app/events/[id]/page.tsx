@@ -8,7 +8,7 @@ import { AvatarStack, Button, Card, Icon, LinkButton, Screen, SectionLabel, TopB
 import { moveDecision } from "@/lib/actions/decisions";
 import { setEventStatus } from "@/lib/actions/events";
 import { requireUser } from "@/lib/auth";
-import { roundLabel } from "@/lib/engine/rounds";
+import { roundLabel, roundTrail } from "@/lib/engine/rounds";
 import { clipTitle, closesRelative, formatDate, formatDateRange, nightsBetween } from "@/lib/format";
 import { readError } from "@/lib/flash";
 import { getLocale, getMessages } from "@/lib/locale-server";
@@ -34,6 +34,10 @@ export default async function EventPage({ params, searchParams }: { params: Prom
   const organizer = member.role === "organizer" || event.createdByMemberId === member.id;
   const mySeatIds = new Set(members.filter((m) => m.userId === user.id || m.managedByUserId === user.id).map((m) => m.id));
   const planning = event.status === "planning";
+  // A quiet, still-planning event nudges the organizer to wrap it up (or keep going). No message is ever sent.
+  const lastActivityAt = log[0]?.createdAt ?? event.createdAt;
+  const quietWeeks = Math.floor((new Date().getTime() - lastActivityAt.getTime()) / (7 * 24 * 60 * 60 * 1000));
+  const stale = planning && organizer && quietWeeks >= 3 && decisions.some((d) => d.decision.status === "open");
   const shareText = decided.length
     ? decided.map((d) => `${d.decision.title}: ${d.outcome ? clipTitle(d.outcome.title, d.decision.format) : t.eventsSummaryDecidedFallback}`).join("; ")
     : interpolate(t.eventsShareHelpDecide, { event: event.title });
@@ -119,6 +123,8 @@ export default async function EventPage({ params, searchParams }: { params: Prom
             const isDecided = d.decision.status === "decided";
             const skipped = d.decision.status === "skipped";
             const open = planning && d.decision.status === "open" && r?.status === "open";
+            const trail = isDecided ? roundTrail(t, d.rounds, d.decision.plan) : "";
+            const trailMargin = isDecided && d.decidedMargin ? interpolate(t.trailWon, { winner: d.decidedMargin.winner, runnerUp: d.decidedMargin.runnerUp }) : "";
             const done = r?.kind === "ideas" ? d.contributedMemberIds : d.votedMemberIds;
             // Proxy seats never add ideas, so only judge my own seats' contribution in an ideas round.
             const mySeatsHere = r?.kind === "ideas" ? [...mySeatIds].filter((sid) => members.find((m) => m.id === sid)?.userId != null) : [...mySeatIds];
@@ -178,6 +184,12 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                         t.eventsNotSettled
                       )}
                     </span>
+                    {isDecided && trail ? (
+                      <span className="text-xs text-ink-3">
+                        {trail}
+                        {trailMargin ? ` · ${trailMargin}` : ""}
+                      </span>
+                    ) : null}
                   </span>
                   {open && r?.kind === "ideas" ? <span className="inline-flex h-8 items-center rounded-[10px] bg-sand px-3 text-[13px] font-bold">{iAmDone ? t.eventsSeeIdeas : t.eventsAddIdea}</span> : null}
                 </Card>
@@ -224,6 +236,20 @@ export default async function EventPage({ params, searchParams }: { params: Prom
           )}
         </div>
       </section>
+
+      {stale ? (
+        <Card className="flex flex-col gap-2 p-4">
+          <div className="font-display text-lg font-bold">{t.eventsQuietTitle}</div>
+          <p className="text-sm text-ink-2">{interpolate(t.eventsQuietBody, { weeks: quietWeeks })}</p>
+          <form action={setEventStatus} className="self-start">
+            <input type="hidden" name="eventId" value={event.id} />
+            <input type="hidden" name="status" value="done" />
+            <Button type="submit" variant="secondary" size="sm">
+              {t.eventsMarkDone}
+            </Button>
+          </form>
+        </Card>
+      ) : null}
 
       {log.length ? (
         <section className="flex flex-col gap-2">
