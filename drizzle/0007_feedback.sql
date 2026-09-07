@@ -1,4 +1,4 @@
-CREATE TABLE "feedback" (
+CREATE TABLE IF NOT EXISTS "feedback" (
 	"id" text PRIMARY KEY NOT NULL,
 	"created_by_user_id" text,
 	"family_id" text,
@@ -12,8 +12,23 @@ CREATE TABLE "feedback" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-ALTER TABLE "feedback" ADD CONSTRAINT "feedback_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "feedback" ADD CONSTRAINT "feedback_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "feedback" ADD CONSTRAINT "feedback_reviewed_by_user_id_users_id_fk" FOREIGN KEY ("reviewed_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "feedback_status_idx" ON "feedback" USING btree ("status");--> statement-breakpoint
-CREATE INDEX "feedback_user_idx" ON "feedback" USING btree ("created_by_user_id");
+DO $$ BEGIN
+ ALTER TABLE "feedback" ADD CONSTRAINT "feedback_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "feedback" ADD CONSTRAINT "feedback_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE set null ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "feedback" ADD CONSTRAINT "feedback_reviewed_by_user_id_users_id_fk" FOREIGN KEY ("reviewed_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "feedback_status_idx" ON "feedback" USING btree ("status");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "feedback_user_idx" ON "feedback" USING btree ("created_by_user_id");
