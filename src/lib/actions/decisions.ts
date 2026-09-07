@@ -404,13 +404,27 @@ export async function extendRound(formData: FormData) {
     const open = await tx.query.rounds.findFirst({ where: and(eq(schema.rounds.decisionId, decision.id), eq(schema.rounds.status, "open")) });
     const round = open ? await lockOpenRound(tx, open.id) : null;
     if (!round) return;
-    await tx.update(schema.rounds).set({ closesAt: closesAtFrom(now, decision.roundHours) }).where(eq(schema.rounds.id, round.id));
+    await tx.update(schema.rounds).set({ closesAt: closesAtFrom(now, decision.roundHours), reminderSentAt: null }).where(eq(schema.rounds.id, round.id));
     await logActivity(tx, { eventId: decision.eventId, decisionId: decision.id, kind: "round_extended", message: interpolate(t.errDecLogExtended, { actor: actorName, number: round.number }), actorMemberId });
     extended = true;
   });
   if (!extended) fail(back, t.errDecNoRoundToExtend);
   revalidateDecision(decision.id, decision.eventId);
   redirect(back);
+}
+
+/**
+ * Organizer only: opt this decision's open rounds into (or out of) email
+ * reminders. It only ever emails the organizer, and only when a mail provider
+ * is configured; without one the toggle is stored but nothing is sent.
+ */
+export async function setDecisionReminder(formData: FormData) {
+  const decisionId = z.string().parse(formData.get("decisionId"));
+  const { decision } = await requireOrganizer(decisionId);
+  const remind = formData.get("remind") === "1";
+  await getDb().update(schema.decisions).set({ remindOrganizer: remind }).where(eq(schema.decisions.id, decision.id));
+  revalidateDecision(decision.id, decision.eventId);
+  redirect(`/app/decisions/${decisionId}`);
 }
 
 /**
@@ -445,7 +459,7 @@ export async function reopenRound(formData: FormData) {
     if (clearVotes) await tx.delete(schema.votes).where(eq(schema.votes.roundId, target.id));
     await tx
       .update(schema.rounds)
-      .set({ status: "open", closedAt: null, closeReason: null, tied: false, closesAt: closesAtFrom(now, decision.roundHours) })
+      .set({ status: "open", closedAt: null, closeReason: null, tied: false, closesAt: closesAtFrom(now, decision.roundHours), reminderSentAt: null })
       .where(eq(schema.rounds.id, target.id));
     await tx.update(schema.decisions).set({ status: "open", outcomeOptionId: null, decidedAt: null }).where(eq(schema.decisions.id, decision.id));
     await logActivity(tx, {
@@ -659,7 +673,7 @@ export async function unskipDecision(formData: FormData) {
   await db.transaction(async (tx) => {
     const [last] = await tx.select().from(schema.rounds).where(eq(schema.rounds.decisionId, decision.id)).orderBy(desc(schema.rounds.number)).limit(1).for("update");
     if (!last) return void (problem = t.errDecNoRoundToBringBack);
-    await tx.update(schema.rounds).set({ status: "open", closedAt: null, closeReason: null, tied: false, closesAt: closesAtFrom(now, decision.roundHours) }).where(eq(schema.rounds.id, last.id));
+    await tx.update(schema.rounds).set({ status: "open", closedAt: null, closeReason: null, tied: false, closesAt: closesAtFrom(now, decision.roundHours), reminderSentAt: null }).where(eq(schema.rounds.id, last.id));
     await tx.update(schema.decisions).set({ status: "open" }).where(eq(schema.decisions.id, decision.id));
     await logActivity(tx, { eventId: decision.eventId, decisionId: decision.id, kind: "unskipped", message: interpolate(t.errDecLogBroughtBack, { actor: actorName, title: decision.title }), actorMemberId });
   });

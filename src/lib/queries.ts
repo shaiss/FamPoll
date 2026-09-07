@@ -1,9 +1,9 @@
-import { and, asc, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lte, ne } from "drizzle-orm";
 import { cache } from "react";
 import { membershipFor, seatsForUser } from "./auth";
 import { getDb, schema } from "./db";
 import type { Decision, Event, Member, Option, Round, Vote } from "./db/schema";
-import { effectivePicks, hiddenDefaultFor, seatsVoted, tally } from "./engine/rounds";
+import { effectivePicks, hiddenDefaultFor, seatsInScope, seatsVoted, tally } from "./engine/rounds";
 import { settleDueRounds } from "./lifecycle";
 
 export type DecisionCard = {
@@ -319,6 +319,66 @@ export const summaryByToken = cache(async function summaryByToken(token: string)
   const decisions = (cards.get(event.id) ?? []).map((c) => ({ decision: c.decision, rounds: c.rounds, currentRound: c.currentRound, outcome: c.outcome }));
   return { event, decisions, log, members };
 });
+
+export type ReminderTarget = {
+  roundId: string;
+  decisionId: string;
+  eventId: string;
+  decisionTitle: string;
+  eventTitle: string;
+  closesAt: Date;
+  pendingNames: string[];
+  organizers: { email: string; name: string }[];
+};
+
+/**
+ * Open voting rounds closing within the window that opted into organizer
+ * reminders and still have someone to vote — with the pending names and the
+ * organizers' emails. Read-only; the sweep in lib/reminders.ts decides what to
+ * send. Only rounds with pending voters AND at least one emailable organizer.
+ */
+export async function roundsDueForReminder(now: Date, windowHours = 24): Promise<ReminderTarget[]> {
+  const db = getDb();
+  const until = new Date(now.getTime() + windowHours * 60 * 60 * 1000);
+  const rows = await db
+    .select({ round: schema.rounds, decision: schema.decisions, event: schema.events })
+    .from(schema.rounds)
+    .innerJoin(schema.decisions, eq(schema.decisions.id, schema.rounds.decisionId))
+    .innerJoin(schema.events, eq(schema.events.id, schema.decisions.eventId))
+    .where(
+      and(
+        eq(schema.rounds.status, "open"),
+        isNull(schema.rounds.reminderSentAt),
+        ne(schema.rounds.kind, "ideas"),
+        eq(schema.decisions.status, "open"),
+        eq(schema.decisions.remindOrganizer, true),
+        eq(schema.events.status, "planning"),
+        gt(schema.rounds.closesAt, now),
+        lte(schema.rounds.closesAt, until),
+      ),
+    );
+  const out: ReminderTarget[] = [];
+  for (const { round, decision, event } of rows) {
+    const [members, votes, orgRows] = await Promise.all([
+      familyMembers(event.familyId),
+      db.select({ memberId: schema.votes.memberId }).from(schema.votes).where(eq(schema.votes.roundId, round.id)),
+      db
+        .select({ email: schema.users.email, name: schema.users.name })
+        .from(schema.members)
+        .innerJoin(schema.users, eq(schema.users.id, schema.members.userId))
+        .where(and(eq(schema.members.familyId, event.familyId), eq(schema.members.role, "organizer"))),
+    ]);
+    const voted = seatsVoted(votes);
+    const pendingNames = seatsInScope(members, decision.eligibilityScope)
+      .filter((m) => !voted.has(m.id))
+      .map((m) => m.displayName);
+    const organizers = orgRows.filter((o): o is { email: string; name: string } => Boolean(o.email));
+    if (pendingNames.length > 0 && organizers.length > 0) {
+      out.push({ roundId: round.id, decisionId: decision.id, eventId: event.id, decisionTitle: decision.title, eventTitle: event.title, closesAt: round.closesAt, pendingNames, organizers });
+    }
+  }
+  return out;
+}
 
 export const familyByCode = cache(async function familyByCode(code: string) {
   return getDb().query.families.findFirst({

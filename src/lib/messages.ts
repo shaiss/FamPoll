@@ -615,6 +615,15 @@ export type Messages = {
   familyRemoveGuests: string;
   errFamOrganizerOnlyGuests: string;
   errFamGuestNotOrganizer: string;
+
+  // batch 5: organizer reminders (B3)
+  decisionRemindLabel: string;
+  decisionRemindOnNote: string;
+  decisionRemindOffNote: string;
+  decisionRemindTurnOn: string;
+  decisionRemindTurnOff: string;
+  reminderEmailSubject: string;
+  reminderEmailBody: string;
 };
 
 const en: Messages = {
@@ -1222,6 +1231,14 @@ const en: Messages = {
   familyRemoveGuests: "Remove all guests ({count})",
   errFamOrganizerOnlyGuests: "Only an organizer can manage guests.",
   errFamGuestNotOrganizer: "An organizer can’t be a guest.",
+
+  decisionRemindLabel: "Email me reminders",
+  decisionRemindOnNote: "On: you’ll get an email when a round is closing with people still to vote. Only you — never the family.",
+  decisionRemindOffNote: "Off. The app never emails the family.",
+  decisionRemindTurnOn: "Turn on reminders",
+  decisionRemindTurnOff: "Turn off reminders",
+  reminderEmailSubject: "“{title}” is closing soon",
+  reminderEmailBody: "The round on “{decision}” ({event}) is closing soon, and these people haven’t voted yet: {waiting}.\n\nNudge them, or close the round: {link}",
 };
 
 const es: Messages = {
@@ -1829,6 +1846,14 @@ const es: Messages = {
   familyRemoveGuests: "Quitar a todos los invitados ({count})",
   errFamOrganizerOnlyGuests: "Solo un organizador puede gestionar invitados.",
   errFamGuestNotOrganizer: "Un organizador no puede ser invitado.",
+
+  decisionRemindLabel: "Enviarme recordatorios",
+  decisionRemindOnNote: "Activado: recibirás un correo cuando una ronda esté por cerrar y aún falte gente por votar. Solo tú, nunca la familia.",
+  decisionRemindOffNote: "Desactivado. La app nunca escribe a la familia.",
+  decisionRemindTurnOn: "Activar recordatorios",
+  decisionRemindTurnOff: "Desactivar recordatorios",
+  reminderEmailSubject: "«{title}» está por cerrar",
+  reminderEmailBody: "La ronda de «{decision}» ({event}) está por cerrar y estas personas aún no han votado: {waiting}.\n\nRecuérdales o cierra la ronda: {link}",
 };
 
 const ptBR: Messages = {
@@ -2436,6 +2461,14 @@ const ptBR: Messages = {
   familyRemoveGuests: "Remover todos os convidados ({count})",
   errFamOrganizerOnlyGuests: "Só um organizador pode gerenciar convidados.",
   errFamGuestNotOrganizer: "Um organizador não pode ser convidado.",
+
+  decisionRemindLabel: "Enviar lembretes para mim",
+  decisionRemindOnNote: "Ligado: você receberá um e-mail quando uma rodada estiver para fechar com gente ainda por votar. Só você, nunca a família.",
+  decisionRemindOffNote: "Desligado. O app nunca escreve para a família.",
+  decisionRemindTurnOn: "Ligar lembretes",
+  decisionRemindTurnOff: "Desligar lembretes",
+  reminderEmailSubject: "“{title}” está para fechar",
+  reminderEmailBody: "A rodada de “{decision}” ({event}) está para fechar e estas pessoas ainda não votaram: {waiting}.\n\nLembre-as ou feche a rodada: {link}",
 };
 
 const DICTS: Record<Locale, Messages> = { en, es, "pt-BR": ptBR };

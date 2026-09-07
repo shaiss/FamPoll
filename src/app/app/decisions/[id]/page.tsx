@@ -2,7 +2,8 @@ import { notFound } from "next/navigation";
 import { LocalTime } from "@/components/time";
 import { Avatar, AvatarStack, Button, Card, Field, Icon, inputClass, Pill, Screen, SectionLabel, TopBar } from "@/components/ui";
 import { VoteForm } from "@/components/vote-form";
-import { addOption, closeRoundNow, deleteDecision, duplicateDecision, editOption, extendRound, pickWinner, removeOption, renameDecision, reopenRound, revealVotes, skipDecision, tiebreak, unskipDecision } from "@/lib/actions/decisions";
+import { addOption, closeRoundNow, deleteDecision, duplicateDecision, editOption, extendRound, pickWinner, removeOption, renameDecision, reopenRound, revealVotes, setDecisionReminder, skipDecision, tiebreak, unskipDecision } from "@/lib/actions/decisions";
+import { hasMailer } from "@/lib/env";
 import { CopyText } from "@/components/copy-text";
 import { baseUrl } from "@/lib/url";
 import { requireUser } from "@/lib/auth";
@@ -695,6 +696,21 @@ export default async function DecisionPage({ params, searchParams }: { params: P
               {t.decisionsaveTitle}
             </Button>
           </form>
+          {hasMailer ? (
+            <details>
+              <summary className="cursor-pointer list-none text-xs font-semibold text-ink-3 [&::-webkit-details-marker]:hidden">{t.decisionRemindLabel}</summary>
+              <div className="mt-2 flex flex-col gap-2">
+                <p className="text-sm text-ink-2">{decision.remindOrganizer ? t.decisionRemindOnNote : t.decisionRemindOffNote}</p>
+                <form action={setDecisionReminder}>
+                  <input type="hidden" name="decisionId" value={decision.id} />
+                  <input type="hidden" name="remind" value={decision.remindOrganizer ? "0" : "1"} />
+                  <Button type="submit" variant="ghost" size="sm">
+                    {decision.remindOrganizer ? t.decisionRemindTurnOff : t.decisionRemindTurnOn}
+                  </Button>
+                </form>
+              </div>
+            </details>
+          ) : null}
           {open && decision.voteType !== "ab" && (open.kind !== "final" || firstRound) && alive.length ? (
             <div className="flex flex-col gap-2">
               <span className="text-[13px] font-semibold text-ink-2">{t.decisionremoveOptionLabel}</span>
