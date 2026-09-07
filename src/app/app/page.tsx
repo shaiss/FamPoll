@@ -4,6 +4,7 @@ import { AvatarStack, Card, Icon, LinkButton, Pill, Progress, SectionLabel, Scre
 import { GroupSwitcher } from "@/components/group-switcher";
 import { ShareButton } from "@/components/share-button";
 import { CopyButton } from "@/components/copy-button";
+import { CopyText } from "@/components/copy-text";
 import { brand } from "@/lib/brand";
 import { baseUrl } from "@/lib/url";
 import { requireMembership } from "@/lib/auth";
@@ -102,6 +103,18 @@ export default async function Home() {
                     {ideas ? t.homeAddIdea : t.homeVote}
                   </LinkButton>
                 </div>
+                {n.waitingNames.length ? (
+                  <CopyText
+                    variant="ghost"
+                    label={t.homeCopyNudge}
+                    lines={[
+                      { text: `${n.decision.title} (${n.event.title})` },
+                      { text: ideas ? t.decisioncopyAddIdeas : interpolate(t.decisioncopyVote, { round: roundLabel(t, n.round, n.rounds, n.decision.plan) }), closesAtIso: n.round.closesAt.toISOString() },
+                      { text: `${base}/app/decisions/${n.decision.id}` },
+                      { text: interpolate(t.decisioncopyStillWaiting, { names: n.waitingNames.join(", ") }) },
+                    ]}
+                  />
+                ) : null}
               </Card>
             );
           })
@@ -122,7 +135,16 @@ export default async function Home() {
       ) : null}
 
       <section className="flex flex-col gap-2.5">
-        <SectionLabel right={past.length ? <Link href="#past">{t.homeSeePast}</Link> : undefined}>{t.homeEventsLabel}</SectionLabel>
+        <SectionLabel
+          right={
+            <span className="flex items-center gap-3">
+              <Link href="/app/decided">{t.homeDecidedLink}</Link>
+              {past.length ? <Link href="#past">{t.homeSeePast}</Link> : null}
+            </span>
+          }
+        >
+          {t.homeEventsLabel}
+        </SectionLabel>
         {live.length === 0 ? (
           <Card className="flex flex-col gap-2 p-4">
             <div className="font-display text-lg font-bold">{t.homeNoEventsTitle}</div>

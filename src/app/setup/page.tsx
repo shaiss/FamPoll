@@ -29,6 +29,16 @@ const STEPS: { key: keyof ReturnType<typeof setupStatus>; label: string; how: st
     how: "The public address of this deployment, used in share links. Optional: falls back to the request URL.",
   },
   {
+    key: "mailer",
+    label: "RESEND_API_KEY + RESEND_FROM_EMAIL",
+    how: "Optional. Turns on organizer-only email reminders: a Resend API key and a verified sender address. Without them the app never emails anyone.",
+  },
+  {
+    key: "reminderCron",
+    label: "CRON_SECRET",
+    how: "Optional. A shared secret an external scheduler (a GitHub Actions cron or cron-job.org) passes to /api/tick every few minutes to send due reminders.",
+  },
+  {
     key: "githubFeedbackToken",
     label: "GITHUB_FEEDBACK_TOKEN",
     how: "Optional. A fine-grained GitHub token (Issues: read and write on one repo), under a dedicated machine account, so in-app feedback can post issues under a single bot identity. Server-side only.",

@@ -608,6 +608,62 @@ export type Messages = {
   errFeedbackGone: string;
   errFeedbackNotConnected: string;
   errFeedbackPostFailed: string;
+  // batch 1: the record, nudges, trail, stale events, dates grid
+  homeCopyNudge: string;
+  homeDecidedLink: string;
+  decidedTitle: string;
+  decidedEmpty: string;
+  decidedInEvent: string;
+  trailWon: string;
+  eventsQuietTitle: string;
+  eventsQuietBody: string;
+  decisionGridTitle: string;
+
+  // batch 2: ask again, duplicate event, undo, rotate link, hand-off
+  errDecLogAskedAgain: string;
+  errDecLogEventStartedFrom: string;
+  eventsCopyTitle: string;
+  decisionAskAgain: string;
+  decisionUndo: string;
+  decisionAddToCalendar: string;
+  decisionOpenInMaps: string;
+  eventsShareLinksTitle: string;
+  eventsRotateShareLink: string;
+  eventsRotateShareHint: string;
+  eventsDuplicate: string;
+  eventsDuplicateHint: string;
+
+  // batch 3: ranked-choice finals (D4) + adults-only decisions (E2)
+  cmprankedFinalTitle: string;
+  cmprankedFinalBody: string;
+  cmprankEmpty: string;
+  cmprankChoiceHint: string;
+  decisionRankedNote: string;
+  engineInstructionRankedFinal: string;
+  cmpadultsOnlyTitle: string;
+  cmpadultsOnlyBody: string;
+  decisionAdultsPill: string;
+  decisionAdvisorySeat: string;
+  errDecAdultsOnlySeat: string;
+
+  // batch 4: guest seats (E3)
+  familyGuestPill: string;
+  familyGuestToggle: string;
+  familyGuestExplain: string;
+  familyGuestMark: string;
+  familyGuestUnmark: string;
+  familyRemoveGuests: string;
+  errFamOrganizerOnlyGuests: string;
+  errFamGuestNotOrganizer: string;
+
+  // batch 5: organizer reminders (B3)
+  decisionRemindLabel: string;
+  decisionRemindOnNote: string;
+  decisionRemindOffNote: string;
+  decisionRemindTurnOn: string;
+  decisionRemindTurnOff: string;
+  reminderEmailSubject: string;
+  reminderEmailBody: string;
 };
 
 const en: Messages = {
@@ -1211,6 +1267,57 @@ const en: Messages = {
   errFeedbackGone: "That item is no longer in the queue.",
   errFeedbackNotConnected: "GitHub isn't connected, so this can't be posted yet.",
   errFeedbackPostFailed: "Couldn't post to GitHub just now. It's saved — try again.",
+  homeCopyNudge: "Copy nudge",
+  homeDecidedLink: "Decided",
+  decidedTitle: "What we’ve decided",
+  decidedEmpty: "Nothing decided yet. Settled decisions collect here as the family makes them.",
+  decidedInEvent: "in {event}",
+  trailWon: "won {winner}–{runnerUp}",
+  eventsQuietTitle: "Quiet for a while",
+  eventsQuietBody: "Nothing has happened here in {weeks} weeks. Wrap it up, or keep deciding?",
+  decisionGridTitle: "Who can make which dates",
+
+  errDecLogAskedAgain: "{actor} asked “{title}” again.",
+  errDecLogEventStartedFrom: "{actor} started this event from “{title}”.",
+  eventsCopyTitle: "{title} (copy)",
+  decisionAskAgain: "Ask again",
+  decisionUndo: "Undo",
+  decisionAddToCalendar: "Add to calendar",
+  decisionOpenInMaps: "Open in Maps",
+  eventsShareLinksTitle: "Sharing",
+  eventsRotateShareLink: "Make a new share link",
+  eventsRotateShareHint: "The old read-only link stops working. Use this if it leaked.",
+  eventsDuplicate: "Duplicate as a new event",
+  eventsDuplicateHint: "Copies the decisions and their options as a fresh checklist, set aside so you open each when you’re ready. No votes carry over.",
+
+  cmprankedFinalTitle: "Ranked final round",
+  cmprankedFinalBody: "In the final, everyone ranks the options; the lowest drops until one has a majority.",
+  cmprankEmpty: "Tap the options in your order — favorite first.",
+  cmprankChoiceHint: "Tap to rank; tap a ranked one to remove it.",
+  decisionRankedNote: "Counted by instant-runoff: the lowest choice drops until one has a majority.",
+  engineInstructionRankedFinal: "Rank them. The lowest drops until one has a majority.",
+  cmpadultsOnlyTitle: "Adults decide",
+  cmpadultsOnlyBody: "Kids’ seats can follow along but don’t count toward this one.",
+  decisionAdultsPill: "Adults decide",
+  decisionAdvisorySeat: "This one’s for the adults. {name} can follow along, but the vote won’t count.",
+  errDecAdultsOnlySeat: "This decision is for adults, so that seat can’t vote on it.",
+
+  familyGuestPill: "Guest",
+  familyGuestToggle: "Guest access",
+  familyGuestExplain: "A one-event visitor. They vote and count like anyone while they’re here; remove all guests in one tap when the event is over.",
+  familyGuestMark: "Mark as a guest",
+  familyGuestUnmark: "No longer a guest",
+  familyRemoveGuests: "Remove all guests ({count})",
+  errFamOrganizerOnlyGuests: "Only an organizer can manage guests.",
+  errFamGuestNotOrganizer: "An organizer can’t be a guest.",
+
+  decisionRemindLabel: "Email me reminders",
+  decisionRemindOnNote: "On: you’ll get an email when a round is closing with people still to vote. Only you — never the family.",
+  decisionRemindOffNote: "Off. The app never emails the family.",
+  decisionRemindTurnOn: "Turn on reminders",
+  decisionRemindTurnOff: "Turn off reminders",
+  reminderEmailSubject: "“{title}” is closing soon",
+  reminderEmailBody: "The round on “{decision}” ({event}) is closing soon, and these people haven’t voted yet: {waiting}.\n\nNudge them, or close the round: {link}",
 };
 
 const es: Messages = {
@@ -1814,6 +1921,57 @@ const es: Messages = {
   errFeedbackGone: "Ese elemento ya no está en la cola.",
   errFeedbackNotConnected: "GitHub no está conectado, así que esto aún no se puede publicar.",
   errFeedbackPostFailed: "No se pudo publicar en GitHub ahora mismo. Se guardó; inténtalo de nuevo.",
+  homeCopyNudge: "Copiar recordatorio",
+  homeDecidedLink: "Decidido",
+  decidedTitle: "Lo que decidimos",
+  decidedEmpty: "Nada decidido todavía. Las decisiones resueltas se juntan aquí a medida que la familia las toma.",
+  decidedInEvent: "en {event}",
+  trailWon: "ganó {winner}–{runnerUp}",
+  eventsQuietTitle: "Sin novedades",
+  eventsQuietBody: "No ha pasado nada aquí en {weeks} semanas. ¿Lo cerramos o seguimos decidiendo?",
+  decisionGridTitle: "Quién puede en cada fecha",
+
+  errDecLogAskedAgain: "{actor} volvió a preguntar «{title}».",
+  errDecLogEventStartedFrom: "{actor} creó este evento a partir de «{title}».",
+  eventsCopyTitle: "{title} (copia)",
+  decisionAskAgain: "Preguntar otra vez",
+  decisionUndo: "Deshacer",
+  decisionAddToCalendar: "Agregar al calendario",
+  decisionOpenInMaps: "Abrir en Maps",
+  eventsShareLinksTitle: "Compartir",
+  eventsRotateShareLink: "Crear un nuevo enlace",
+  eventsRotateShareHint: "El enlace de solo lectura anterior deja de funcionar. Úsalo si se filtró.",
+  eventsDuplicate: "Duplicar como nuevo evento",
+  eventsDuplicateHint: "Copia las decisiones y sus opciones como una lista nueva, apartadas para que abras cada una cuando quieras. No se copian los votos.",
+
+  cmprankedFinalTitle: "Ronda final por orden",
+  cmprankedFinalBody: "En la final, cada quien ordena las opciones; la más baja se elimina hasta que una tenga mayoría.",
+  cmprankEmpty: "Toca las opciones en tu orden: la favorita primero.",
+  cmprankChoiceHint: "Toca para ordenar; toca una ya ordenada para quitarla.",
+  decisionRankedNote: "Contado por segunda vuelta instantánea: la opción más baja se elimina hasta que una tenga mayoría.",
+  engineInstructionRankedFinal: "Ordénalas. La más baja se elimina hasta que una tenga mayoría.",
+  cmpadultsOnlyTitle: "Deciden los adultos",
+  cmpadultsOnlyBody: "Los asientos de los niños pueden seguir la decisión, pero no cuentan aquí.",
+  decisionAdultsPill: "Deciden los adultos",
+  decisionAdvisorySeat: "Esta es para los adultos. {name} puede seguirla, pero su voto no cuenta.",
+  errDecAdultsOnlySeat: "Esta decisión es para adultos, así que ese asiento no puede votar.",
+
+  familyGuestPill: "Invitado",
+  familyGuestToggle: "Acceso de invitado",
+  familyGuestExplain: "Una visita para un solo evento. Vota y cuenta como cualquiera mientras está; quita a todos los invitados de un toque cuando termine el evento.",
+  familyGuestMark: "Marcar como invitado",
+  familyGuestUnmark: "Ya no es invitado",
+  familyRemoveGuests: "Quitar a todos los invitados ({count})",
+  errFamOrganizerOnlyGuests: "Solo un organizador puede gestionar invitados.",
+  errFamGuestNotOrganizer: "Un organizador no puede ser invitado.",
+
+  decisionRemindLabel: "Enviarme recordatorios",
+  decisionRemindOnNote: "Activado: recibirás un correo cuando una ronda esté por cerrar y aún falte gente por votar. Solo tú, nunca la familia.",
+  decisionRemindOffNote: "Desactivado. La app nunca escribe a la familia.",
+  decisionRemindTurnOn: "Activar recordatorios",
+  decisionRemindTurnOff: "Desactivar recordatorios",
+  reminderEmailSubject: "«{title}» está por cerrar",
+  reminderEmailBody: "La ronda de «{decision}» ({event}) está por cerrar y estas personas aún no han votado: {waiting}.\n\nRecuérdales o cierra la ronda: {link}",
 };
 
 const ptBR: Messages = {
@@ -2417,6 +2575,57 @@ const ptBR: Messages = {
   errFeedbackGone: "Esse item não está mais na fila.",
   errFeedbackNotConnected: "O GitHub não está conectado, então isto ainda não pode ser publicado.",
   errFeedbackPostFailed: "Não foi possível publicar no GitHub agora. Foi salvo; tente de novo.",
+  homeCopyNudge: "Copiar lembrete",
+  homeDecidedLink: "Decidido",
+  decidedTitle: "O que já decidimos",
+  decidedEmpty: "Nada decidido ainda. As decisões resolvidas se reúnem aqui conforme a família as toma.",
+  decidedInEvent: "em {event}",
+  trailWon: "venceu {winner}–{runnerUp}",
+  eventsQuietTitle: "Parado há um tempo",
+  eventsQuietBody: "Nada aconteceu aqui há {weeks} semanas. Encerrar ou continuar decidindo?",
+  decisionGridTitle: "Quem pode em cada data",
+
+  errDecLogAskedAgain: "{actor} perguntou “{title}” de novo.",
+  errDecLogEventStartedFrom: "{actor} criou este evento a partir de “{title}”.",
+  eventsCopyTitle: "{title} (cópia)",
+  decisionAskAgain: "Perguntar de novo",
+  decisionUndo: "Desfazer",
+  decisionAddToCalendar: "Adicionar à agenda",
+  decisionOpenInMaps: "Abrir no Maps",
+  eventsShareLinksTitle: "Compartilhar",
+  eventsRotateShareLink: "Gerar um novo link",
+  eventsRotateShareHint: "O link somente-leitura anterior para de funcionar. Use se ele vazou.",
+  eventsDuplicate: "Duplicar como novo evento",
+  eventsDuplicateHint: "Copia as decisões e suas opções como uma nova lista, deixadas de lado para você abrir cada uma quando quiser. Nenhum voto é copiado.",
+
+  cmprankedFinalTitle: "Rodada final por ordem",
+  cmprankedFinalBody: "Na final, cada um ordena as opções; a mais baixa cai até uma ter maioria.",
+  cmprankEmpty: "Toque nas opções na sua ordem — a favorita primeiro.",
+  cmprankChoiceHint: "Toque para ordenar; toque em uma já ordenada para remover.",
+  decisionRankedNote: "Apurado por segundo turno instantâneo: a opção mais baixa cai até uma ter maioria.",
+  engineInstructionRankedFinal: "Ordene-as. A mais baixa cai até uma ter maioria.",
+  cmpadultsOnlyTitle: "Os adultos decidem",
+  cmpadultsOnlyBody: "Os assentos das crianças podem acompanhar, mas não contam aqui.",
+  decisionAdultsPill: "Os adultos decidem",
+  decisionAdvisorySeat: "Esta é para os adultos. {name} pode acompanhar, mas o voto não conta.",
+  errDecAdultsOnlySeat: "Esta decisão é para adultos, então esse assento não pode votar.",
+
+  familyGuestPill: "Convidado",
+  familyGuestToggle: "Acesso de convidado",
+  familyGuestExplain: "Uma visita para um só evento. Vota e conta como qualquer um enquanto está aqui; remova todos os convidados com um toque quando o evento acabar.",
+  familyGuestMark: "Marcar como convidado",
+  familyGuestUnmark: "Não é mais convidado",
+  familyRemoveGuests: "Remover todos os convidados ({count})",
+  errFamOrganizerOnlyGuests: "Só um organizador pode gerenciar convidados.",
+  errFamGuestNotOrganizer: "Um organizador não pode ser convidado.",
+
+  decisionRemindLabel: "Enviar lembretes para mim",
+  decisionRemindOnNote: "Ligado: você receberá um e-mail quando uma rodada estiver para fechar com gente ainda por votar. Só você, nunca a família.",
+  decisionRemindOffNote: "Desligado. O app nunca escreve para a família.",
+  decisionRemindTurnOn: "Ligar lembretes",
+  decisionRemindTurnOff: "Desligar lembretes",
+  reminderEmailSubject: "“{title}” está para fechar",
+  reminderEmailBody: "A rodada de “{decision}” ({event}) está para fechar e estas pessoas ainda não votaram: {waiting}.\n\nLembre-as ou feche a rodada: {link}",
 };
 
 const DICTS: Record<Locale, Messages> = { en, es, "pt-BR": ptBR };

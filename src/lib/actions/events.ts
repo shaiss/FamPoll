@@ -1,14 +1,15 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { membershipFor, requireMembership, requireUser } from "../auth";
 import { getDb, schema } from "../db";
+import { roundSequence } from "../engine/rounds";
 import { fail } from "../flash";
 import { newCode, newId } from "../ids";
-import { logActivity } from "../lifecycle";
+import { logActivity, openRound } from "../lifecycle";
 import { getMessages } from "@/lib/locale-server";
 import { interpolate } from "@/lib/messages";
 
@@ -90,6 +91,90 @@ export async function updateEvent(formData: FormData) {
   revalidatePath(`/app/events/${eventId}`);
   revalidatePath("/app");
   redirect(`/app/events/${eventId}`);
+}
+
+/** Organizer or creator: mint a fresh public summary token; the old /s/<token> link stops working. */
+export async function rotateShareToken(formData: FormData) {
+  const t = await getMessages();
+  const eventId = z.string().parse(formData.get("eventId"));
+  const loaded = await loadEventAndMembership(eventId);
+  if (!loaded) fail("/app", t.errDecEventGone);
+  const { event, member } = loaded;
+  if (member.role !== "organizer" && event.createdByMemberId !== member.id) fail(`/app/events/${eventId}`, t.errDecOnlyOrganizerChange);
+  await getDb().update(schema.events).set({ shareToken: newCode() + newCode() }).where(eq(schema.events.id, eventId));
+  revalidatePath(`/app/events/${eventId}`);
+  redirect(`/app/events/${eventId}/edit`);
+}
+
+/**
+ * "Start from a past event": clone the event and its decisions' definitions and
+ * options into a fresh event in the same group, each decision set aside so the
+ * organizer opens them when ready. Dates are cleared and no rounds or votes copy.
+ */
+export async function duplicateEvent(formData: FormData) {
+  const t = await getMessages();
+  const sourceId = z.string().parse(formData.get("eventId"));
+  const loaded = await loadEventAndMembership(sourceId);
+  if (!loaded) fail("/app", t.errDecEventGone);
+  const { event: source, member } = loaded;
+  if (member.role !== "organizer" && source.createdByMemberId !== member.id) fail(`/app/events/${sourceId}`, t.errDecOnlyOrganizerEdit);
+  const db = getDb();
+  const id = newId();
+  const now = new Date();
+  await db.transaction(async (tx) => {
+    await tx.insert(schema.events).values({
+      id,
+      familyId: source.familyId,
+      title: interpolate(t.eventsCopyTitle, { title: source.title }).slice(0, 80),
+      kind: source.kind,
+      startsOn: null,
+      endsOn: null,
+      shareToken: newCode() + newCode(),
+      createdByMemberId: member.id,
+    });
+    await logActivity(tx, { eventId: id, kind: "event_created", message: interpolate(t.errDecLogEventStartedFrom, { actor: member.displayName, title: source.title }), actorMemberId: member.id });
+    const decisions = await tx.query.decisions.findMany({ where: eq(schema.decisions.eventId, source.id), orderBy: [asc(schema.decisions.position), asc(schema.decisions.createdAt)] });
+    let position = 0;
+    for (const d of decisions) {
+      position++;
+      const decisionId = newId();
+      const [copy] = await tx
+        .insert(schema.decisions)
+        .values({
+          id: decisionId,
+          eventId: id,
+          title: d.title,
+          position,
+          plan: d.plan,
+          format: d.format,
+          voteType: d.voteType,
+          picks: d.picks,
+          advanceCount: d.advanceCount,
+          roundHours: d.roundHours,
+          anyoneCanAddOptions: d.anyoneCanAddOptions,
+          setsEventDates: d.setsEventDates,
+          anonymous: d.anonymous,
+          eligibilityScope: d.eligibilityScope,
+          rankedFinal: d.rankedFinal,
+          remindOrganizer: d.remindOrganizer,
+          // Set aside so a duplicated event doesn't open every vote at once; the organizer brings each back.
+          status: "skipped",
+          createdByMemberId: member.id,
+        })
+        .returning();
+      // A set-aside decision still needs a round to reopen from (unskip reopens the last round).
+      const round = await openRound(tx, copy, roundSequence(d.plan)[0], 1, now);
+      await tx.update(schema.rounds).set({ status: "closed", closedAt: now, closeReason: "organizer" }).where(eq(schema.rounds.id, round.id));
+      const options = await tx.query.options.findMany({ where: eq(schema.options.decisionId, d.id), orderBy: [asc(schema.options.createdAt)] });
+      if (options.length) {
+        await tx.insert(schema.options).values(
+          options.map((o) => ({ id: newId(), decisionId, title: o.title, note: o.note, startsOn: o.startsOn, endsOn: o.endsOn, addedByMemberId: member.id, anonymous: o.anonymous, addedInRoundId: round.id })),
+        );
+      }
+    }
+  });
+  revalidatePath("/app");
+  redirect(`/app/events/${id}`);
 }
 
 /** Organizer only. Removes the event and everything under it. */

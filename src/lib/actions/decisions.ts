@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { membershipFor, requireUser, seatsForUser } from "../auth";
 import { getDb, schema } from "../db";
-import { ballotsToSkip, closesAtFrom, effectivePicks, isPastDeadline, optionCountRule, optionTitleLimit, planRoundCount, plansFor, resolveFinal, roundSequence, tally, type Format, type Plan, type VoteType } from "../engine/rounds";
+import { ballotsToSkip, closesAtFrom, effectivePicks, isPastDeadline, optionCountRule, optionTitleLimit, planRoundCount, plansFor, rankedBallots, resolveFinal, resolveRankedFinal, roundSequence, tally, type Format, type Plan, type VoteType } from "../engine/rounds";
 import { fail } from "../flash";
 import { newId } from "../ids";
 import { applyOutcome, closeRoundAndAdvance, lockOpenRound, logActivity, maybeCloseEarly, openRound, settleDueRounds } from "../lifecycle";
@@ -137,6 +137,9 @@ export async function createDecision(formData: FormData) {
   // A or B keeps its two options: nobody adds a third.
   const anyoneCanAddOptions = voteType !== "ab" && formData.getAll("anyoneCanAddOptions").map(String).includes("on");
   const setsEventDates = format === "date" && formData.get("setsEventDates") === "on";
+  // A or B settles in one round, so ranking never applies to it.
+  const rankedFinal = voteType !== "ab" && formData.get("rankedFinal") === "on";
+  const eligibilityScope: "all" | "adults" = formData.get("adultsOnly") === "on" ? "adults" : "all";
   let optionRows: { title: string; startsOn: string | null; endsOn: string | null }[];
   if (format === "date") {
     const parsed = cleanDateOptions(t, await getLocale(), formData.getAll("dateStart"), formData.getAll("dateEnd"));
@@ -153,10 +156,12 @@ export async function createDecision(formData: FormData) {
   const db = getDb();
   const decisionId = newId();
   await db.transaction(async (tx) => {
+    // Lock the event so concurrent creates can't read the same sibling count and collide on position.
+    await tx.select({ id: schema.events.id }).from(schema.events).where(eq(schema.events.id, event.id)).for("update");
     const siblings = await tx.select({ id: schema.decisions.id }).from(schema.decisions).where(eq(schema.decisions.eventId, event.id));
     const [decision] = await tx
       .insert(schema.decisions)
-      .values({ id: decisionId, eventId: event.id, title, position: siblings.length + 1, plan, format, voteType, picks, anonymous, roundHours, anyoneCanAddOptions, setsEventDates, createdByMemberId: member.id })
+      .values({ id: decisionId, eventId: event.id, title, position: siblings.length + 1, plan, format, voteType, picks, anonymous, roundHours, anyoneCanAddOptions, setsEventDates, rankedFinal, eligibilityScope, createdByMemberId: member.id })
       .returning();
     const round = await openRound(tx, decision, roundSequence(plan)[0], 1, new Date(), undefined, firstClosesAt);
     if (optionRows.length) {
@@ -175,6 +180,73 @@ export async function createDecision(formData: FormData) {
   });
   revalidatePath(`/app/events/${event.id}`);
   redirect(`/app/decisions/${decisionId}`);
+}
+
+/**
+ * "Ask again": clone a decision — its wording, format, vote type, plan, settings
+ * and full option slate — into a fresh decision with round 1 open. No votes carry
+ * over. Makes a recurring question (Friday dinner) one tap, with no scheduler.
+ */
+export async function duplicateDecision(formData: FormData) {
+  const decisionId = z.string().parse(formData.get("decisionId"));
+  const { member, decision } = await loadDecisionAndMembership(decisionId);
+  const t = await getMessages();
+  if (decision.event.status !== "planning") fail(`/app/events/${decision.eventId}`, t.errDecEventClosedAddDecisions);
+  const db = getDb();
+  const newDecisionId = newId();
+  await db.transaction(async (tx) => {
+    // Lock the event so concurrent creates can't read the same sibling count and collide on position.
+    await tx.select({ id: schema.events.id }).from(schema.events).where(eq(schema.events.id, decision.eventId)).for("update");
+    const options = await tx.query.options.findMany({ where: eq(schema.options.decisionId, decision.id), orderBy: [asc(schema.options.createdAt)] });
+    const siblings = await tx.select({ id: schema.decisions.id }).from(schema.decisions).where(eq(schema.decisions.eventId, decision.eventId));
+    const [copy] = await tx
+      .insert(schema.decisions)
+      .values({
+        id: newDecisionId,
+        eventId: decision.eventId,
+        title: decision.title,
+        position: siblings.length + 1,
+        plan: decision.plan,
+        format: decision.format,
+        voteType: decision.voteType,
+        picks: decision.picks,
+        advanceCount: decision.advanceCount,
+        roundHours: decision.roundHours,
+        anyoneCanAddOptions: decision.anyoneCanAddOptions,
+        setsEventDates: decision.setsEventDates,
+        anonymous: decision.anonymous,
+        eligibilityScope: decision.eligibilityScope,
+        rankedFinal: decision.rankedFinal,
+        remindOrganizer: decision.remindOrganizer,
+        createdByMemberId: member.id,
+      })
+      .returning();
+    const round = await openRound(tx, copy, roundSequence(decision.plan)[0], 1, new Date());
+    if (options.length) {
+      await tx.insert(schema.options).values(
+        options.map((o) => ({
+          id: newId(),
+          decisionId: newDecisionId,
+          title: o.title,
+          note: o.note,
+          startsOn: o.startsOn,
+          endsOn: o.endsOn,
+          addedByMemberId: member.id,
+          anonymous: o.anonymous,
+          addedInRoundId: round.id,
+        })),
+      );
+    }
+    await logActivity(tx, {
+      eventId: decision.eventId,
+      decisionId: newDecisionId,
+      kind: "decision_created",
+      message: interpolate(t.errDecLogAskedAgain, { actor: decision.anonymous ? t.errDecActorSomeone : member.displayName, title: decision.title }),
+      actorMemberId: decision.anonymous ? null : member.id,
+    });
+  });
+  revalidatePath(`/app/events/${decision.eventId}`);
+  redirect(`/app/decisions/${newDecisionId}`);
 }
 
 export async function addOption(formData: FormData) {
@@ -247,8 +319,12 @@ export async function castVote(formData: FormData) {
   const seats = await seatsForUser(family.id, user.id);
   const seat = seats.find((s) => s.id === memberId);
   if (!seat) fail(back, t.errDecCantVoteFromSeat);
+  // Adults-only: a proxy (kid) seat may follow along but never casts a ballot.
+  if (decision.eligibilityScope === "adults" && seat.userId === null) fail(back, t.errDecAdultsOnlySeat);
   if (round.kind === "ideas") fail(back, t.errDecNoVoteIdeasRound);
   if (!skip && optionIds.length === 0) fail(back, t.errDecPickOneOrSkip);
+  // A ranked final records the picks in order (rank 1..N) and lifts the pick cap; Set above kept insertion order.
+  const ranked = decision.rankedFinal && round.kind === "final";
 
   // Deadlines are settled in their own committed transaction first, so a
   // redirect below can never roll a close back.
@@ -265,13 +341,13 @@ export async function castVote(formData: FormData) {
     // The cap depends on how many options are alive, so it is checked under the same
     // lock that addOption and removeOption take.
     const cap = effectivePicks(fresh.maxPicks, alive.length);
-    if (optionIds.length > cap) return void (problem = cap === 1 ? t.errDecPickOne : interpolate(t.errDecPickUpTo, { cap }));
+    if (!ranked && optionIds.length > cap) return void (problem = cap === 1 ? t.errDecPickOne : interpolate(t.errDecPickUpTo, { cap }));
     const before = await tx.select({ id: schema.votes.id }).from(schema.votes).where(and(eq(schema.votes.roundId, roundId), eq(schema.votes.memberId, memberId)));
     await tx.delete(schema.votes).where(and(eq(schema.votes.roundId, roundId), eq(schema.votes.memberId, memberId)));
     if (skip) {
       await tx.insert(schema.votes).values({ id: newId(), roundId, optionId: null, memberId, castByUserId: user.id, anonymous: hidden });
     } else {
-      await tx.insert(schema.votes).values(optionIds.map((optionId) => ({ id: newId(), roundId, optionId, memberId, castByUserId: user.id, anonymous: hidden })));
+      await tx.insert(schema.votes).values(optionIds.map((optionId, i) => ({ id: newId(), roundId, optionId, memberId, castByUserId: user.id, anonymous: hidden, rank: ranked ? i + 1 : null })));
     }
     if (seat.userId === null && before.length === 0) {
       const me = seats.find((s) => s.userId === user.id);
@@ -332,13 +408,27 @@ export async function extendRound(formData: FormData) {
     const open = await tx.query.rounds.findFirst({ where: and(eq(schema.rounds.decisionId, decision.id), eq(schema.rounds.status, "open")) });
     const round = open ? await lockOpenRound(tx, open.id) : null;
     if (!round) return;
-    await tx.update(schema.rounds).set({ closesAt: closesAtFrom(now, decision.roundHours) }).where(eq(schema.rounds.id, round.id));
+    await tx.update(schema.rounds).set({ closesAt: closesAtFrom(now, decision.roundHours), reminderSentAt: null }).where(eq(schema.rounds.id, round.id));
     await logActivity(tx, { eventId: decision.eventId, decisionId: decision.id, kind: "round_extended", message: interpolate(t.errDecLogExtended, { actor: actorName, number: round.number }), actorMemberId });
     extended = true;
   });
   if (!extended) fail(back, t.errDecNoRoundToExtend);
   revalidateDecision(decision.id, decision.eventId);
   redirect(back);
+}
+
+/**
+ * Organizer only: opt this decision's open rounds into (or out of) email
+ * reminders. It only ever emails the organizer, and only when a mail provider
+ * is configured; without one the toggle is stored but nothing is sent.
+ */
+export async function setDecisionReminder(formData: FormData) {
+  const decisionId = z.string().parse(formData.get("decisionId"));
+  const { decision } = await requireOrganizer(decisionId);
+  const remind = formData.get("remind") === "1";
+  await getDb().update(schema.decisions).set({ remindOrganizer: remind }).where(eq(schema.decisions.id, decision.id));
+  revalidateDecision(decision.id, decision.eventId);
+  redirect(`/app/decisions/${decisionId}`);
 }
 
 /**
@@ -373,7 +463,7 @@ export async function reopenRound(formData: FormData) {
     if (clearVotes) await tx.delete(schema.votes).where(eq(schema.votes.roundId, target.id));
     await tx
       .update(schema.rounds)
-      .set({ status: "open", closedAt: null, closeReason: null, tied: false, closesAt: closesAtFrom(now, decision.roundHours) })
+      .set({ status: "open", closedAt: null, closeReason: null, tied: false, closesAt: closesAtFrom(now, decision.roundHours), reminderSentAt: null })
       .where(eq(schema.rounds.id, target.id));
     await tx.update(schema.decisions).set({ status: "open", outcomeOptionId: null, decidedAt: null }).where(eq(schema.decisions.id, decision.id));
     await logActivity(tx, {
@@ -437,7 +527,10 @@ export async function tiebreak(formData: FormData) {
       orderBy: [asc(schema.options.createdAt)],
     });
     const votes = await tx.query.votes.findMany({ where: eq(schema.votes.roundId, last.id) });
-    const result = resolveFinal(tally(alive.map((o) => o.id), votes.filter((v): v is typeof v & { optionId: string } => v.optionId !== null)));
+    // The finalists carried into the tiebreak must match how the round was counted.
+    const result = decision.rankedFinal
+      ? resolveRankedFinal(rankedBallots(votes), alive.map((o) => o.id))
+      : resolveFinal(tally(alive.map((o) => o.id), votes.filter((v): v is typeof v & { optionId: string } => v.optionId !== null)));
     if (result.tiedIds.length < 2) return void (problem = t.errDecNoTieToBreak);
     await tx.update(schema.rounds).set({ tied: false }).where(eq(schema.rounds.id, last.id));
     await openRound(tx, decision, "final", last.number + 1, now, { optionIds: result.tiedIds, stampRoundId: last.id });
@@ -584,7 +677,7 @@ export async function unskipDecision(formData: FormData) {
   await db.transaction(async (tx) => {
     const [last] = await tx.select().from(schema.rounds).where(eq(schema.rounds.decisionId, decision.id)).orderBy(desc(schema.rounds.number)).limit(1).for("update");
     if (!last) return void (problem = t.errDecNoRoundToBringBack);
-    await tx.update(schema.rounds).set({ status: "open", closedAt: null, closeReason: null, tied: false, closesAt: closesAtFrom(now, decision.roundHours) }).where(eq(schema.rounds.id, last.id));
+    await tx.update(schema.rounds).set({ status: "open", closedAt: null, closeReason: null, tied: false, closesAt: closesAtFrom(now, decision.roundHours), reminderSentAt: null }).where(eq(schema.rounds.id, last.id));
     await tx.update(schema.decisions).set({ status: "open" }).where(eq(schema.decisions.id, decision.id));
     await logActivity(tx, { eventId: decision.eventId, decisionId: decision.id, kind: "unskipped", message: interpolate(t.errDecLogBroughtBack, { actor: actorName, title: decision.title }), actorMemberId });
   });
