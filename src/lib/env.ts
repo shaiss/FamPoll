@@ -21,6 +21,11 @@ export const env = {
   // Who may open the feedback review queue: a comma-separated allowlist of emails.
   // Empty means no one — the review page stays closed until an owner is named.
   feedbackAdminEmails: process.env.FEEDBACK_ADMIN_EMAILS ?? "",
+  // Stripe (Vercel Marketplace). Optional: smoke checkout and webhook stay inert
+  // until these are present. Never commit real keys — only placeholders in .env.example.
+  stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? "",
+  stripePublishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "",
+  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
 };
 
 export const hasClerk = Boolean(env.clerkPublishableKey && env.clerkSecretKey);
@@ -34,6 +39,13 @@ export const hasReminderCron = Boolean(env.cronSecret);
 
 /** The feedback bridge is live only when both the token and the target repo are set. */
 export const hasGithubFeedback = Boolean(env.githubFeedbackToken && env.githubFeedbackRepo);
+
+/** Server Stripe SDK can run when the secret key is present. */
+export const hasStripe = Boolean(env.stripeSecretKey);
+/** Embedded Checkout can mount when the publishable key is present. */
+export const hasStripePublishable = Boolean(env.stripePublishableKey);
+/** Webhook signature verification is live when the signing secret is present. */
+export const hasStripeWebhook = Boolean(env.stripeWebhookSecret);
 
 /** The owner allowlist, normalized. Never returns the raw string. */
 export function feedbackAdminEmails(): string[] {

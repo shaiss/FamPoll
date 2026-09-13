@@ -28,6 +28,17 @@ npm run dev                  # http://localhost:3000
 
 Other scripts: `npm test` (unit tests: the rounds engine and the format helpers), `npm run typecheck`, `npm run lint`, `npm run db:generate` (writes SQL to `drizzle/` after a schema change; the next build applies it), `npm run db:studio`.
 
+## Payments (smoke)
+
+A non-production Stripe Embedded Checkout path lives at `/smoke/checkout`. It creates a one-off $1 test Checkout Session and mounts Stripe's embedded UI. The webhook stub is `POST /api/stripe/webhook` (verifies the signature, logs the event type only).
+
+1. On the Vercel project, install **Stripe** from the Marketplace (or set the three vars by hand in test mode). Neon is already attached — do not re-provision it.
+2. Locally: `vercel env pull` (or copy the placeholders from `.env.example` and paste real **test** keys into `.env.local`). Needed: `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, and optionally `STRIPE_WEBHOOK_SECRET`.
+3. `npm run dev`, open `http://localhost:3000/smoke/checkout`.
+4. For webhooks locally: `stripe listen --forward-to localhost:3000/api/stripe/webhook` and put the printed `whsec_…` into `STRIPE_WEBHOOK_SECRET`.
+
+This path is for Stack launch verification only. It is not linked from product UI and is not a public payment offer.
+
 ## Connect the integrations (once)
 
 1. **Clerk** (sign-in): in the Vercel project, *Integrations → Browse Marketplace → Clerk → Install*, which creates the Clerk application and adds `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` for you. (Without the marketplace: create an app at dashboard.clerk.com and paste those two keys under *Settings → Environment Variables*.) Then in the Clerk dashboard, *SSO connections → Add connection*, pick Google, Apple and Facebook. In a development instance all three work immediately on Clerk's shared credentials; nobody needs a Google Cloud, Apple Developer or Meta account to try the app. Going to production later means a `pk_live_` / `sk_live_` instance with your own provider credentials (Apple needs an Apple Developer membership, Facebook needs a Meta app switched to Live).
