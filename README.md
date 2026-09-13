@@ -26,7 +26,7 @@ npm run db:migrate           # creates the tables (the build does this too)
 npm run dev                  # http://localhost:3000
 ```
 
-Other scripts: `npm test` (unit tests: the rounds engine and the format helpers), `npm run typecheck`, `npm run lint`, `npm run db:generate` (writes SQL to `drizzle/` after a schema change; the next build applies it), `npm run db:studio`.
+Other scripts: `npm test` (unit tests: the rounds engine, format helpers, and feed mappers), `npm run typecheck`, `npm run lint`, `npm run db:generate` (writes SQL to `drizzle/` after a schema change; the next build applies it), `npm run db:studio`.
 
 ## Connect the integrations (once)
 
@@ -34,7 +34,14 @@ Other scripts: `npm test` (unit tests: the rounds engine and the format helpers)
 2. **Database**: in the Vercel project, *Storage → Create → Neon Postgres*. Vercel adds `DATABASE_URL` for you. The build runs pending migrations itself (`scripts/migrate.mjs`), so there is nothing to run by hand. Keep migrations backward-compatible with the previous deployment (see `CLAUDE.md`).
 3. **App URL** (optional): `NEXT_PUBLIC_APP_URL=https://your-domain` so share links are stable.
 4. **Brand name** (optional): `NEXT_PUBLIC_BRAND_NAME` and `NEXT_PUBLIC_BRAND_TAGLINE` rename the product everywhere it shows (`src/lib/brand.ts` holds the defaults). "FamPoll" is a working name.
-5. Redeploy. `/setup` should show every step ticked.
+5. **Famdash feed** (optional): set `FAMPOLL_API_KEY` to a long random secret. Famdash (or any FeedClient) calls `GET /api/feed/recent?limit=10` with `Authorization: Bearer <FAMPOLL_API_KEY>` and receives a `FeedItem[]` of open (needs-vote) decisions first, then recently decided ones (≤14 days). Without the key the route returns 401. Example:
+
+   ```bash
+   curl -H "Authorization: Bearer $FAMPOLL_API_KEY" \
+     "https://your-domain/api/feed/recent?limit=10"
+   ```
+
+6. Redeploy. `/setup` should show every step ticked.
 
 ## How the app is organised
 

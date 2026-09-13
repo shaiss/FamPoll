@@ -12,6 +12,9 @@ export const env = {
   resendFromEmail: process.env.RESEND_FROM_EMAIL ?? "",
   // Shared secret an external pinger passes to /api/tick to run the reminder sweep.
   cronSecret: process.env.CRON_SECRET ?? "",
+  // Shared secret famdash (or any FeedClient) passes to GET /api/feed/recent.
+  // Server-only. Absent → every feed request is 401.
+  fampollApiKey: process.env.FAMPOLL_API_KEY ?? "",
   // Feedback → GitHub issues. Server-only: a fine-grained PAT (Issues:write on the
   // one repo, under a dedicated machine account) and the target "owner/repo".
   // Never NEXT_PUBLIC_ — that would inline the token into the client bundle.
@@ -31,6 +34,8 @@ export const isConfigured = hasClerk && hasDatabase;
 export const hasMailer = Boolean(env.resendApiKey && env.resendFromEmail);
 /** The reminder sweep endpoint accepts a ping only when a secret is set to guard it. */
 export const hasReminderCron = Boolean(env.cronSecret);
+/** Famdash feed is served only when an API key is set to guard it. */
+export const hasFampollApiKey = Boolean(env.fampollApiKey);
 
 /** The feedback bridge is live only when both the token and the target repo are set. */
 export const hasGithubFeedback = Boolean(env.githubFeedbackToken && env.githubFeedbackRepo);
@@ -56,6 +61,7 @@ export type SetupStatus = {
   appUrl: boolean;
   mailer: boolean;
   reminderCron: boolean;
+  fampollApiKey: boolean;
   githubFeedbackToken: boolean;
   githubFeedbackRepo: boolean;
   feedbackAdminEmails: boolean;
@@ -70,6 +76,7 @@ export function setupStatus(): SetupStatus {
     appUrl: Boolean(env.appUrl),
     mailer: hasMailer,
     reminderCron: hasReminderCron,
+    fampollApiKey: hasFampollApiKey,
     githubFeedbackToken: Boolean(env.githubFeedbackToken),
     githubFeedbackRepo: Boolean(env.githubFeedbackRepo),
     feedbackAdminEmails: Boolean(env.feedbackAdminEmails),

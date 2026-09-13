@@ -39,6 +39,11 @@ const STEPS: { key: keyof ReturnType<typeof setupStatus>; label: string; how: st
     how: "Optional. A shared secret an external scheduler (a GitHub Actions cron or cron-job.org) passes to /api/tick every few minutes to send due reminders.",
   },
   {
+    key: "fampollApiKey",
+    label: "FAMPOLL_API_KEY",
+    how: "Optional. Shared secret for GET /api/feed/recent so famdash can pull recent decisions. Pass it as Authorization: Bearer …; without it the route returns 401.",
+  },
+  {
     key: "githubFeedbackToken",
     label: "GITHUB_FEEDBACK_TOKEN",
     how: "Optional. A fine-grained GitHub token (Issues: read and write on one repo), under a dedicated machine account, so in-app feedback can post issues under a single bot identity. Server-side only.",
