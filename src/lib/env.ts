@@ -26,6 +26,8 @@ export const env = {
   stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? "",
   stripePublishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "",
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
+  // Gate for /app/billing/smoke. Must be exactly "1"; unset in production.
+  stripeSmoke: process.env.STRIPE_SMOKE ?? "",
 };
 
 export const hasClerk = Boolean(env.clerkPublishableKey && env.clerkSecretKey);
@@ -46,6 +48,8 @@ export const hasStripe = Boolean(env.stripeSecretKey);
 export const hasStripePublishable = Boolean(env.stripePublishableKey);
 /** Webhook signature verification is live when the signing secret is present. */
 export const hasStripeWebhook = Boolean(env.stripeWebhookSecret);
+/** Smoke billing UI + checkout route are reachable only when STRIPE_SMOKE=1. */
+export const hasStripeSmoke = env.stripeSmoke === "1";
 
 /** The owner allowlist, normalized. Never returns the raw string. */
 export function feedbackAdminEmails(): string[] {

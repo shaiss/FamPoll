@@ -1,22 +1,30 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { Screen } from "@/components/ui";
 import { SmokeCheckout } from "@/components/smoke-checkout";
+import { isOrganizer, requireMembership } from "@/lib/auth";
 import { brand } from "@/lib/brand";
-import { hasStripe, hasStripePublishable } from "@/lib/env";
+import { hasStripe, hasStripePublishable, hasStripeSmoke } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Checkout smoke",
+  title: "Billing smoke",
   robots: { index: false, follow: false },
 };
 
 /**
- * Non-production smoke path for Stripe Embedded Checkout. Not linked from the
- * product UI; exists so the Stack launch path can verify env + SDK wiring.
+ * Optional smoke UI for Stripe Embedded Checkout. Not linked from home/nav.
+ * Reachable only when STRIPE_SMOKE=1 and the viewer is an organizer.
+ * Checkout Session smoke only — no paywall, subscriptions, or product billing.
  */
-export default function SmokeCheckoutPage() {
+export default async function BillingSmokePage() {
+  if (!hasStripeSmoke) notFound();
+
+  const { member } = await requireMembership();
+  if (!isOrganizer(member)) notFound();
+
   const ready = hasStripe && hasStripePublishable;
   return (
     <Screen className="pt-10">
@@ -27,7 +35,7 @@ export default function SmokeCheckoutPage() {
       <p className="text-sm text-ink-2">
         One-off $1 test charge via Stripe Embedded Checkout. Confirms{" "}
         {brand.name} can create a session and mount Checkout when Marketplace env
-        vars are present. Nothing here is a public payment offer.
+        vars are present. Nothing here is a public payment offer or subscription.
       </p>
       {ready ? (
         <SmokeCheckout />
@@ -36,17 +44,17 @@ export default function SmokeCheckoutPage() {
           <p className="font-semibold text-ink">Stripe env not set.</p>
           <p className="mt-1">
             After installing Stripe on the Vercel project, run{" "}
-            <code className="font-semibold">vercel env pull</code> (or copy the
-            test placeholders from <code className="font-semibold">.env.example</code>
-            ) so <code className="font-semibold">STRIPE_SECRET_KEY</code> and{" "}
+            <code className="font-semibold">vercel env pull</code> so{" "}
+            <code className="font-semibold">STRIPE_SECRET_KEY</code> and{" "}
             <code className="font-semibold">NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code>{" "}
-            are in <code className="font-semibold">.env.local</code>, then restart{" "}
+            are in <code className="font-semibold">.env.local</code>, set{" "}
+            <code className="font-semibold">STRIPE_SMOKE=1</code>, then restart{" "}
             <code className="font-semibold">npm run dev</code>.
           </p>
         </div>
       )}
-      <Link href="/" className="text-sm font-semibold text-accent">
-        Back home
+      <Link href="/app" className="text-sm font-semibold text-accent">
+        Back to app
       </Link>
     </Screen>
   );

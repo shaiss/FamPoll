@@ -30,14 +30,21 @@ Other scripts: `npm test` (unit tests: the rounds engine and the format helpers)
 
 ## Payments (smoke)
 
-A non-production Stripe Embedded Checkout path lives at `/smoke/checkout`. It creates a one-off $1 test Checkout Session and mounts Stripe's embedded UI. The webhook stub is `POST /api/stripe/webhook` (verifies the signature, logs the event type only).
+Checkout Session smoke only (no paywall, no subscriptions). Paths match the Stack Ballot convention:
 
-1. On the Vercel project, install **Stripe** from the Marketplace (or set the three vars by hand in test mode). Neon is already attached — do not re-provision it.
-2. Locally: `vercel env pull` (or copy the placeholders from `.env.example` and paste real **test** keys into `.env.local`). Needed: `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, and optionally `STRIPE_WEBHOOK_SECRET`.
-3. `npm run dev`, open `http://localhost:3000/smoke/checkout`.
+| Piece | Path |
+| --- | --- |
+| Stripe client | `src/lib/stripe.ts` |
+| Create session | `POST /api/stripe/checkout` |
+| Webhook stub | `POST /api/stripe/webhook` |
+| Smoke UI | `/app/billing/smoke` (not linked from home/nav) |
+
+1. On the Vercel project, install **Stripe** from the Marketplace (or set the keys by hand in test mode). Neon is already attached — do not re-provision it.
+2. Locally: `vercel env pull` (or copy placeholders from `.env.example` into `.env.local`). Needed: `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, optionally `STRIPE_WEBHOOK_SECRET`, and `STRIPE_SMOKE=1` to enable the UI.
+3. `npm run dev`, sign in as an organizer, open `http://localhost:3000/app/billing/smoke`.
 4. For webhooks locally: `stripe listen --forward-to localhost:3000/api/stripe/webhook` and put the printed `whsec_…` into `STRIPE_WEBHOOK_SECRET`.
 
-This path is for Stack launch verification only. It is not linked from product UI and is not a public payment offer.
+Leave `STRIPE_SMOKE` unset in production. This path is for Stack launch verification only.
 
 ## Connect the integrations (once)
 

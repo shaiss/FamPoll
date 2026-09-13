@@ -3,22 +3,22 @@
 import { useCallback } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { EmbeddedCheckout, EmbeddedCheckoutProvider } from "@stripe/react-stripe-js";
-import { createSmokeCheckoutSession } from "@/lib/actions/stripe-smoke";
 
 const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
 const stripePromise = publishableKey ? loadStripe(publishableKey) : null;
 
 /**
  * Minimal Embedded Checkout mount for the smoke path. Fetches a client_secret
- * via server action; never touches the secret key.
+ * from POST /api/stripe/checkout; never touches the secret key.
  */
 export function SmokeCheckout() {
   const fetchClientSecret = useCallback(async () => {
-    const result = await createSmokeCheckoutSession();
-    if ("error" in result) {
-      throw new Error(result.error);
+    const res = await fetch("/api/stripe/checkout", { method: "POST" });
+    const data = (await res.json()) as { clientSecret?: string; error?: string };
+    if (!res.ok || !data.clientSecret) {
+      throw new Error(data.error ?? "Failed to create Checkout Session.");
     }
-    return result.clientSecret;
+    return data.clientSecret;
   }, []);
 
   if (!stripePromise) {
