@@ -23,7 +23,7 @@ export function CopyText({ lines, label, variant = "secondary" }: { lines: CopyL
       <Button
         type="button"
         variant={variant}
-        size="sm"
+        className="w-full"
         onClick={async () => {
           try {
             await navigator.clipboard.writeText(text);

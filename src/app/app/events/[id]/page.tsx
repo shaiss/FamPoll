@@ -141,14 +141,14 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                       </span>
                     </span>
                   </Link>
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-3">
                     <div className="flex items-center gap-2">
                       <AvatarStack names={d.votedMemberIds.map((mid) => memberName.get(mid) ?? "?")} size={24} max={4} ring="#ffffff" />
                       <span className="text-xs text-ink-2">
                         {interpolate(t.eventsVotedCount, { voted: d.votedMemberIds.length, total: members.length })}{iAmDone ? "" : ` · ${t.eventsNotYouYet}`}
                       </span>
                     </div>
-                    <LinkButton href={`/app/decisions/${d.decision.id}`} size="sm" variant={iAmDone ? "ghost" : "primary"}>
+                    <LinkButton href={`/app/decisions/${d.decision.id}`} className="w-full" variant={iAmDone ? "ghost" : "primary"}>
                       {iAmDone ? t.eventsChange : t.eventsVote}
                     </LinkButton>
                   </div>
