@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { clipTitle } from "./format";
+import { clipTitle, deadlineShort } from "./format";
 
 describe("clipTitle", () => {
   it("passes short-text and date titles through untouched", () => {
@@ -22,5 +22,19 @@ describe("clipTitle", () => {
   });
   it("skips leading blank lines", () => {
     assert.equal(clipTitle("\n\n  Second line is first  \nmore", "long_text"), "Second line is first…");
+  });
+});
+
+describe("deadlineShort", () => {
+  const now = new Date("2026-09-15T12:00:00Z");
+
+  it("uses relative minutes and hours without a closes verb", () => {
+    assert.equal(deadlineShort(new Date(now.getTime() + 5 * 60 * 1000), now, "en"), "5 min");
+    assert.equal(deadlineShort(new Date(now.getTime() + 3 * 60 * 60 * 1000), now, "en"), "3h");
+  });
+
+  it("localizes relative buckets", () => {
+    assert.equal(deadlineShort(new Date(now.getTime() + 5 * 60 * 1000), now, "es"), "5 min");
+    assert.equal(deadlineShort(new Date(now.getTime() + 3 * 60 * 60 * 1000), now, "pt-BR"), "3h");
   });
 });
