@@ -3,11 +3,11 @@ import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Button, Icon, LinkButton } from "@/components/ui";
+import { InAppBrowserNotice } from "@/components/in-app-browser-notice";
 import { Wordmark } from "@/components/wordmark";
 import { getLocale } from "@/lib/locale-server";
 import { messages } from "@/lib/messages";
 import { hasClerk, hasDatabase } from "@/lib/env";
-import { isInAppBrowser } from "@/lib/ua";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +16,6 @@ export default async function Landing() {
     const { userId } = await auth();
     if (userId && hasDatabase) redirect("/app");
   }
-  const inApp = await isInAppBrowser();
   const locale = await getLocale();
   const t = messages(locale);
   return (
@@ -38,9 +37,7 @@ export default async function Landing() {
         </ul>
       </div>
       <div className="relative flex flex-col gap-3">
-        {inApp ? (
-          <p className="rounded-[12px] bg-accent-tint px-3 py-2 text-sm font-semibold text-accent-deep">{t.inAppHint}</p>
-        ) : null}
+        <InAppBrowserNotice />
         {hasClerk ? (
           <>
             <SignInButton mode="modal">

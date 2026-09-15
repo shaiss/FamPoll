@@ -3,6 +3,7 @@ import { SignInButton, SignUpButton } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { AvatarStack, Button, Card, LinkButton, Screen } from "@/components/ui";
+import { InAppBrowserNotice } from "@/components/in-app-browser-notice";
 import { Wordmark } from "@/components/wordmark";
 import { SubmitButton } from "@/components/submit-button";
 import { joinFamily } from "@/lib/actions/family";
@@ -13,7 +14,6 @@ import { hasClerk, hasDatabase } from "@/lib/env";
 import { readError } from "@/lib/flash";
 import { interpolate } from "@/lib/messages";
 import { familyByCode } from "@/lib/queries";
-import { isInAppBrowser } from "@/lib/ua";
 
 export const dynamic = "force-dynamic";
 
@@ -65,15 +65,12 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
 
   if (!userId) {
     const here = `/join/${encodeURIComponent(code)}`;
-    const inApp = await isInAppBrowser();
     return (
       <Screen className="pt-14">
         <Wordmark href="/" />
         <Card className="flex flex-col gap-4 p-5 shadow-card">
           {invite}
-          {inApp ? (
-            <p className="rounded-[12px] bg-accent-tint px-3 py-2 text-sm font-semibold text-accent-deep">{t.pubInAppBrowserHint}</p>
-          ) : null}
+          <InAppBrowserNotice />
           <div className="flex flex-col gap-2">
             <SignInButton mode="modal" forceRedirectUrl={here} signUpForceRedirectUrl={here}>
               <Button>{t.pubContinueSocial}</Button>

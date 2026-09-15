@@ -14,6 +14,9 @@ export type Messages = {
   feature2: string;
   feature3: string;
   inAppHint: string;
+  inAppOpenTitle: string;
+  inAppHintIos: string;
+  inAppHintAndroid: string;
   continueCta: string;
   noPasswords: string;
   finishSetup: string;
@@ -192,6 +195,8 @@ export type Messages = {
   decisioncopyAddIdeas: string;
   decisioncopyVote: string;
   decisioncopyStillWaiting: string;
+  nudgeStillWaiting: string;
+  nudgeOpenInBrowser: string;
   decisiontieHeading: string;
   decisiontieEndedLevel: string;
   decisiontiedJoinAnd: string;
@@ -545,6 +550,8 @@ export type Messages = {
   fmtClosesInHours: string;
   fmtClosesInDays: string;
   fmtClosesWhen: string;
+  fmtDeadlineInMin: string;
+  fmtDeadlineInHours: string;
   fmtJustNow: string;
   fmtMinAgo: string;
   fmtNightSingular: string;
@@ -673,12 +680,15 @@ const en: Messages = {
   feature1: "Every decision lives inside its event",
   feature2: "Ideas, shortlist, final: rounds that close themselves",
   feature3: "One link back to the family chat with what you decided",
-  inAppHint: "Sign-in works best in your browser. Tap the menu and choose “Open in browser”, then come back to this link.",
+  inAppHint: "Sign-in won’t work inside Messenger. Open this link in Safari or Chrome, then come back.",
+  inAppOpenTitle: "Open in Safari or Chrome",
+  inAppHintIos: "1. Tap ··· at the top right\n2. Tap Open in Safari\n3. Sign in there, then return to this link",
+  inAppHintAndroid: "1. Tap ⋮ at the top right\n2. Tap Open in Chrome (or Open in browser)\n3. Sign in there, then return to this link",
   continueCta: "Continue with Google, Apple or Facebook",
   noPasswords: "No passwords. We only keep your name and photo so the family knows who voted.",
   finishSetup: "Finish setup",
   setupHint: "Sign-in turns on once Clerk is connected.",
-  authinAppBrowserNotice: "Sign-in works best in your browser. Tap the menu and choose “Open in browser”, then come back to this link.",
+  authinAppBrowserNotice: "Sign-in won’t work inside Messenger. Open this link in Safari or Chrome, then come back.",
   authnotFoundTitle: "That page isn’t here.",
   authnotFoundBody: "The link may be old, or the event it pointed to was removed.",
   authgoToMyFamily: "Go to my groups",
@@ -852,6 +862,8 @@ const en: Messages = {
   decisioncopyAddIdeas: "Add your ideas, {closes}:",
   decisioncopyVote: "{round}. Vote, {closes}:",
   decisioncopyStillWaiting: "Still waiting on {names}.",
+  nudgeStillWaiting: "Still waiting on {names} — vote by {deadline}: {link}",
+  nudgeOpenInBrowser: "Open in Safari/Chrome — Messenger’s browser can block sign-in.",
   decisiontieHeading: "It’s a tie",
   decisiontieEndedLevel: "{options} ended level.",
   decisiontiedJoinAnd: "and",
@@ -964,7 +976,7 @@ const en: Messages = {
   pubHome: "Home",
   pubInvitedToJoin: "You’re invited to join",
   pubPeopleIn: "{count} people in",
-  pubInAppBrowserHint: "Sign-in works best in your browser. Tap the menu and choose “Open in browser”, then come back to this link.",
+  pubInAppBrowserHint: "Sign-in won’t work inside Messenger. Open this link in Safari or Chrome, then come back.",
   pubContinueSocial: "Continue with Google, Apple or Facebook",
   pubImNewHere: "I’m new here",
   pubNoPasswords: "No passwords. We only keep your name and photo so the family knows who voted.",
@@ -1205,6 +1217,8 @@ const en: Messages = {
   fmtClosesInHours: "closes in {n}h",
   fmtClosesInDays: "closes in {n} days",
   fmtClosesWhen: "closes {when}",
+  fmtDeadlineInMin: "{n} min",
+  fmtDeadlineInHours: "{n}h",
   fmtJustNow: "just now",
   fmtMinAgo: "{n} min ago",
   fmtNightSingular: "{count} night",
@@ -1316,8 +1330,8 @@ const en: Messages = {
   decisionRemindOffNote: "Off. The app never emails the family.",
   decisionRemindTurnOn: "Turn on reminders",
   decisionRemindTurnOff: "Turn off reminders",
-  reminderEmailSubject: "“{title}” is closing soon",
-  reminderEmailBody: "The round on “{decision}” ({event}) is closing soon, and these people haven’t voted yet: {waiting}.\n\nNudge them, or close the round: {link}",
+  reminderEmailSubject: "Still waiting on “{title}”",
+  reminderEmailBody: "Still waiting on {waiting} — vote by {deadline}: {link}\n\nOpen in Safari/Chrome — Messenger’s browser can block sign-in.",
 };
 
 const es: Messages = {
@@ -1327,12 +1341,15 @@ const es: Messages = {
   feature1: "Cada decisión vive dentro de su evento",
   feature2: "Ideas, finalistas y ronda final: rondas que se cierran solas",
   feature3: "Un enlace de vuelta al chat de la familia con lo que decidieron",
-  inAppHint: "El inicio de sesión funciona mejor en tu navegador. Abre el menú y elige «Abrir en el navegador», y vuelve a este enlace.",
+  inAppHint: "El inicio de sesión no funciona dentro de Messenger. Abre este enlace en Safari o Chrome y vuelve.",
+  inAppOpenTitle: "Abrir en Safari o Chrome",
+  inAppHintIos: "1. Toca ··· arriba a la derecha\n2. Toca Abrir en Safari\n3. Inicia sesión allí y vuelve a este enlace",
+  inAppHintAndroid: "1. Toca ⋮ arriba a la derecha\n2. Toca Abrir en Chrome (o Abrir en el navegador)\n3. Inicia sesión allí y vuelve a este enlace",
   continueCta: "Continuar con Google, Apple o Facebook",
   noPasswords: "Sin contraseñas. Solo guardamos tu nombre y foto para que la familia sepa quién votó.",
   finishSetup: "Terminar la configuración",
   setupHint: "El inicio de sesión se activa cuando Clerk esté conectado.",
-  authinAppBrowserNotice: "El inicio de sesión funciona mejor en tu navegador. Toca el menú y elige «Abrir en el navegador»; luego vuelve a este enlace.",
+  authinAppBrowserNotice: "El inicio de sesión no funciona dentro de Messenger. Abre este enlace en Safari o Chrome y vuelve.",
   authnotFoundTitle: "Esa página no está aquí.",
   authnotFoundBody: "Puede que el enlace sea antiguo o que se haya eliminado el evento al que apuntaba.",
   authgoToMyFamily: "Ir a mis grupos",
@@ -1506,6 +1523,8 @@ const es: Messages = {
   decisioncopyAddIdeas: "Agrega tus ideas, {closes}:",
   decisioncopyVote: "{round}. Vota, {closes}:",
   decisioncopyStillWaiting: "Aún esperando a {names}.",
+  nudgeStillWaiting: "Aún esperando a {names} — voten antes de {deadline}: {link}",
+  nudgeOpenInBrowser: "Ábrelo en Safari/Chrome — el navegador de Messenger puede bloquear el inicio de sesión.",
   decisiontieHeading: "Hay empate",
   decisiontieEndedLevel: "{options} quedaron empatadas.",
   decisiontiedJoinAnd: "y",
@@ -1618,7 +1637,7 @@ const es: Messages = {
   pubHome: "Inicio",
   pubInvitedToJoin: "Te invitaron a unirte a",
   pubPeopleIn: "{count} personas dentro",
-  pubInAppBrowserHint: "El inicio de sesión funciona mejor en tu navegador. Abre el menú y elige «Abrir en el navegador», y vuelve a este enlace.",
+  pubInAppBrowserHint: "El inicio de sesión no funciona dentro de Messenger. Abre este enlace en Safari o Chrome y vuelve.",
   pubContinueSocial: "Continuar con Google, Apple o Facebook",
   pubImNewHere: "Soy nuevo aquí",
   pubNoPasswords: "Sin contraseñas. Solo guardamos tu nombre y foto para que la familia sepa quién votó.",
@@ -1859,6 +1878,8 @@ const es: Messages = {
   fmtClosesInHours: "cierra en {n}h",
   fmtClosesInDays: "cierra en {n} días",
   fmtClosesWhen: "cierra {when}",
+  fmtDeadlineInMin: "{n} min",
+  fmtDeadlineInHours: "{n}h",
   fmtJustNow: "ahora mismo",
   fmtMinAgo: "hace {n} min",
   fmtNightSingular: "{count} noche",
@@ -1970,8 +1991,8 @@ const es: Messages = {
   decisionRemindOffNote: "Desactivado. La app nunca escribe a la familia.",
   decisionRemindTurnOn: "Activar recordatorios",
   decisionRemindTurnOff: "Desactivar recordatorios",
-  reminderEmailSubject: "«{title}» está por cerrar",
-  reminderEmailBody: "La ronda de «{decision}» ({event}) está por cerrar y estas personas aún no han votado: {waiting}.\n\nRecuérdales o cierra la ronda: {link}",
+  reminderEmailSubject: "Aún esperando en «{title}»",
+  reminderEmailBody: "Aún esperando a {waiting} — voten antes de {deadline}: {link}\n\nÁbrelo en Safari/Chrome — el navegador de Messenger puede bloquear el inicio de sesión.",
 };
 
 const ptBR: Messages = {
@@ -1981,12 +2002,15 @@ const ptBR: Messages = {
   feature1: "Cada decisão vive dentro do seu evento",
   feature2: "Ideias, finalistas e rodada final: rodadas que se fecham sozinhas",
   feature3: "Um link de volta para o chat da família com o que vocês decidiram",
-  inAppHint: "O login funciona melhor no seu navegador. Toque no menu e escolha “Abrir no navegador”, depois volte para este link.",
+  inAppHint: "O login não funciona dentro do Messenger. Abra este link no Safari ou Chrome e volte.",
+  inAppOpenTitle: "Abrir no Safari ou Chrome",
+  inAppHintIos: "1. Toque em ··· no canto superior direito\n2. Toque em Abrir no Safari\n3. Entre por lá e volte para este link",
+  inAppHintAndroid: "1. Toque em ⋮ no canto superior direito\n2. Toque em Abrir no Chrome (ou Abrir no navegador)\n3. Entre por lá e volte para este link",
   continueCta: "Continuar com Google, Apple ou Facebook",
   noPasswords: "Sem senhas. Guardamos apenas seu nome e foto para a família saber quem votou.",
   finishSetup: "Concluir a configuração",
   setupHint: "O login é ativado assim que o Clerk estiver conectado.",
-  authinAppBrowserNotice: "O login funciona melhor no seu navegador. Toque no menu e escolha “Abrir no navegador” e depois volte para este link.",
+  authinAppBrowserNotice: "O login não funciona dentro do Messenger. Abra este link no Safari ou Chrome e volte.",
   authnotFoundTitle: "Essa página não está aqui.",
   authnotFoundBody: "O link pode estar antigo, ou o evento para o qual ele apontava foi removido.",
   authgoToMyFamily: "Ir para meus grupos",
@@ -2160,6 +2184,8 @@ const ptBR: Messages = {
   decisioncopyAddIdeas: "Adicione suas ideias, {closes}:",
   decisioncopyVote: "{round}. Vote, {closes}:",
   decisioncopyStillWaiting: "Ainda esperando por {names}.",
+  nudgeStillWaiting: "Ainda esperando por {names} — votem até {deadline}: {link}",
+  nudgeOpenInBrowser: "Abra no Safari/Chrome — o navegador do Messenger pode bloquear o login.",
   decisiontieHeading: "Deu empate",
   decisiontieEndedLevel: "{options} terminaram empatadas.",
   decisiontiedJoinAnd: "e",
@@ -2272,7 +2298,7 @@ const ptBR: Messages = {
   pubHome: "Início",
   pubInvitedToJoin: "Você foi convidado para entrar em",
   pubPeopleIn: "{count} pessoas dentro",
-  pubInAppBrowserHint: "O login funciona melhor no seu navegador. Toque no menu e escolha “Abrir no navegador”, depois volte para este link.",
+  pubInAppBrowserHint: "O login não funciona dentro do Messenger. Abra este link no Safari ou Chrome e volte.",
   pubContinueSocial: "Continuar com Google, Apple ou Facebook",
   pubImNewHere: "Sou novo por aqui",
   pubNoPasswords: "Sem senhas. Guardamos apenas seu nome e foto para a família saber quem votou.",
@@ -2513,6 +2539,8 @@ const ptBR: Messages = {
   fmtClosesInHours: "fecha em {n}h",
   fmtClosesInDays: "fecha em {n} dias",
   fmtClosesWhen: "fecha {when}",
+  fmtDeadlineInMin: "{n} min",
+  fmtDeadlineInHours: "{n}h",
   fmtJustNow: "agora mesmo",
   fmtMinAgo: "há {n} min",
   fmtNightSingular: "{count} noite",
@@ -2624,8 +2652,8 @@ const ptBR: Messages = {
   decisionRemindOffNote: "Desligado. O app nunca escreve para a família.",
   decisionRemindTurnOn: "Ligar lembretes",
   decisionRemindTurnOff: "Desligar lembretes",
-  reminderEmailSubject: "“{title}” está para fechar",
-  reminderEmailBody: "A rodada de “{decision}” ({event}) está para fechar e estas pessoas ainda não votaram: {waiting}.\n\nLembre-as ou feche a rodada: {link}",
+  reminderEmailSubject: "Ainda esperando em “{title}”",
+  reminderEmailBody: "Ainda esperando por {waiting} — votem até {deadline}: {link}\n\nAbra no Safari/Chrome — o navegador do Messenger pode bloquear o login.",
 };
 
 const DICTS: Record<Locale, Messages> = { en, es, "pt-BR": ptBR };
