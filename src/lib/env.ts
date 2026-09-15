@@ -26,8 +26,9 @@ export const env = {
   stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? "",
   stripePublishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "",
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
-  // Gate for /app/billing/smoke. Must be exactly "1"; unset in production.
-  stripeSmoke: process.env.STRIPE_SMOKE ?? "",
+  // Explicit smoke gate for /app/billing/smoke. Must be exactly "1"; unset in
+  // production so Marketplace Stripe keys alone cannot expose the smoke UI.
+  stripeSmokeEnabled: process.env.STRIPE_SMOKE_ENABLED ?? "",
 };
 
 export const hasClerk = Boolean(env.clerkPublishableKey && env.clerkSecretKey);
@@ -48,8 +49,8 @@ export const hasStripe = Boolean(env.stripeSecretKey);
 export const hasStripePublishable = Boolean(env.stripePublishableKey);
 /** Webhook signature verification is live when the signing secret is present. */
 export const hasStripeWebhook = Boolean(env.stripeWebhookSecret);
-/** Smoke billing UI + checkout route are reachable only when STRIPE_SMOKE=1. */
-export const hasStripeSmoke = env.stripeSmoke === "1";
+/** Smoke billing UI + checkout route are reachable only when STRIPE_SMOKE_ENABLED=1. */
+export const hasStripeSmokeEnabled = env.stripeSmokeEnabled === "1";
 
 /** The owner allowlist, normalized. Never returns the raw string. */
 export function feedbackAdminEmails(): string[] {

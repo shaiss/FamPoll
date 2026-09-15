@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Screen } from "@/components/ui";
 import { isOrganizer, requireMembership } from "@/lib/auth";
-import { hasStripeSmoke } from "@/lib/env";
+import { hasStripeSmokeEnabled } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +21,7 @@ export default async function BillingSmokeReturnPage({
 }: {
   searchParams: Promise<{ session_id?: string }>;
 }) {
-  if (!hasStripeSmoke) notFound();
+  if (!hasStripeSmokeEnabled) notFound();
   const { member } = await requireMembership();
   if (!isOrganizer(member)) notFound();
 

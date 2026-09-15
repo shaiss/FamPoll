@@ -5,7 +5,7 @@ import { Screen } from "@/components/ui";
 import { SmokeCheckout } from "@/components/smoke-checkout";
 import { isOrganizer, requireMembership } from "@/lib/auth";
 import { brand } from "@/lib/brand";
-import { hasStripe, hasStripePublishable, hasStripeSmoke } from "@/lib/env";
+import { hasStripe, hasStripePublishable, hasStripeSmokeEnabled } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -16,11 +16,12 @@ export const metadata: Metadata = {
 
 /**
  * Optional smoke UI for Stripe Embedded Checkout. Not linked from home/nav.
- * Reachable only when STRIPE_SMOKE=1 and the viewer is an organizer.
+ * Reachable only when STRIPE_SMOKE_ENABLED=1 and the viewer is an organizer.
+ * Marketplace Stripe keys alone must not expose this — flag off → notFound.
  * Checkout Session smoke only — no paywall, subscriptions, or product billing.
  */
 export default async function BillingSmokePage() {
-  if (!hasStripeSmoke) notFound();
+  if (!hasStripeSmokeEnabled) notFound();
 
   const { member } = await requireMembership();
   if (!isOrganizer(member)) notFound();
@@ -48,7 +49,7 @@ export default async function BillingSmokePage() {
             <code className="font-semibold">STRIPE_SECRET_KEY</code> and{" "}
             <code className="font-semibold">NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code>{" "}
             are in <code className="font-semibold">.env.local</code>, set{" "}
-            <code className="font-semibold">STRIPE_SMOKE=1</code>, then restart{" "}
+            <code className="font-semibold">STRIPE_SMOKE_ENABLED=1</code>, then restart{" "}
             <code className="font-semibold">npm run dev</code>.
           </p>
         </div>

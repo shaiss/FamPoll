@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { isOrganizer, requireMembership } from "@/lib/auth";
 import { brand } from "@/lib/brand";
-import { env, hasStripe, hasStripePublishable, hasStripeSmoke } from "@/lib/env";
+import { env, hasStripe, hasStripePublishable, hasStripeSmokeEnabled } from "@/lib/env";
 import { getStripe } from "@/lib/stripe";
 import { baseUrl } from "@/lib/url";
 
@@ -10,11 +10,11 @@ export const dynamic = "force-dynamic";
 
 /**
  * Creates a one-off Embedded Checkout Session for the $1 smoke product.
- * Gated by STRIPE_SMOKE=1 and an organizer seat — not a product paywall.
+ * Gated by STRIPE_SMOKE_ENABLED=1 and an organizer seat — not a product paywall.
  * Returns only { clientSecret } for Embedded Checkout.
  */
 export async function POST() {
-  if (!hasStripeSmoke) {
+  if (!hasStripeSmokeEnabled) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
   if (!hasStripe || !hasStripePublishable) {
