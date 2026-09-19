@@ -85,6 +85,22 @@ export function closesRelative(closesAt: Date, now = new Date(), locale: Locale 
   return interpolate(t.fmtClosesInDays, { n: Math.round(diff / day) });
 }
 
+/**
+ * Bare deadline for “vote by {deadline}” nudge copy — no “closes” verb.
+ * Uses the viewer's clock/TZ when called from the client; relative buckets match closesLabel.
+ */
+export function deadlineShort(closesAt: Date, now = new Date(), locale: Locale = DEFAULT_LOCALE): string {
+  const t = messages(locale);
+  const diff = closesAt.getTime() - now.getTime();
+  if (diff <= 0) return t.fmtClosingNow;
+  if (diff < 60 * 60 * 1000) return interpolate(t.fmtDeadlineInMin, { n: Math.max(1, Math.round(diff / 60000)) });
+  if (diff < 12 * 60 * 60 * 1000) return interpolate(t.fmtDeadlineInHours, { n: Math.round(diff / 3600000) });
+  if (diff < 6 * day) {
+    return new Intl.DateTimeFormat(BCP47[locale], { weekday: "short", hour: "numeric" }).format(closesAt).replace(" AM", "am").replace(" PM", "pm");
+  }
+  return formatDate(closesAt, undefined, locale);
+}
+
 /** "Jul 11–18 · 7 nights" for a date-range option. */
 export function dateRangeTitle(start: string, end: string | null, locale: Locale = DEFAULT_LOCALE): string {
   const range = formatDateRange(start, end, locale);

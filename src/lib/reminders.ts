@@ -3,6 +3,7 @@ import { getDb, schema } from "./db";
 import { env, hasMailer } from "./env";
 import { DEFAULT_LOCALE } from "./locale";
 import { interpolate, messages } from "./messages";
+import { reminderNudgeBody } from "./nudge";
 import { roundsDueForReminder } from "./queries";
 
 /**
@@ -46,11 +47,12 @@ export async function runReminderSweep(now = new Date()): Promise<{ claimed: num
       .returning({ id: schema.rounds.id });
     if (!got) continue;
     const subject = interpolate(t.reminderEmailSubject, { title: target.decisionTitle });
-    const body = interpolate(t.reminderEmailBody, {
-      decision: target.decisionTitle,
-      event: target.eventTitle,
-      waiting: target.pendingNames.join(", "),
-      link: `${appUrl}/app/decisions/${target.decisionId}`,
+    const link = `${appUrl}/app/decisions/${target.decisionId}`;
+    const body = reminderNudgeBody(t, {
+      names: target.pendingNames,
+      link,
+      closesAt: target.closesAt,
+      locale: DEFAULT_LOCALE,
     });
     let ok = false;
     try {

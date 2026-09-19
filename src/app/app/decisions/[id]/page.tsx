@@ -5,12 +5,14 @@ import { VoteForm } from "@/components/vote-form";
 import { addOption, closeRoundNow, deleteDecision, duplicateDecision, editOption, extendRound, pickWinner, removeOption, renameDecision, reopenRound, revealVotes, setDecisionReminder, skipDecision, tiebreak, unskipDecision } from "@/lib/actions/decisions";
 import { hasMailer } from "@/lib/env";
 import { CopyText } from "@/components/copy-text";
+import { InAppBrowserNotice } from "@/components/in-app-browser-notice";
 import { baseUrl } from "@/lib/url";
 import { requireUser } from "@/lib/auth";
 import type { Vote } from "@/lib/db/schema";
 import { formatLabel, roundKindLabel, voteTypeLabel, effectivePicks, isTiebreak, peopleVoted, roundInstruction, roundLabel, roundSequence, roundTrail, tally, type Format, type RoundKind } from "@/lib/engine/rounds";
 import { readError } from "@/lib/flash";
 import { clipTitle, closesRelative, formatDate } from "@/lib/format";
+import { pasteNudgeLines } from "@/lib/nudge";
 import { decisionData, type OptionView, type RoundView } from "@/lib/queries";
 import { getLocale, getMessages } from "@/lib/locale-server";
 import { interpolate } from "@/lib/messages";
@@ -288,6 +290,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
       </div>
 
       {error ? <p className="rounded-[12px] bg-accent-tint px-3 py-2 text-sm font-semibold text-accent-deep">{error}</p> : null}
+      <InAppBrowserNotice />
       {!planning ? <Card className="p-4 text-sm text-ink-2">{interpolate(t.decisioneventClosedNote, { status: event.status })}</Card> : null}
 
       {decided && outcome ? (
@@ -519,12 +522,23 @@ export default async function DecisionPage({ params, searchParams }: { params: P
             {(open.kind === "ideas" ? t.decisionideasCloseNote : t.decisionchangeMindNote).split("{closes}")[1]}
           </p>
           <CopyText
-            lines={[
-              { text: `${decision.title} (${event.title})` },
-              { text: open.kind === "ideas" ? t.decisioncopyAddIdeas : interpolate(t.decisioncopyVote, { round: roundLabel(t, open, rounds, decision.plan) }), closesAtIso: open.closesAt.toISOString() },
-              { text: `${base}/app/decisions/${decision.id}` },
-              ...(open.kind !== "ideas" && waitingOn.length ? [{ text: interpolate(t.decisioncopyStillWaiting, { names: waitingOn.join(", ") }) }] : []),
-            ]}
+            lines={
+              open.kind !== "ideas" && waitingOn.length
+                ? pasteNudgeLines(t, {
+                    names: waitingOn,
+                    link: `${base}/app/decisions/${decision.id}`,
+                    closesAt: open.closesAt,
+                  })
+                : [
+                    { text: `${decision.title} (${event.title})` },
+                    {
+                      text: open.kind === "ideas" ? t.decisioncopyAddIdeas : interpolate(t.decisioncopyVote, { round: roundLabel(t, open, rounds, decision.plan) }),
+                      closesAtIso: open.closesAt.toISOString(),
+                    },
+                    { text: `${base}/app/decisions/${decision.id}` },
+                    { text: t.nudgeOpenInBrowser },
+                  ]
+            }
           />
         </div>
       ) : null}

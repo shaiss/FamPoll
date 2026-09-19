@@ -10,6 +10,7 @@ import { baseUrl } from "@/lib/url";
 import { requireMembership } from "@/lib/auth";
 import { roundLabel } from "@/lib/engine/rounds";
 import { closesRelative, formatDate, formatDateRange } from "@/lib/format";
+import { pasteNudgeLines } from "@/lib/nudge";
 import { homeData } from "@/lib/queries";
 import { getLocale, getMessages } from "@/lib/locale-server";
 import { interpolate, type Messages } from "@/lib/messages";
@@ -103,15 +104,25 @@ export default async function Home() {
                     {ideas ? t.homeAddIdea : t.homeVote}
                   </LinkButton>
                 </div>
-                {n.waitingNames.length ? (
+                {n.waitingNames.length && !ideas ? (
+                  <CopyText
+                    variant="ghost"
+                    label={t.homeCopyNudge}
+                    lines={pasteNudgeLines(t, {
+                      names: n.waitingNames,
+                      link: `${base}/app/decisions/${n.decision.id}`,
+                      closesAt: n.round.closesAt,
+                    })}
+                  />
+                ) : n.waitingNames.length ? (
                   <CopyText
                     variant="ghost"
                     label={t.homeCopyNudge}
                     lines={[
                       { text: `${n.decision.title} (${n.event.title})` },
-                      { text: ideas ? t.decisioncopyAddIdeas : interpolate(t.decisioncopyVote, { round: roundLabel(t, n.round, n.rounds, n.decision.plan) }), closesAtIso: n.round.closesAt.toISOString() },
+                      { text: t.decisioncopyAddIdeas, closesAtIso: n.round.closesAt.toISOString() },
                       { text: `${base}/app/decisions/${n.decision.id}` },
-                      { text: interpolate(t.decisioncopyStillWaiting, { names: n.waitingNames.join(", ") }) },
+                      { text: t.nudgeOpenInBrowser },
                     ]}
                   />
                 ) : null}

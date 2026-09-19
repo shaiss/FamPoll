@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { closesLabel } from "@/lib/format";
+import { closesLabel, deadlineShort } from "@/lib/format";
 import { useLocale, useMessages } from "@/components/locale-provider";
 import { Button, Icon } from "./ui";
 
@@ -17,7 +17,15 @@ export function CopyText({ lines, label, variant = "secondary" }: { lines: CopyL
   const t = useMessages();
   const locale = useLocale();
   const [state, setState] = useState<"idle" | "done" | "manual">("idle");
-  const text = lines.map((l) => (l.closesAtIso ? l.text.replace("{closes}", closesLabel(new Date(l.closesAtIso), undefined, locale)) : l.text)).join("\n");
+  const text = lines
+    .map((l) => {
+      if (!l.closesAtIso) return l.text;
+      const closesAt = new Date(l.closesAtIso);
+      return l.text
+        .replaceAll("{closes}", closesLabel(closesAt, undefined, locale))
+        .replaceAll("{deadline}", deadlineShort(closesAt, undefined, locale));
+    })
+    .join("\n");
   return (
     <div className="flex flex-col gap-2">
       <Button
