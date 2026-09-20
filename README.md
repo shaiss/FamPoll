@@ -28,6 +28,24 @@ npm run dev                  # http://localhost:3000
 
 Other scripts: `npm test` (unit tests: the rounds engine, format helpers, and feed mappers), `npm run typecheck`, `npm run lint`, `npm run db:generate` (writes SQL to `drizzle/` after a schema change; the next build applies it), `npm run db:studio`.
 
+## Payments (smoke)
+
+Checkout Session smoke only (no paywall, no subscriptions). Paths match the Stack Ballot convention:
+
+| Piece | Path |
+| --- | --- |
+| Stripe client | `src/lib/stripe.ts` |
+| Create session | `POST /api/stripe/checkout` |
+| Webhook stub | `POST /api/stripe/webhook` |
+| Smoke UI | `/app/billing/smoke` (not linked from home/nav) |
+
+1. On the Vercel project, install **Stripe** from the Marketplace (or set the keys by hand in test mode). Neon is already attached — do not re-provision it.
+2. Locally: `vercel env pull` (or copy placeholders from `.env.example` into `.env.local`). Needed: `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, optionally `STRIPE_WEBHOOK_SECRET`, and **`STRIPE_SMOKE_ENABLED=1`** to enable the UI (keys alone are not enough — flag off returns 404).
+3. `npm run dev`, sign in as an organizer, open `http://localhost:3000/app/billing/smoke`.
+4. For webhooks locally: `stripe listen --forward-to localhost:3000/api/stripe/webhook` and put the printed `whsec_…` into `STRIPE_WEBHOOK_SECRET`.
+
+Leave `STRIPE_SMOKE_ENABLED` unset in production. This path is for Stack launch verification only.
+
 ## Connect the integrations (once)
 
 1. **Clerk** (sign-in): in the Vercel project, *Integrations → Browse Marketplace → Clerk → Install*, which creates the Clerk application and adds `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` for you. (Without the marketplace: create an app at dashboard.clerk.com and paste those two keys under *Settings → Environment Variables*.) Then in the Clerk dashboard, *SSO connections → Add connection*, pick Google, Apple and Facebook. In a development instance all three work immediately on Clerk's shared credentials; nobody needs a Google Cloud, Apple Developer or Meta account to try the app. Going to production later means a `pk_live_` / `sk_live_` instance with your own provider credentials (Apple needs an Apple Developer membership, Facebook needs a Meta app switched to Live).
