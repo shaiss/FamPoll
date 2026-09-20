@@ -4,7 +4,8 @@ import { and, asc, desc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { membershipFor, requireUser, seatsForUser } from "../auth";
+import { auth } from "@clerk/nextjs/server";
+import { isLinkSeat, memberBySeatSession, membershipFor, requireUser, seatsForUser } from "../auth";
 import { getDb, schema } from "../db";
 import { ballotsToSkip, closesAtFrom, effectivePicks, isPastDeadline, optionCountRule, optionTitleLimit, planRoundCount, plansFor, rankedBallots, resolveFinal, resolveRankedFinal, roundSequence, tally, type Format, type Plan, type VoteType } from "../engine/rounds";
 import { fail } from "../flash";
@@ -300,6 +301,24 @@ export async function addOption(formData: FormData) {
   revalidatePath(back);
 }
 
+async function resolveBallotSeat(familyId: string, memberId: string, back: string) {
+  const t = await getMessages();
+  const { userId } = await auth();
+  if (userId) {
+    const membership = await membershipFor(userId, familyId);
+    if (membership) {
+      const seats = await seatsForUser(familyId, userId);
+      const seat = seats.find((s) => s.id === memberId);
+      if (seat) return { mode: "user" as const, user: await requireUser(), seat, seats, family: membership.family };
+    }
+  }
+  const link = await memberBySeatSession();
+  if (link && link.familyId === familyId && link.id === memberId && isLinkSeat(link)) {
+    return { mode: "seat" as const, seat: link, family: link.family };
+  }
+  fail(back, t.errDecCantVoteFromSeat);
+}
+
 export async function castVote(formData: FormData) {
   const roundId = z.string().parse(formData.get("roundId"));
   const memberId = z.string().parse(formData.get("memberId"));
@@ -310,16 +329,21 @@ export async function castVote(formData: FormData) {
   const db = getDb();
   const round = await db.query.rounds.findFirst({ where: eq(schema.rounds.id, roundId) });
   if (!round) throw new Error("Round not found.");
-  const { user, decision, family } = await loadDecisionAndMembership(round.decisionId);
+  const decision = await db.query.decisions.findFirst({ where: eq(schema.decisions.id, round.decisionId), with: { event: true } });
+  if (!decision) throw new Error("Decision not found.");
   const t = await getMessages();
-  const back = `/app/decisions/${decision.id}`;
+  const backApp = `/app/decisions/${decision.id}`;
+  const backSeat = `/seat/decisions/${decision.id}`;
+  const voter = await resolveBallotSeat(decision.event.familyId, memberId, backApp);
+  const back = voter.mode === "seat" ? backSeat : backApp;
+  const { family } = voter;
+  const seat = voter.seat;
+  const seats = voter.mode === "user" ? voter.seats : [voter.seat];
+  const castByUserId = voter.mode === "user" ? voter.user.id : null;
 
   if (decision.status !== "open") fail(back, t.errDecAlreadySettled);
   if (decision.event.status !== "planning") fail(back, t.errDecEventClosed);
-  const seats = await seatsForUser(family.id, user.id);
-  const seat = seats.find((s) => s.id === memberId);
-  if (!seat) fail(back, t.errDecCantVoteFromSeat);
-  // Adults-only: a proxy (kid) seat may follow along but never casts a ballot.
+  // Adults-only: proxy and link seats without accounts do not cast (link seats are never anonymous but may be non-adult relatives).
   if (decision.eligibilityScope === "adults" && seat.userId === null) fail(back, t.errDecAdultsOnlySeat);
   if (round.kind === "ideas") fail(back, t.errDecNoVoteIdeasRound);
   if (!skip && optionIds.length === 0) fail(back, t.errDecPickOneOrSkip);
@@ -345,13 +369,13 @@ export async function castVote(formData: FormData) {
     const before = await tx.select({ id: schema.votes.id }).from(schema.votes).where(and(eq(schema.votes.roundId, roundId), eq(schema.votes.memberId, memberId)));
     await tx.delete(schema.votes).where(and(eq(schema.votes.roundId, roundId), eq(schema.votes.memberId, memberId)));
     if (skip) {
-      await tx.insert(schema.votes).values({ id: newId(), roundId, optionId: null, memberId, castByUserId: user.id, anonymous: hidden });
+      await tx.insert(schema.votes).values({ id: newId(), roundId, optionId: null, memberId, castByUserId, anonymous: hidden });
     } else {
-      await tx.insert(schema.votes).values(optionIds.map((optionId, i) => ({ id: newId(), roundId, optionId, memberId, castByUserId: user.id, anonymous: hidden, rank: ranked ? i + 1 : null })));
+      await tx.insert(schema.votes).values(optionIds.map((optionId, i) => ({ id: newId(), roundId, optionId, memberId, castByUserId, anonymous: hidden, rank: ranked ? i + 1 : null })));
     }
-    if (seat.userId === null && before.length === 0) {
-      const me = seats.find((s) => s.userId === user.id);
-      await logActivity(tx, { eventId: decision.eventId, decisionId: decision.id, kind: "proxy_vote", message: interpolate(t.errDecLogProxyVoted, { voter: me?.displayName ?? user.name, seat: seat.displayName }), actorMemberId: me?.id ?? null });
+    if (voter.mode === "user" && seat.userId === null && !seat.linkSeat && before.length === 0) {
+      const me = seats.find((s) => s.userId === voter.user.id);
+      await logActivity(tx, { eventId: decision.eventId, decisionId: decision.id, kind: "proxy_vote", message: interpolate(t.errDecLogProxyVoted, { voter: me?.displayName ?? voter.user.name, seat: seat.displayName }), actorMemberId: me?.id ?? null });
     }
     await maybeCloseEarly(tx, fresh, family.id, now);
   });

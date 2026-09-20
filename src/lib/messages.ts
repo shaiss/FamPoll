@@ -663,6 +663,38 @@ export type Messages = {
   errFamOrganizerOnlyGuests: string;
   errFamGuestNotOrganizer: string;
 
+  // batch 4b: named link seats (issue #2)
+  familyNamedSeatsLabel: string;
+  familyNamedSeatsExplain: string;
+  familyNamedSeatsOn: string;
+  familyNamedSeatsOff: string;
+  familyAddLinkSeatLabel: string;
+  familyAddLinkSeatHint: string;
+  familyAddLinkSeatPlaceholder: string;
+  familyAddLinkSeatButton: string;
+  familyPersonalLinkLabel: string;
+  familyRotatePersonalLink: string;
+  familyRevokePersonalLink: string;
+  familyroleLinkSeat: string;
+  seatVotingAs: string;
+  seatNotYou: string;
+  seatHomeTitle: string;
+  seatHomeEmpty: string;
+  seatClaimTitle: string;
+  seatClaimBody: string;
+  seatClaimButton: string;
+  seatClaimPending: string;
+  seatNeedLinkTitle: string;
+  seatNeedLinkBody: string;
+  pubMetaPersonalLinkTitle: string;
+  errFamOrganizerOnlyLinkSeats: string;
+  errFamLinkSeatsOff: string;
+  errFamLinkSeatNameRequired: string;
+  errFamNotLinkSeat: string;
+  errSeatLinkInvalid: string;
+  logLinkSeatAdded: string;
+  logSeatClaimed: string;
+
   // batch 5: organizer reminders (B3)
   decisionRemindLabel: string;
   decisionRemindOnNote: string;
@@ -1325,6 +1357,37 @@ const en: Messages = {
   errFamOrganizerOnlyGuests: "Only an organizer can manage guests.",
   errFamGuestNotOrganizer: "An organizer can’t be a guest.",
 
+  familyNamedSeatsLabel: "Vote without signing in",
+  familyNamedSeatsExplain: "For relatives in Messenger or anyone without a Google or Apple account. Each person gets a personal link; they tap their name once, then vote from that link.",
+  familyNamedSeatsOn: "Turn off link voting",
+  familyNamedSeatsOff: "Turn on link voting",
+  familyAddLinkSeatLabel: "Add a named seat",
+  familyAddLinkSeatHint: "Creates a personal /p/ link you can DM. They never need an account.",
+  familyAddLinkSeatPlaceholder: "Nana",
+  familyAddLinkSeatButton: "Add seat + link",
+  familyPersonalLinkLabel: "Personal voting link",
+  familyRotatePersonalLink: "Rotate link",
+  familyRevokePersonalLink: "Remove seat",
+  familyroleLinkSeat: "votes by link",
+  seatVotingAs: "Voting as {name}.",
+  seatNotYou: "Not you?",
+  seatHomeTitle: "Your ballots",
+  seatHomeEmpty: "Nothing needs your vote right now. Check back when someone starts a round.",
+  seatClaimTitle: "Vote as {name}",
+  seatClaimBody: "This link is just for you. Tap below to open your ballot on this phone.",
+  seatClaimButton: "I'm {name}",
+  seatClaimPending: "Opening…",
+  seatNeedLinkTitle: "Need a personal link",
+  seatNeedLinkBody: "Ask whoever runs the group to send you your voting link. It looks like /p/…",
+  pubMetaPersonalLinkTitle: "Your voting link",
+  errFamOrganizerOnlyLinkSeats: "Only an organizer can manage link seats.",
+  errFamLinkSeatsOff: "Turn on link voting first.",
+  errFamLinkSeatNameRequired: "Enter a name for this seat.",
+  errFamNotLinkSeat: "That seat is not a link seat.",
+  errSeatLinkInvalid: "That voting link isn’t valid any more. Ask for a fresh one.",
+  logLinkSeatAdded: "{organizer} added a link seat for {name}.",
+  logSeatClaimed: "{name} opened their voting link.",
+
   decisionRemindLabel: "Email me reminders",
   decisionRemindOnNote: "On: you’ll get an email when a round is closing with people still to vote. Only you — never the family.",
   decisionRemindOffNote: "Off. The app never emails the family.",
@@ -1986,6 +2049,37 @@ const es: Messages = {
   errFamOrganizerOnlyGuests: "Solo un organizador puede gestionar invitados.",
   errFamGuestNotOrganizer: "Un organizador no puede ser invitado.",
 
+  familyNamedSeatsLabel: "Votar sin iniciar sesión",
+  familyNamedSeatsExplain: "Para familiares en Messenger o quien no tenga cuenta de Google o Apple. Cada persona recibe un enlace personal; toca su nombre una vez y luego vota desde ese enlace.",
+  familyNamedSeatsOn: "Desactivar votación por enlace",
+  familyNamedSeatsOff: "Activar votación por enlace",
+  familyAddLinkSeatLabel: "Añadir un lugar con enlace",
+  familyAddLinkSeatHint: "Crea un enlace personal /p/ que puedes enviar por mensaje. No necesitan cuenta.",
+  familyAddLinkSeatPlaceholder: "Abuela",
+  familyAddLinkSeatButton: "Añadir lugar + enlace",
+  familyPersonalLinkLabel: "Enlace personal de voto",
+  familyRotatePersonalLink: "Rotar enlace",
+  familyRevokePersonalLink: "Quitar lugar",
+  familyroleLinkSeat: "vota por enlace",
+  seatVotingAs: "Votas como {name}.",
+  seatNotYou: "¿No eres tú?",
+  seatHomeTitle: "Tus votaciones",
+  seatHomeEmpty: "Ahora no hay nada que votar. Vuelve cuando alguien abra una ronda.",
+  seatClaimTitle: "Votar como {name}",
+  seatClaimBody: "Este enlace es solo para ti. Toca abajo para abrir tu papeleta en este teléfono.",
+  seatClaimButton: "Soy {name}",
+  seatClaimPending: "Abriendo…",
+  seatNeedLinkTitle: "Necesitas un enlace personal",
+  seatNeedLinkBody: "Pide a quien administra el grupo que te envíe tu enlace de voto. Parece /p/…",
+  pubMetaPersonalLinkTitle: "Tu enlace de voto",
+  errFamOrganizerOnlyLinkSeats: "Solo un organizador puede gestionar lugares con enlace.",
+  errFamLinkSeatsOff: "Activa primero la votación por enlace.",
+  errFamLinkSeatNameRequired: "Escribe un nombre para este lugar.",
+  errFamNotLinkSeat: "Ese lugar no es de enlace.",
+  errSeatLinkInvalid: "Ese enlace de voto ya no es válido. Pide uno nuevo.",
+  logLinkSeatAdded: "{organizer} añadió un lugar con enlace para {name}.",
+  logSeatClaimed: "{name} abrió su enlace de voto.",
+
   decisionRemindLabel: "Enviarme recordatorios",
   decisionRemindOnNote: "Activado: recibirás un correo cuando una ronda esté por cerrar y aún falte gente por votar. Solo tú, nunca la familia.",
   decisionRemindOffNote: "Desactivado. La app nunca escribe a la familia.",
@@ -2646,6 +2740,37 @@ const ptBR: Messages = {
   familyRemoveGuests: "Remover todos os convidados ({count})",
   errFamOrganizerOnlyGuests: "Só um organizador pode gerenciar convidados.",
   errFamGuestNotOrganizer: "Um organizador não pode ser convidado.",
+
+  familyNamedSeatsLabel: "Votar sem fazer login",
+  familyNamedSeatsExplain: "Para parentes no Messenger ou quem não tem conta Google ou Apple. Cada pessoa recebe um link pessoal; toca o nome uma vez e depois vota por esse link.",
+  familyNamedSeatsOn: "Desligar voto por link",
+  familyNamedSeatsOff: "Ligar voto por link",
+  familyAddLinkSeatLabel: "Adicionar lugar com link",
+  familyAddLinkSeatHint: "Cria um link pessoal /p/ para mandar no chat. Não precisam de conta.",
+  familyAddLinkSeatPlaceholder: "Vovó",
+  familyAddLinkSeatButton: "Adicionar lugar + link",
+  familyPersonalLinkLabel: "Link pessoal de voto",
+  familyRotatePersonalLink: "Gerar novo link",
+  familyRevokePersonalLink: "Remover lugar",
+  familyroleLinkSeat: "vota por link",
+  seatVotingAs: "Votando como {name}.",
+  seatNotYou: "Não é você?",
+  seatHomeTitle: "Suas votações",
+  seatHomeEmpty: "Nada precisa do seu voto agora. Volte quando alguém abrir uma rodada.",
+  seatClaimTitle: "Votar como {name}",
+  seatClaimBody: "Este link é só para você. Toque abaixo para abrir sua cédula neste celular.",
+  seatClaimButton: "Sou {name}",
+  seatClaimPending: "Abrindo…",
+  seatNeedLinkTitle: "Precisa de um link pessoal",
+  seatNeedLinkBody: "Peça a quem organiza o grupo o seu link de voto. Parece /p/…",
+  pubMetaPersonalLinkTitle: "Seu link de voto",
+  errFamOrganizerOnlyLinkSeats: "Só um organizador pode gerenciar lugares com link.",
+  errFamLinkSeatsOff: "Ative o voto por link primeiro.",
+  errFamLinkSeatNameRequired: "Digite um nome para este lugar.",
+  errFamNotLinkSeat: "Esse lugar não é de link.",
+  errSeatLinkInvalid: "Esse link de voto não é mais válido. Peça um novo.",
+  logLinkSeatAdded: "{organizer} adicionou um lugar com link para {name}.",
+  logSeatClaimed: "{name} abriu o link de voto.",
 
   decisionRemindLabel: "Enviar lembretes para mim",
   decisionRemindOnNote: "Ligado: você receberá um e-mail quando uma rodada estiver para fechar com gente ainda por votar. Só você, nunca a família.",

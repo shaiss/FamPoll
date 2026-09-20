@@ -4,10 +4,12 @@ import { hasClerk } from "@/lib/env";
 
 /** /join stays public so an invitee sees who invited them before signing in. */
 const isProtectedRoute = createRouteMatcher(["/app(.*)"]);
+/** Link-seat voters use `/seat` and `/p` without a Clerk account. */
+const isLinkSeatRoute = createRouteMatcher(["/seat(.*)", "/p(.*)"]);
 
 const withClerk = clerkMiddleware(
   async (auth, req) => {
-    if (isProtectedRoute(req)) {
+    if (isProtectedRoute(req) && !isLinkSeatRoute(req)) {
       await auth.protect();
     }
   },

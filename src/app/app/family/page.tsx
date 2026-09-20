@@ -5,6 +5,8 @@ import { GroupSwitcher } from "@/components/group-switcher";
 import { ShareButton } from "@/components/share-button";
 import { Avatar, Button, Card, Field, inputClass, Pill, SectionLabel, Screen, TopBar } from "@/components/ui";
 import { addExistingUserToGroup, addProxyMember, deleteFamily, demoteOrganizer, leaveFamily, makeOrganizer, reassignProxy, removeGuests, removeMember, renameMember, removeProxyMember, renameFamily, rotateInviteCode, setGuest, setVotePrivacy } from "@/lib/actions/family";
+import { addLinkSeat, revokePersonalLink, rotatePersonalLink, setNamedSeatsEnabled } from "@/lib/actions/seats";
+import { isLinkSeat } from "@/lib/auth";
 import { brand } from "@/lib/brand";
 import { requireMembership } from "@/lib/auth";
 import { readError } from "@/lib/flash";
@@ -63,7 +65,8 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
       <section className="flex flex-col gap-2.5">
         <SectionLabel right={interpolate(t.familyseatCount, { count: members.length })}>{t.familymembersHeading}</SectionLabel>
         {members.map((m) => {
-          const proxy = m.userId === null;
+          const linkSeat = isLinkSeat(m);
+          const proxy = m.userId === null && !linkSeat;
           const mine = m.userId === user.id;
           const managedByMe = m.managedByUserId === user.id;
           const canRemove = proxy ? managedByMe || organizer : organizer && !mine && m.role !== "organizer";
@@ -80,12 +83,12 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
                   {mine ? t.familyyouSuffix : ""}
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-ink-2">
-                  <span>{m.role === "organizer" ? t.familyroleOrganizer : proxy ? t.familyroleProxyDesc : t.familyroleMember}</span>
+                  <span>{m.role === "organizer" ? t.familyroleOrganizer : linkSeat ? t.familyroleLinkSeat : proxy ? t.familyroleProxyDesc : t.familyroleMember}</span>
                   {m.isGuest ? <Pill>{t.familyGuestPill}</Pill> : null}
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
-                {organizer && !proxy && m.role !== "organizer" ? (
+                {organizer && !proxy && !linkSeat && m.role !== "organizer" ? (
                   <form action={makeOrganizer}>
                     <input type="hidden" name="familyId" value={family.id} />
                     <input type="hidden" name="memberId" value={m.id} />
@@ -104,7 +107,7 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
                   </form>
                 ) : null}
                 {canRemove ? (
-                  <form action={proxy ? removeProxyMember : removeMember}>
+                  <form action={proxy ? removeProxyMember : linkSeat ? revokePersonalLink : removeMember}>
                     <input type="hidden" name="familyId" value={family.id} />
                     <input type="hidden" name="memberId" value={m.id} />
                     <Button type="submit" variant="ghost" size="sm">
@@ -196,6 +199,29 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
             {interpolate(t.familyRemoveGuests, { count: guestCount })}
           </Button>
         </form>
+      ) : null}
+
+      {organizer ? (
+        <Card className="flex flex-col gap-3 p-4">
+          <SectionLabel>{t.familyNamedSeatsLabel}</SectionLabel>
+          <p className="text-xs text-ink-3">{t.familyNamedSeatsExplain}</p>
+          <form action={setNamedSeatsEnabled}>
+            <input type="hidden" name="familyId" value={family.id} />
+            <input type="hidden" name="enabled" value={family.namedSeatsEnabled ? "0" : "1"} />
+            <Button type="submit" variant="secondary" size="sm">
+              {family.namedSeatsEnabled ? t.familyNamedSeatsOn : t.familyNamedSeatsOff}
+            </Button>
+          </form>
+          {family.namedSeatsEnabled ? (
+            <form action={addLinkSeat} className="flex flex-col gap-3 border-t border-line pt-3">
+              <input type="hidden" name="familyId" value={family.id} />
+              <Field label={t.familyAddLinkSeatLabel} hint={t.familyAddLinkSeatHint}>
+                <input name="displayName" required maxLength={60} placeholder={t.familyAddLinkSeatPlaceholder} className={inputClass} />
+              </Field>
+              <Button type="submit" variant="secondary">{t.familyAddLinkSeatButton}</Button>
+            </form>
+          ) : null}
+        </Card>
       ) : null}
 
       {organizer ? (

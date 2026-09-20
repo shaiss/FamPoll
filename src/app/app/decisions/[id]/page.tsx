@@ -194,7 +194,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
     if (v.memberId === null) return t.decisionvoterLeft;
     const m = memberById.get(v.memberId);
     const name = m?.displayName ?? "?";
-    if (!m || m.userId === v.castByUserId) return name;
+    if (!m || !v.castByUserId || m.userId === v.castByUserId) return name;
     return interpolate(t.decisionviaCaster, { name, caster: casterName.get(v.castByUserId) ?? t.decisioncasterFallback });
   };
   const organizer = member.role === "organizer" || decision.createdByMemberId === member.id;

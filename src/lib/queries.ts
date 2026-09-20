@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lte, ne } from "drizzle-orm";
 import { cache } from "react";
-import { membershipFor, seatsForUser } from "./auth";
+import { isLinkSeat, membershipFor, seatsForUser } from "./auth";
 import { getDb, schema } from "./db";
 import type { Decision, Event, Member, Option, Round, Vote } from "./db/schema";
 import { effectivePicks, hiddenDefaultFor, seatsInScope, seatsVoted, tally } from "./engine/rounds";
@@ -298,10 +298,76 @@ export async function decisionData(decisionId: string, userId: string) {
     hiddenDefault.set(seat.id, hiddenDefaultFor(mine, seat.votesHidden));
   }
   // Who physically cast each proxy vote, for "Eli (via Shai)".
-  const casterIds = [...new Set(rounds.flatMap((r) => r.votes.map((v) => v.castByUserId)))];
+  const casterIds = [...new Set(rounds.flatMap((r) => r.votes.map((v) => v.castByUserId).filter((id): id is string => id !== null)))];
   const casters = casterIds.length ? await db.query.users.findMany({ where: inArray(schema.users.id, casterIds), columns: { id: true, name: true } }) : [];
   const casterName = new Map(casters.map((u) => [u.id, u.name.split(" ")[0]]));
   return { decision, event: found.event, rounds, currentRound, options, members, seats, casterName, hiddenDefault, family: membership.family, member: membership.member };
+}
+
+/** Ballot read model for a single link seat (no Clerk account). */
+export async function decisionDataForLinkSeat(decisionId: string, seat: Member) {
+  if (!isLinkSeat(seat)) return null;
+  const db = getDb();
+  const found = await db.query.decisions.findFirst({ where: eq(schema.decisions.id, decisionId), with: { event: true } });
+  if (!found || found.event.familyId !== seat.familyId) return null;
+  const family = await db.query.families.findFirst({ where: eq(schema.families.id, seat.familyId) });
+  if (!family?.namedSeatsEnabled) return null;
+  const familyId = seat.familyId;
+  await settleDueRounds(familyId);
+  const [decision, allRounds, rawOptions, members] = await Promise.all([
+    db.query.decisions.findFirst({ where: eq(schema.decisions.id, decisionId) }),
+    db.query.rounds.findMany({ where: eq(schema.rounds.decisionId, decisionId), orderBy: [asc(schema.rounds.number)], with: { votes: true } }),
+    db.query.options.findMany({ where: eq(schema.options.decisionId, decisionId), orderBy: [asc(schema.options.createdAt)], with: { addedBy: true } }),
+    familyMembers(familyId),
+  ]);
+  if (!decision) return null;
+  const seats = [seat];
+  const mySeatIds = new Set([seat.id]);
+  const rounds: RoundView[] = allRounds.map((r) => ({
+    ...r,
+    votes: r.status === "open" ? r.votes.filter((v) => v.memberId !== null && mySeatIds.has(v.memberId)) : r.votes,
+    voterMemberIds: [...seatsVoted(r.votes)],
+  }));
+  const options: OptionView[] = rawOptions.map((o) => (o.anonymous ? { ...o, addedBy: null, addedByMemberId: null } : o));
+  const currentRound = rounds[rounds.length - 1] ?? null;
+  const hiddenDefault = new Map<string, boolean>();
+  const mine = allRounds.flatMap((r) => r.votes.filter((v) => v.memberId === seat.id).map((v) => ({ roundNumber: r.number, createdAt: v.createdAt, anonymous: v.anonymous })));
+  hiddenDefault.set(seat.id, hiddenDefaultFor(mine, seat.votesHidden));
+  const casterIds = [...new Set(rounds.flatMap((r) => r.votes.map((v) => v.castByUserId).filter((id): id is string => id !== null)))];
+  const casters = casterIds.length ? await db.query.users.findMany({ where: inArray(schema.users.id, casterIds), columns: { id: true, name: true } }) : [];
+  const casterName = new Map(casters.map((u) => [u.id, u.name.split(" ")[0]]));
+  return { decision, event: found.event, rounds, currentRound, options, members, seats, casterName, hiddenDefault, family, seat };
+}
+
+export type SeatBallotItem = { decision: Decision; event: Event; round: Round };
+
+/** Open voting rounds in the group that this link seat has not voted in yet. */
+export async function seatOpenBallots(familyId: string, seatId: string): Promise<SeatBallotItem[]> {
+  await settleDueRounds(familyId);
+  const db = getDb();
+  const events = await db.query.events.findMany({
+    where: and(eq(schema.events.familyId, familyId), eq(schema.events.status, "planning")),
+    columns: { id: true, title: true },
+  });
+  if (events.length === 0) return [];
+  const eventIds = events.map((e) => e.id);
+  const decisions = await db.query.decisions.findMany({
+    where: and(inArray(schema.decisions.eventId, eventIds), eq(schema.decisions.status, "open")),
+    with: { rounds: { orderBy: [asc(schema.rounds.number)], with: { votes: { columns: { memberId: true } } } } },
+  });
+  const eventById = new Map(events.map((e) => [e.id, e]));
+  const out: SeatBallotItem[] = [];
+  for (const row of decisions) {
+    const { rounds: rs, ...decision } = row;
+    const round = rs[rs.length - 1];
+    if (!round || round.status !== "open" || round.kind === "ideas") continue;
+    const voted = round.votes.some((v) => v.memberId === seatId);
+    if (voted) continue;
+    const event = eventById.get(decision.eventId);
+    if (!event) continue;
+    out.push({ decision, event: event as Event, round });
+  }
+  return out;
 }
 
 /**

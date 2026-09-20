@@ -57,6 +57,13 @@
       "when": 1788764720453,
       "tag": "0007_feedback",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789936835281,
+      "tag": "0008_silent_bastion",
+      "breakpoints": true
     }
   ]
 }
