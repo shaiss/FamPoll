@@ -38,7 +38,7 @@ export default async function Home() {
   const now = new Date();
 
   return (
-    <Screen className="relative pt-8">
+    <Screen className="relative pt-8 !pb-28">
       <div className="flex items-end justify-between">
         <div className="flex flex-col gap-0.5">
           <div className="text-sm font-medium text-ink-2">
@@ -70,7 +70,7 @@ export default async function Home() {
                       {n.event.title} · {why}
                     </div>
                   </div>
-                  <LinkButton href={`/app/decisions/${n.decision.id}`} size="sm">
+                  <LinkButton href={`/app/decisions/${n.decision.id}`} className="w-full">
                     {t.homeSortItOut}
                   </LinkButton>
                 </Card>
@@ -93,14 +93,14 @@ export default async function Home() {
                     {proxies.length ? ` · ${interpolate(t.homeAlsoFor, { names: proxies.map((p) => p.displayName).join(", ") })}` : ""}
                   </div>
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-3">
                   <div className="flex items-center gap-2">
                     <AvatarStack names={n.votedNames} size={24} max={4} ring="#ffffff" />
                     <span className="text-xs text-ink-2">
                       {ideas ? interpolate(t.homeAddedIdeasCount, { count: n.votedNames.length, total: n.totalSeats }) : interpolate(t.homeVotedCount, { count: n.votedNames.length, total: n.totalSeats })}
                     </span>
                   </div>
-                  <LinkButton href={`/app/decisions/${n.decision.id}`} size="sm">
+                  <LinkButton href={`/app/decisions/${n.decision.id}`} className="w-full">
                     {ideas ? t.homeAddIdea : t.homeVote}
                   </LinkButton>
                 </div>
@@ -211,7 +211,7 @@ export default async function Home() {
       <Link
         href="/app/events/new"
         aria-label={t.homeNewEventAria}
-        className="fixed bottom-8 right-5 inline-flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-button hover:bg-accent-deep md:right-[calc(50%-13rem)]"
+        className="fixed bottom-[calc(2rem+env(safe-area-inset-bottom))] right-[max(1.25rem,env(safe-area-inset-right))] inline-flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-button hover:bg-accent-deep md:right-[calc(50%-13rem)]"
       >
         <Icon name="plus" size={24} stroke={2.5} />
       </Link>

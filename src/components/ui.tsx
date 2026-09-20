@@ -74,7 +74,8 @@ const buttonVariant = {
   dark: "bg-ink text-white hover:bg-black",
   danger: "bg-card text-accent-deep border border-accent-line hover:bg-accent-tint",
 };
-const buttonSize = { md: "h-[52px] px-5 text-base", sm: "h-9 px-4 text-sm rounded-[10px]" };
+/* md ≈52px primary; sm floor ≥44px (HIG/WCAG) — never ship primary vote/share below that */
+const buttonSize = { md: "h-[52px] px-5 text-base", sm: "min-h-11 px-4 text-sm rounded-[10px]" };
 
 export function Button({ children, variant = "primary", size = "md", className = "", ...rest }: ButtonProps & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
