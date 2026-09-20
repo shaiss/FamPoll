@@ -12,11 +12,14 @@ import { getMemberships } from "@/lib/auth";
 import { roundLabel } from "@/lib/engine/rounds";
 import { clipTitle, closesRelative, formatDate, formatDateRange, nightsBetween, relativeTime } from "@/lib/format";
 import { interpolate } from "@/lib/messages";
+import { summaryOgImagePath, summaryShareMeta } from "@/lib/og/summary-share";
+import { SUMMARY_OG_SIZE } from "@/lib/og/summary-og-image";
 import { summaryByToken } from "@/lib/queries";
+import { absoluteUrl } from "@/lib/url";
 
 export const dynamic = "force-dynamic";
 
-/** Text-only link preview for the family chat. Names and votes stay off it. */
+/** Link preview for the family chat. Names and votes stay off the image; description may name an open question. */
 export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
   const locale = await getLocale();
   const b = brandFor(locale);
@@ -25,13 +28,16 @@ export async function generateMetadata({ params }: { params: Promise<{ token: st
   const { token } = await params;
   const data = await summaryByToken(token);
   if (!data) return { title: t.pubMetaSummaryTitle, robots: { index: false } };
-  const decided = data.decisions.filter((d) => d.decision.status === "decided");
-  const open = data.decisions.filter((d) => d.decision.status === "open" && d.currentRound?.status === "open");
-  const parts = [interpolate(t.pubMetaDecidedCount, { decided: decided.length, total: data.decisions.length })];
-  if (open.length) parts.push(`${open.length === 1 ? open[0].decision.title : interpolate(t.pubMetaOpenCount, { count: open.length })}${open.length === 1 && open[0].currentRound ? " · " + closesRelative(open[0].currentRound.closesAt, undefined, locale) : ""}`);
-  const title = interpolate(t.pubMetaDecidedTitle, { event: data.event.title });
-  const description = parts.join(" · ");
-  return { title, description, robots: { index: false }, openGraph: { title, description, siteName: b.name, type: "website" } };
+  const { title, description } = summaryShareMeta(data, t, locale);
+  const imageUrl = await absoluteUrl(summaryOgImagePath(token));
+  const image = { url: imageUrl, width: SUMMARY_OG_SIZE.width, height: SUMMARY_OG_SIZE.height, alt: title };
+  return {
+    title,
+    description,
+    robots: { index: false },
+    openGraph: { title, description, siteName: b.name, type: "website", images: [image] },
+    twitter: { card: "summary_large_image", title, description, images: [imageUrl] },
+  };
 }
 
 export default async function PublicSummary({ params }: { params: Promise<{ token: string }> }) {
