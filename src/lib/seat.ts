@@ -12,8 +12,10 @@ export async function setSeatSessionToken(token: string): Promise<void> {
   const store = await cookies();
   store.set(SEAT_COOKIE, token, {
     httpOnly: true,
+    secure: true,
     sameSite: "lax",
     path: "/",
+    // Long-lived so relatives are not asked to reclaim after every Messenger visit; rotation/revoke clears the token server-side.
     maxAge: 60 * 60 * 24 * 365 * 2,
   });
 }
