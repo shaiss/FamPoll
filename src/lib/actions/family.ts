@@ -68,7 +68,7 @@ async function reassignHistory(tx: Tx, memberIds: string[], heirMemberId: string
  * so a settled round's counts never shift and a hidden vote in it is never
  * given away by subtraction.
  */
-async function retireSeats(tx: Tx, memberIds: string[]) {
+export async function retireSeats(tx: Tx, memberIds: string[]) {
   if (memberIds.length === 0) return;
   const open = await tx.select({ id: schema.rounds.id }).from(schema.rounds).where(eq(schema.rounds.status, "open"));
   if (open.length) {

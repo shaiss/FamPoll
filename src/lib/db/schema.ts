@@ -40,6 +40,8 @@ export const families = pgTable("families", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   inviteCode: text("invite_code").notNull().unique(),
+  /** When true, organizers can mint personal /p/ links so relatives vote without signing in. */
+  namedSeatsEnabled: boolean("named_seats_enabled").notNull().default(false),
   createdByUserId: text("created_by_user_id")
     .notNull()
     .references(() => users.id),
@@ -66,6 +68,15 @@ export const members = pgTable(
     votesHidden: boolean("votes_hidden").notNull().default(false),
     /** A one-event guest an organizer can clear out afterwards (removeGuests). Counts and votes like anyone while present. */
     isGuest: boolean("is_guest").notNull().default(false),
+    /**
+     * A named seat claimed via personal link: no Clerk account, not a proxy
+     * (managedByUserId stays null). Votes are cast with a long-lived seat cookie.
+     */
+    linkSeat: boolean("link_seat").notNull().default(false),
+    /** Secret in `/p/<token>`; rotated by the organizer to revoke old links. */
+    personalLinkToken: text("personal_link_token").unique(),
+    /** Stored in the `fp_seat` cookie after claim; cleared on link rotation. */
+    seatSessionToken: text("seat_session_token").unique(),
     createdAt: createdAt(),
   },
   (t) => [
@@ -203,10 +214,8 @@ export const votes = pgTable(
      * so its counts (and any hidden vote in it) never shift after the fact.
      */
     memberId: text("member_id").references(() => members.id, { onDelete: "set null" }),
-    /** The signed-in person who physically cast it (differs from the member for proxies). */
-    castByUserId: text("cast_by_user_id")
-      .notNull()
-      .references(() => users.id),
+    /** The signed-in person who physically cast it; null when a link seat votes from its own cookie. */
+    castByUserId: text("cast_by_user_id").references(() => users.id),
     /** A hidden ballot: counted like any other, never attributed in the UI. */
     anonymous: boolean("anonymous").notNull().default(false),
     /** Position on a ranked ballot (1 = first choice). Null for ordinary pick-one / pick-several ballots. */

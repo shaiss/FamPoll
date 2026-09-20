@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getDb, schema } from "./db";
 import { hasClerk, hasDatabase } from "./env";
 import { getActiveGroupId } from "./group";
+import { getSeatSessionToken } from "./seat";
 import type { Family, Member, User } from "./db/schema";
 
 /**
@@ -103,4 +104,33 @@ export async function seatsForUser(familyId: string, userId: string): Promise<Me
 
 export function isOrganizer(member: Member): boolean {
   return member.role === "organizer";
+}
+
+/** A seat that votes via personal link instead of Clerk (never anonymous, never a proxy). */
+export function isLinkSeat(member: Member): boolean {
+  return member.linkSeat && member.userId === null && member.managedByUserId === null;
+}
+
+/**
+ * The named link seat stamped in the browser cookie, when the group still allows
+ * link voting. Null when unset, stale, or named seats are turned off.
+ */
+export async function memberBySeatSession(): Promise<(Member & { family: Family }) | null> {
+  const token = await getSeatSessionToken();
+  if (!token) return null;
+  const db = getDb();
+  const row = await db.query.members.findFirst({
+    where: and(eq(schema.members.seatSessionToken, token), eq(schema.members.linkSeat, true)),
+    with: { family: true },
+  });
+  if (!row?.family.namedSeatsEnabled) return null;
+  const { family, ...member } = row;
+  return { ...(member as Member), family };
+}
+
+/** Require a link-seat session or send the browser to claim a personal link. */
+export async function requireLinkSeat(): Promise<Member & { family: Family }> {
+  const seat = await memberBySeatSession();
+  if (!seat) redirect("/p");
+  return seat;
 }

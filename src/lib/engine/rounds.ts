@@ -193,7 +193,7 @@ export function resolveFinal(rows: TallyRow[]): FinalResult {
  * A skip (optionId null) contributes nothing; a seat that ranked fewer options
  * simply has a shorter list, so its lower choices exhaust during the runoff.
  */
-export function rankedBallots(votes: { memberId: string | null; optionId: string | null; rank: number | null; castByUserId: string }[]): string[][] {
+export function rankedBallots(votes: { memberId: string | null; optionId: string | null; rank: number | null; castByUserId: string | null }[]): string[][] {
   const byBallot = new Map<string, { optionId: string; rank: number }[]>();
   for (const v of votes) {
     if (v.optionId === null) continue;
@@ -341,7 +341,7 @@ export function seatsInScope<T extends { userId: string | null }>(seats: T[], sc
   return scope === "adults" ? seats.filter((s) => s.userId !== null) : seats;
 }
 
-export type BallotRef = { memberId: string | null; optionId: string | null; castByUserId: string };
+export type BallotRef = { memberId: string | null; optionId: string | null; castByUserId: string | null };
 
 /** The seats that took part in a round. A seat that has since left the family (memberId null) is not one. */
 export function seatsVoted(votes: { memberId: string | null }[]): Set<string> {
@@ -355,9 +355,9 @@ export function seatsVoted(votes: { memberId: string | null }[]): Set<string> {
  * still in the family count once each; ballots left behind by seats that have
  * gone are grouped by whoever cast them, the closest thing to a person we keep.
  */
-export function peopleVoted(votes: { memberId: string | null; castByUserId: string }[]): number {
+export function peopleVoted(votes: { memberId: string | null; castByUserId: string | null }[]): number {
   const departed = new Set<string>();
-  for (const v of votes) if (v.memberId === null) departed.add(v.castByUserId);
+  for (const v of votes) if (v.memberId === null && v.castByUserId) departed.add(v.castByUserId);
   return seatsVoted(votes).size + departed.size;
 }
 
