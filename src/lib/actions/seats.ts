@@ -10,6 +10,7 @@ import { fail } from "../flash";
 import { newId } from "../ids";
 import { logActivity } from "../lifecycle";
 import { clearSeatSessionCookie, setSeatSessionToken } from "../seat";
+import { stampSeatSessionIfLinkCurrent } from "../seat-session";
 import { getMessages } from "@/lib/locale-server";
 import { interpolate } from "@/lib/messages";
 import { retireSeats } from "./family";
@@ -134,7 +135,12 @@ export async function claimPersonalLink(formData: FormData) {
   });
   if (!seat || !isLinkSeat(seat) || !seat.family.namedSeatsEnabled) fail(back, t.errSeatLinkInvalid);
   const seatSessionToken = newId();
-  await db.update(schema.members).set({ seatSessionToken }).where(eq(schema.members.id, seat.id));
+  const stamped = await stampSeatSessionIfLinkCurrent(db, {
+    memberId: seat.id,
+    presentedToken: token,
+    seatSessionToken,
+  });
+  if (!stamped) fail(back, t.errSeatLinkInvalid);
   const event = await db.query.events.findFirst({
     where: eq(schema.events.familyId, seat.familyId),
     orderBy: (e, { desc }) => [desc(e.createdAt)],
