@@ -7,12 +7,12 @@ import { hasMailer } from "@/lib/env";
 import { CopyText } from "@/components/copy-text";
 import { InAppBrowserNotice } from "@/components/in-app-browser-notice";
 import { baseUrl } from "@/lib/url";
-import { requireUser } from "@/lib/auth";
+import { isLinkSeat, requireUser } from "@/lib/auth";
 import type { Vote } from "@/lib/db/schema";
 import { formatLabel, roundKindLabel, voteTypeLabel, effectivePicks, isTiebreak, peopleVoted, roundInstruction, roundLabel, roundSequence, roundTrail, tally, type Format, type RoundKind } from "@/lib/engine/rounds";
 import { readError } from "@/lib/flash";
 import { clipTitle, closesRelative, formatDate } from "@/lib/format";
-import { pasteNudgeLines } from "@/lib/nudge";
+import { nudgePeople, pasteNudgeLines } from "@/lib/nudge";
 import { decisionData, type OptionView, type RoundView } from "@/lib/queries";
 import { getLocale, getMessages } from "@/lib/locale-server";
 import { interpolate } from "@/lib/messages";
@@ -243,7 +243,12 @@ export default async function DecisionPage({ params, searchParams }: { params: P
   const canAddIdeas = !!open && decision.voteType !== "ab" && !laterFinal && (laterShortlist ? organizer : decision.anyoneCanAddOptions || organizer);
   // Participation is public; the open round's `votes` holds only the viewer's own seats' ballots.
   const votersInOpen = open ? new Set(open.voterMemberIds) : new Set<string>();
-  const waitingOn = open ? eligibleMembers.filter((m) => !votersInOpen.has(m.id)).map((m) => m.displayName) : [];
+  const waitingSeats = open ? eligibleMembers.filter((m) => !votersInOpen.has(m.id)) : [];
+  const waitingOn = waitingSeats.map((m) => m.displayName);
+  const waitingVoters = waitingSeats.map((m) => ({
+    displayName: m.displayName,
+    personalLinkToken: data.family.namedSeatsEnabled && isLinkSeat(m) ? m.personalLinkToken : null,
+  }));
   const tiedOptions = tied
     ? (() => {
         const rows = tally(
@@ -525,7 +530,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
             lines={
               open.kind !== "ideas" && waitingOn.length
                 ? pasteNudgeLines(t, {
-                    names: waitingOn,
+                    pending: nudgePeople(waitingVoters, base),
                     link: `${base}/app/decisions/${decision.id}`,
                     closesAt: open.closesAt,
                   })

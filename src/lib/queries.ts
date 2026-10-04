@@ -40,6 +40,8 @@ export type NeedsVote = {
   picks: number;
   /** Every roster seat still to act, by name — for the "still waiting on …" nudge the organizer pastes into the chat. */
   waitingNames: string[];
+  /** Stored personal-link tokens for pending link seats (null for signed-in / proxy seats). */
+  waitingVoters: { displayName: string; personalLinkToken: string | null }[];
 };
 
 async function decisionCards(eventIds: string[]): Promise<Map<string, DecisionCard[]>> {
@@ -132,11 +134,13 @@ export async function invitableUsers(currentFamilyId: string, userId: string): P
 export async function homeData(familyId: string, userId: string) {
   await settleDueRounds(familyId);
   const db = getDb();
-  const [events, members, seats] = await Promise.all([
+  const [events, members, seats, familyRow] = await Promise.all([
     db.query.events.findMany({ where: eq(schema.events.familyId, familyId), orderBy: [desc(schema.events.createdAt)] }),
     familyMembers(familyId),
     seatsForUser(familyId, userId),
+    db.query.families.findFirst({ where: eq(schema.families.id, familyId), columns: { namedSeatsEnabled: true } }),
   ]);
+  const namedSeatsEnabled = familyRow?.namedSeatsEnabled === true;
   const cards = await decisionCards(events.map((e) => e.id));
   const memberName = new Map(members.map((m) => [m.id, m.displayName]));
 
@@ -167,6 +171,7 @@ export async function homeData(familyId: string, userId: string) {
             totalSeats: members.length,
             picks: effectivePicks(r.maxPicks, c.aliveCount),
             waitingNames: [],
+            waitingVoters: [],
           });
         }
         continue;
@@ -183,7 +188,12 @@ export async function homeData(familyId: string, userId: string) {
       const pendingSeats = eligibleSeats.filter((s) => !done.includes(s.id));
       // Everyone on the roster still to act, for the nudge text.
       const rosterEligible = excludeProxies ? members.filter((m) => m.userId !== null) : members;
-      const waitingNames = rosterEligible.filter((m) => !done.includes(m.id)).map((m) => m.displayName);
+      const waiting = rosterEligible.filter((m) => !done.includes(m.id));
+      const waitingNames = waiting.map((m) => m.displayName);
+      const waitingVoters = waiting.map((m) => ({
+        displayName: m.displayName,
+        personalLinkToken: namedSeatsEnabled && isLinkSeat(m) ? m.personalLinkToken : null,
+      }));
       if (pendingSeats.length > 0) {
         needsVote.push({
           kind: r.kind === "ideas" ? "ideas" : "vote",
@@ -197,6 +207,7 @@ export async function homeData(familyId: string, userId: string) {
           totalSeats: rosterEligible.length,
           picks: effectivePicks(r.maxPicks, c.aliveCount),
           waitingNames,
+          waitingVoters,
         });
       }
     }
@@ -396,6 +407,7 @@ export type ReminderTarget = {
   eventTitle: string;
   closesAt: Date;
   pendingNames: string[];
+  pendingVoters: { displayName: string; personalLinkToken: string | null }[];
   organizers: { email: string; name: string }[];
 };
 
@@ -409,10 +421,11 @@ export async function roundsDueForReminder(now: Date, windowHours = 24): Promise
   const db = getDb();
   const until = new Date(now.getTime() + windowHours * 60 * 60 * 1000);
   const rows = await db
-    .select({ round: schema.rounds, decision: schema.decisions, event: schema.events })
+    .select({ round: schema.rounds, decision: schema.decisions, event: schema.events, namedSeatsEnabled: schema.families.namedSeatsEnabled })
     .from(schema.rounds)
     .innerJoin(schema.decisions, eq(schema.decisions.id, schema.rounds.decisionId))
     .innerJoin(schema.events, eq(schema.events.id, schema.decisions.eventId))
+    .innerJoin(schema.families, eq(schema.families.id, schema.events.familyId))
     .where(
       and(
         eq(schema.rounds.status, "open"),
@@ -426,7 +439,7 @@ export async function roundsDueForReminder(now: Date, windowHours = 24): Promise
       ),
     );
   const out: ReminderTarget[] = [];
-  for (const { round, decision, event } of rows) {
+  for (const { round, decision, event, namedSeatsEnabled } of rows) {
     const [members, votes, orgRows] = await Promise.all([
       familyMembers(event.familyId),
       db.select({ memberId: schema.votes.memberId }).from(schema.votes).where(eq(schema.votes.roundId, round.id)),
@@ -437,12 +450,15 @@ export async function roundsDueForReminder(now: Date, windowHours = 24): Promise
         .where(and(eq(schema.members.familyId, event.familyId), eq(schema.members.role, "organizer"))),
     ]);
     const voted = seatsVoted(votes);
-    const pendingNames = seatsInScope(members, decision.eligibilityScope)
-      .filter((m) => !voted.has(m.id))
-      .map((m) => m.displayName);
+    const pending = seatsInScope(members, decision.eligibilityScope).filter((m) => !voted.has(m.id));
+    const pendingVoters = pending.map((m) => ({
+      displayName: m.displayName,
+      personalLinkToken: namedSeatsEnabled && isLinkSeat(m) ? m.personalLinkToken : null,
+    }));
+    const pendingNames = pendingVoters.map((p) => p.displayName);
     const organizers = orgRows.filter((o): o is { email: string; name: string } => Boolean(o.email));
     if (pendingNames.length > 0 && organizers.length > 0) {
-      out.push({ roundId: round.id, decisionId: decision.id, eventId: event.id, decisionTitle: decision.title, eventTitle: event.title, closesAt: round.closesAt, pendingNames, organizers });
+      out.push({ roundId: round.id, decisionId: decision.id, eventId: event.id, decisionTitle: decision.title, eventTitle: event.title, closesAt: round.closesAt, pendingNames, pendingVoters, organizers });
     }
   }
   return out;

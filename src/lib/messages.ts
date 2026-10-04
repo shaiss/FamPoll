@@ -196,6 +196,7 @@ export type Messages = {
   decisioncopyVote: string;
   decisioncopyStillWaiting: string;
   nudgeStillWaiting: string;
+  nudgePersonLink: string;
   nudgeOpenInBrowser: string;
   decisiontieHeading: string;
   decisiontieEndedLevel: string;
@@ -895,6 +896,7 @@ const en: Messages = {
   decisioncopyVote: "{round}. Vote, {closes}:",
   decisioncopyStillWaiting: "Still waiting on {names}.",
   nudgeStillWaiting: "Still waiting on {names} — vote by {deadline}: {link}",
+  nudgePersonLink: "{name}: {link}",
   nudgeOpenInBrowser: "Open in Safari/Chrome — Messenger’s browser can block sign-in.",
   decisiontieHeading: "It’s a tie",
   decisiontieEndedLevel: "{options} ended level.",
@@ -1587,6 +1589,7 @@ const es: Messages = {
   decisioncopyVote: "{round}. Vota, {closes}:",
   decisioncopyStillWaiting: "Aún esperando a {names}.",
   nudgeStillWaiting: "Aún esperando a {names} — voten antes de {deadline}: {link}",
+  nudgePersonLink: "{name}: {link}",
   nudgeOpenInBrowser: "Ábrelo en Safari/Chrome — el navegador de Messenger puede bloquear el inicio de sesión.",
   decisiontieHeading: "Hay empate",
   decisiontieEndedLevel: "{options} quedaron empatadas.",
@@ -2279,6 +2282,7 @@ const ptBR: Messages = {
   decisioncopyVote: "{round}. Vote, {closes}:",
   decisioncopyStillWaiting: "Ainda esperando por {names}.",
   nudgeStillWaiting: "Ainda esperando por {names} — votem até {deadline}: {link}",
+  nudgePersonLink: "{name}: {link}",
   nudgeOpenInBrowser: "Abra no Safari/Chrome — o navegador do Messenger pode bloquear o login.",
   decisiontieHeading: "Deu empate",
   decisiontieEndedLevel: "{options} terminaram empatadas.",
