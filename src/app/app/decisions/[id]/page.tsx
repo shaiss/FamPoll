@@ -233,7 +233,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
       ) : null}
 
       {allowAddIdeas ? (
-        <AddOptionForm decisionId={decision.id} format={decision.format} ideasRound={open?.kind === "ideas"} t={t} />
+        <AddOptionForm decisionId={decision.id} memberId={member.id} format={decision.format} ideasRound={open?.kind === "ideas"} t={t} />
       ) : open?.kind === "ideas" ? (
         <p className="text-xs text-ink-3">{t.decisionorganizerCollectingIdeas}</p>
       ) : null}

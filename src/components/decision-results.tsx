@@ -204,11 +204,13 @@ export async function IdeasSoFar({ options, format }: { options: OptionView[]; f
 
 export function AddOptionForm({
   decisionId,
+  memberId,
   format,
   ideasRound,
   t,
 }: {
   decisionId: string;
+  memberId: string;
   format: Format;
   ideasRound: boolean;
   t: Messages;
@@ -217,6 +219,7 @@ export function AddOptionForm({
     <Card className="p-4">
       <form action={addOption} className="flex flex-col gap-3">
         <input type="hidden" name="decisionId" value={decisionId} />
+        <input type="hidden" name="memberId" value={memberId} />
         {format === "date" ? (
           <div className="flex flex-col gap-2">
             <span className="text-[13px] font-semibold text-ink-2">{ideasRound ? t.decisionsuggestDates : t.decisionaddDateRange}</span>

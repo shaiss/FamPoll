@@ -139,7 +139,7 @@ export default async function SeatDecisionPage({ params, searchParams }: { param
       {open && open.kind === "ideas" ? <IdeasSoFar options={alive} format={decision.format} /> : null}
 
       {allowAddIdeas ? (
-        <AddOptionForm decisionId={decision.id} format={decision.format} ideasRound={open?.kind === "ideas"} t={t} />
+        <AddOptionForm decisionId={decision.id} memberId={seat.id} format={decision.format} ideasRound={open?.kind === "ideas"} t={t} />
       ) : open?.kind === "ideas" ? (
         <p className="text-xs text-ink-3">{t.decisionorganizerCollectingIdeas}</p>
       ) : null}

@@ -5,6 +5,22 @@ export function decisionPagePath(mode: "user" | "seat", decisionId: string): str
   return mode === "seat" ? `/seat/decisions/${decisionId}` : `/app/decisions/${decisionId}`;
 }
 
+/**
+ * Who may act as `memberId` on a ballot action (vote, add an idea, show a hand).
+ * A signed-in family member only wins when `memberId` is one of their seats;
+ * otherwise the `fp_seat` cookie seat wins. A co-present Clerk member who is
+ * not that seat must not steal attribution or block the cookie.
+ */
+export function ballotActorKind(input: {
+  memberId: string;
+  clerkSeatIds: readonly string[] | null;
+  cookieSeatId: string | null;
+}): "user" | "seat" | null {
+  if (input.clerkSeatIds?.includes(input.memberId)) return "user";
+  if (input.cookieSeatId === input.memberId) return "seat";
+  return null;
+}
+
 /** "Eli (via Shai)" when someone else cast the vote; a departed seat keeps its ballot, not its name. */
 export function voterDisplayName(
   v: { memberId: string | null; castByUserId: string | null },

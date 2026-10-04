@@ -8,7 +8,7 @@ import { auth } from "@clerk/nextjs/server";
 import { isLinkSeat, memberBySeatSession, membershipFor, requireUser, seatsForUser } from "../auth";
 import { getDb, schema } from "../db";
 import { ballotsToSkip, canAddIdeas, closesAtFrom, effectivePicks, isPastDeadline, optionCountRule, optionTitleLimit, planRoundCount, plansFor, rankedBallots, resolveFinal, resolveRankedFinal, roundSequence, tally, type Format, type Plan, type VoteType } from "../engine/rounds";
-import { decisionPagePath } from "../decision-view";
+import { ballotActorKind, decisionPagePath } from "../decision-view";
 import { fail } from "../flash";
 import { newId } from "../ids";
 import { applyOutcome, closeRoundAndAdvance, lockOpenRound, logActivity, maybeCloseEarly, openRound, settleDueRounds } from "../lifecycle";
@@ -253,29 +253,13 @@ export async function duplicateDecision(formData: FormData) {
   redirect(`/app/decisions/${newDecisionId}`);
 }
 
-/** Signed-in member of this group, or the cookie link seat for this group. */
-async function resolveDecisionActor(familyId: string, fallbackBack: string) {
-  const t = await getMessages();
-  const { userId } = await auth();
-  if (userId) {
-    const membership = await membershipFor(userId, familyId);
-    if (membership) {
-      return { mode: "user" as const, user: await requireUser(), member: membership.member, family: membership.family };
-    }
-  }
-  const link = await memberBySeatSession();
-  if (link && link.familyId === familyId && isLinkSeat(link)) {
-    return { mode: "seat" as const, member: link, family: link.family };
-  }
-  fail(fallbackBack, t.errDecCantActFromSeat);
-}
-
 export async function addOption(formData: FormData) {
   const decisionId = z.string().parse(formData.get("decisionId"));
+  const memberId = z.string().parse(formData.get("memberId"));
   const found = await getDb().query.decisions.findFirst({ where: eq(schema.decisions.id, decisionId), with: { event: true } });
   if (!found) throw new Error("Decision not found.");
-  const actor = await resolveDecisionActor(found.event.familyId, `/app/decisions/${decisionId}`);
-  const member = actor.member;
+  const actor = await resolveBallotSeat(found.event.familyId, memberId, decisionPagePath("user", decisionId));
+  const member = actor.seat;
   const decision = found;
   const t = await getMessages();
   const back = decisionPagePath(actor.mode, decisionId);
@@ -329,16 +313,20 @@ export async function addOption(formData: FormData) {
 async function resolveBallotSeat(familyId: string, memberId: string, back: string) {
   const t = await getMessages();
   const { userId } = await auth();
-  if (userId) {
-    const membership = await membershipFor(userId, familyId);
-    if (membership) {
-      const seats = await seatsForUser(familyId, userId);
-      const seat = seats.find((s) => s.id === memberId);
-      if (seat) return { mode: "user" as const, user: await requireUser(), seat, seats, family: membership.family };
-    }
-  }
+  const membership = userId ? await membershipFor(userId, familyId) : null;
+  const clerkSeats = membership && userId ? await seatsForUser(familyId, userId) : null;
   const link = await memberBySeatSession();
-  if (link && link.familyId === familyId && link.id === memberId && isLinkSeat(link)) {
+  const cookieSeatId = link && link.familyId === familyId && isLinkSeat(link) ? link.id : null;
+  const kind = ballotActorKind({
+    memberId,
+    clerkSeatIds: clerkSeats?.map((s) => s.id) ?? null,
+    cookieSeatId,
+  });
+  if (kind === "user" && clerkSeats && membership) {
+    const seat = clerkSeats.find((s) => s.id === memberId);
+    if (seat) return { mode: "user" as const, user: await requireUser(), seat, seats: clerkSeats, family: membership.family };
+  }
+  if (kind === "seat" && link) {
     return { mode: "seat" as const, seat: link, family: link.family };
   }
   fail(back, t.errDecCantVoteFromSeat);
@@ -781,12 +769,10 @@ export async function revealVotes(formData: FormData) {
   if (!round) throw new Error("Round not found.");
   const found = await db.query.decisions.findFirst({ where: eq(schema.decisions.id, round.decisionId), with: { event: true } });
   if (!found) throw new Error("Decision not found.");
-  const actor = await resolveDecisionActor(found.event.familyId, decisionPagePath("user", found.id));
+  const actor = await resolveBallotSeat(found.event.familyId, memberId, decisionPagePath("user", found.id));
   const t = await getMessages();
   const back = decisionPagePath(actor.mode, found.id);
   if (round.status !== "closed") fail(back, t.errDecShowHandAfterClose);
-  const ownSeat = actor.mode === "user" ? (await seatsForUser(actor.family.id, actor.user.id)).some((s) => s.id === memberId) : actor.member.id === memberId;
-  if (!ownSeat) fail(back, t.errDecNotYourSeat);
   await db.update(schema.votes).set({ anonymous: false }).where(and(eq(schema.votes.roundId, roundId), eq(schema.votes.memberId, memberId)));
   revalidateDecision(found.id, found.eventId);
   redirect(back);

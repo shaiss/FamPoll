@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { advancedFromShortlists, decisionPagePath, voterDisplayName } from "./decision-view";
+import { advancedFromShortlists, ballotActorKind, decisionPagePath, voterDisplayName } from "./decision-view";
 import { interpolate, messages } from "./messages";
 
 const en = messages("en");
@@ -45,6 +45,41 @@ describe("advancedFromShortlists", () => {
   });
 });
 
+describe("ballotActorKind", () => {
+  it("lets the fp_seat cookie win when a co-present Clerk family member is not that seat", () => {
+    assert.equal(
+      ballotActorKind({
+        memberId: "cookie-seat",
+        clerkSeatIds: ["clerk-member", "clerk-proxy"],
+        cookieSeatId: "cookie-seat",
+      }),
+      "seat",
+    );
+  });
+
+  it("lets a signed-in family member act as their own seat even if a cookie is present", () => {
+    assert.equal(
+      ballotActorKind({
+        memberId: "clerk-member",
+        clerkSeatIds: ["clerk-member"],
+        cookieSeatId: "cookie-seat",
+      }),
+      "user",
+    );
+  });
+
+  it("rejects a Clerk member claiming a seat that is neither theirs nor the cookie", () => {
+    assert.equal(
+      ballotActorKind({
+        memberId: "other-seat",
+        clerkSeatIds: ["clerk-member"],
+        cookieSeatId: "cookie-seat",
+      }),
+      null,
+    );
+  });
+});
+
 describe("seat surface source", () => {
   const files = [
     "src/app/seat/page.tsx",
@@ -58,5 +93,40 @@ describe("seat surface source", () => {
       assert.equal(src.includes("personalLinkToken"), false, file);
       assert.equal(src.includes("/p/"), false, file);
     }
+  });
+  it("keeps organizer controls off the seat decision page", () => {
+    const src = readFileSync("src/app/seat/decisions/[id]/page.tsx", "utf8");
+    for (const action of ["closeRoundNow", "deleteDecision", "extendRound", "pickWinner", "reopenRound", "tiebreak"]) {
+      assert.equal(src.includes(action), false, action);
+    }
+    assert.match(src, /organizer:\s*false/);
+  });
+});
+
+function actionBody(src: string, name: string): string {
+  const start = src.indexOf(`export async function ${name}`);
+  assert.ok(start >= 0, name);
+  const next = src.indexOf("\nexport async function ", start + 1);
+  return next === -1 ? src.slice(start) : src.slice(start, next);
+}
+
+describe("addOption and revealVotes seat cookie", () => {
+  const src = readFileSync("src/lib/actions/decisions.ts", "utf8");
+  it("resolve through resolveBallotSeat, not a Clerk-first actor", () => {
+    for (const name of ["addOption", "revealVotes", "castVote"]) {
+      const body = actionBody(src, name);
+      assert.match(body, /resolveBallotSeat\(/, name);
+      assert.equal(body.includes("resolveDecisionActor"), false, name);
+    }
+    assert.match(src, /ballotActorKind\(/);
+    assert.equal(src.includes("function resolveDecisionActor"), false);
+  });
+  it("addOption posts a seat id so a co-present Clerk member cannot steal the cookie seat", () => {
+    const add = actionBody(src, "addOption");
+    assert.match(add, /formData\.get\("memberId"\)/);
+    const form = readFileSync("src/components/decision-results.tsx", "utf8");
+    assert.match(form, /name="memberId"/);
+    const seatPage = readFileSync("src/app/seat/decisions/[id]/page.tsx", "utf8");
+    assert.match(seatPage, /memberId=\{seat\.id\}/);
   });
 });
