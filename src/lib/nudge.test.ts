@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { messages } from "./messages";
 import { nudgePeople, pasteNudgeLines, personalVoteUrl, reminderNudgeBody, storedPersonalLinkToken, visibleRosterMember } from "./nudge";
@@ -245,5 +246,16 @@ describe("visibleRosterMember", () => {
     const row = visibleRosterMember(signedIn, live);
     assert.equal(row.personalLinkToken, null);
     assert.equal(row.seatSessionToken, null);
+  });
+});
+
+describe("family roster personal-link controls", () => {
+  const src = readFileSync("src/app/app/family/page.tsx", "utf8");
+
+  it("projects members through visibleRosterMember before render", () => {
+    assert.match(src, /visibleRosterMember/);
+    assert.match(src, /includePersonalLinks:\s*organizer/);
+    assert.match(src, /rotatePersonalLink/);
+    assert.match(src, /familyPersonalLinkLabel/);
   });
 });
