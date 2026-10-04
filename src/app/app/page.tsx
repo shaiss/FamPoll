@@ -10,7 +10,7 @@ import { baseUrl } from "@/lib/url";
 import { requireMembership } from "@/lib/auth";
 import { roundLabel } from "@/lib/engine/rounds";
 import { closesRelative, formatDate, formatDateRange } from "@/lib/format";
-import { pasteNudgeLines } from "@/lib/nudge";
+import { nudgePeople, pasteNudgeLines } from "@/lib/nudge";
 import { homeData } from "@/lib/queries";
 import { getLocale, getMessages } from "@/lib/locale-server";
 import { interpolate, type Messages } from "@/lib/messages";
@@ -109,7 +109,7 @@ export default async function Home() {
                     variant="ghost"
                     label={t.homeCopyNudge}
                     lines={pasteNudgeLines(t, {
-                      names: n.waitingNames,
+                      pending: nudgePeople(n.waitingVoters, base),
                       link: `${base}/app/decisions/${n.decision.id}`,
                       closesAt: n.round.closesAt,
                     })}
