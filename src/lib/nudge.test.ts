@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { messages } from "./messages";
-import { nudgePeople, pasteNudgeLines, personalVoteUrl, reminderNudgeBody, storedPersonalLinkToken } from "./nudge";
+import { nudgePeople, pasteNudgeLines, personalVoteUrl, reminderNudgeBody, storedPersonalLinkToken, visibleRosterMember } from "./nudge";
 
 describe("nudge Path A template", () => {
   const closesAt = new Date("2026-09-15T18:00:00Z");
@@ -202,5 +202,48 @@ describe("nudge Path A template", () => {
     assert.equal(pt.length, 2);
     assert.equal(pt.some((l) => l.text.includes("/p/")), false);
   });
+});
 
+describe("visibleRosterMember", () => {
+  const linkSeat = {
+    displayName: "Nana",
+    linkSeat: true,
+    userId: null,
+    managedByUserId: null,
+    personalLinkToken: "nana-token",
+    seatSessionToken: "seat-cookie",
+  };
+  const signedIn = {
+    displayName: "Eli",
+    linkSeat: false,
+    userId: "user_eli",
+    managedByUserId: null,
+    personalLinkToken: "should-not-appear",
+    seatSessionToken: "eli-cookie",
+  };
+  const live = { includePersonalLinks: true, namedSeatsEnabled: true };
+
+  it("keeps a live /p/ token for organizers and always drops seat cookies", () => {
+    const row = visibleRosterMember(linkSeat, live);
+    assert.equal(row.personalLinkToken, "nana-token");
+    assert.equal(row.seatSessionToken, null);
+  });
+
+  it("strips another seat's token for non-organizers", () => {
+    const row = visibleRosterMember(linkSeat, { includePersonalLinks: false, namedSeatsEnabled: true });
+    assert.equal(row.personalLinkToken, null);
+    assert.equal(row.seatSessionToken, null);
+    assert.equal(row.displayName, "Nana");
+  });
+
+  it("omits /p/ tokens when named seats are off, even for organizers", () => {
+    const row = visibleRosterMember(linkSeat, { includePersonalLinks: true, namedSeatsEnabled: false });
+    assert.equal(row.personalLinkToken, null);
+  });
+
+  it("never keeps a token on a signed-in seat", () => {
+    const row = visibleRosterMember(signedIn, live);
+    assert.equal(row.personalLinkToken, null);
+    assert.equal(row.seatSessionToken, null);
+  });
 });

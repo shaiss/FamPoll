@@ -12,16 +12,20 @@ import { requireMembership } from "@/lib/auth";
 import { readError } from "@/lib/flash";
 import { getMessages } from "@/lib/locale-server";
 import { interpolate } from "@/lib/messages";
+import { personalVoteUrl, visibleRosterMember } from "@/lib/nudge";
 import { familyMembers, invitableUsers } from "@/lib/queries";
 import { baseUrl } from "@/lib/url";
 
 export default async function FamilyPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { user, family, member, memberships } = await requireMembership();
   const error = readError(await searchParams);
-  const [members, invitable, base] = await Promise.all([familyMembers(family.id), invitableUsers(family.id, user.id), baseUrl()]);
+  const [rawMembers, invitable, base] = await Promise.all([familyMembers(family.id), invitableUsers(family.id, user.id), baseUrl()]);
   const t = await getMessages();
   const inviteUrl = `${base}/join/${family.inviteCode}`;
   const organizer = member.role === "organizer";
+  const members = rawMembers.map((m) =>
+    visibleRosterMember(m, { includePersonalLinks: organizer, namedSeatsEnabled: family.namedSeatsEnabled }),
+  );
   const organizers = members.filter((m) => m.role === "organizer" && m.userId !== null);
   const canDemote = organizer && organizers.length > 1;
   const guestCount = members.filter((m) => m.isGuest).length;
@@ -73,6 +77,7 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
           const canRename = mine || organizer;
           // Privacy is personal: only the seat's own person, or whoever votes for a proxy, sees or changes it.
           const controlsPrivacy = mine || managedByMe;
+          const personalUrl = m.personalLinkToken ? personalVoteUrl(base, m.personalLinkToken) : null;
           return (
             <Card key={m.id} className="flex flex-col gap-2 p-3">
             <div className="flex items-center gap-3">
@@ -162,6 +167,33 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
                     <input type="hidden" name="isGuest" value={m.isGuest ? "0" : "1"} />
                     <Button type="submit" variant="ghost" size="sm">
                       {m.isGuest ? t.familyGuestUnmark : t.familyGuestMark}
+                    </Button>
+                  </form>
+                </div>
+              </details>
+            ) : null}
+            {organizer && linkSeat ? (
+              <details>
+                <summary className="cursor-pointer list-none text-xs font-semibold text-ink-3 [&::-webkit-details-marker]:hidden">{t.familyPersonalLinkLabel}</summary>
+                <div className="mt-2 flex flex-col gap-2">
+                  {personalUrl ? (
+                    <>
+                      <code className="break-all rounded-[10px] bg-sand px-3 py-2 text-[13px]">{personalUrl}</code>
+                      <div className="grid grid-cols-2 gap-2">
+                        <ShareButton
+                          url={personalUrl}
+                          title={interpolate(t.familyPersonalLinkShareTitle, { name: m.displayName, brand: brand.name })}
+                          text={interpolate(t.familyPersonalLinkShareText, { name: m.displayName })}
+                        />
+                        <CopyButton text={personalUrl} />
+                      </div>
+                    </>
+                  ) : null}
+                  <form action={rotatePersonalLink}>
+                    <input type="hidden" name="familyId" value={family.id} />
+                    <input type="hidden" name="memberId" value={m.id} />
+                    <Button type="submit" variant="ghost" size="sm">
+                      {t.familyRotatePersonalLink}
                     </Button>
                   </form>
                 </div>
