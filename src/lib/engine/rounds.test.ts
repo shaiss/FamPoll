@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   ballotsToSkip,
+  canAddIdeas,
   closesAtFrom,
   cutAdvancing,
   effectivePicks,
   hasQuorum,
+  seatNeedsAction,
   hiddenDefaultFor,
   isPastDeadline,
   isTiebreak,
@@ -424,6 +426,44 @@ describe("seatsInScope", () => {
     assert.deepEqual(seatsInScope(seats, "all"), seats);
     assert.deepEqual(seatsInScope(seats, "adults"), [{ userId: "u1" }, { userId: "u2" }]);
     assert.deepEqual(seatsInScope([], "adults"), []);
+  });
+});
+
+describe("canAddIdeas", () => {
+  const openIdeas = { number: 1, kind: "ideas" as const };
+  const laterShortlist = { number: 2, kind: "shortlist" as const };
+  const laterFinal = { number: 3, kind: "final" as const };
+  const firstFinal = { number: 1, kind: "final" as const };
+
+  it("lets a non-organizer add during an open ideas round when anyone can", () => {
+    assert.equal(canAddIdeas({ open: openIdeas, voteType: "single", anyoneCanAddOptions: true, organizer: false }), true);
+  });
+  it("blocks a non-organizer when the organizer is collecting ideas", () => {
+    assert.equal(canAddIdeas({ open: openIdeas, voteType: "single", anyoneCanAddOptions: false, organizer: false }), false);
+    assert.equal(canAddIdeas({ open: openIdeas, voteType: "single", anyoneCanAddOptions: false, organizer: true }), true);
+  });
+  it("never lets a later-final or A-or-B vote take new options", () => {
+    assert.equal(canAddIdeas({ open: laterFinal, voteType: "single", anyoneCanAddOptions: true, organizer: true }), false);
+    assert.equal(canAddIdeas({ open: firstFinal, voteType: "ab", anyoneCanAddOptions: true, organizer: true }), false);
+  });
+  it("reserves a later shortlist for organizers, and a first-round final for anyone allowed", () => {
+    assert.equal(canAddIdeas({ open: laterShortlist, voteType: "single", anyoneCanAddOptions: true, organizer: false }), false);
+    assert.equal(canAddIdeas({ open: laterShortlist, voteType: "single", anyoneCanAddOptions: true, organizer: true }), true);
+    assert.equal(canAddIdeas({ open: firstFinal, voteType: "single", anyoneCanAddOptions: true, organizer: false }), true);
+  });
+});
+
+describe("seatNeedsAction", () => {
+  it("lists an open ideas round until the seat has contributed", () => {
+    assert.equal(seatNeedsAction({ status: "open", kind: "ideas" }, { voted: false, contributed: false }), true);
+    assert.equal(seatNeedsAction({ status: "open", kind: "ideas" }, { voted: false, contributed: true }), false);
+  });
+  it("lists an open voting round until the seat has voted", () => {
+    assert.equal(seatNeedsAction({ status: "open", kind: "final" }, { voted: false, contributed: false }), true);
+    assert.equal(seatNeedsAction({ status: "open", kind: "final" }, { voted: true, contributed: false }), false);
+  });
+  it("ignores closed rounds", () => {
+    assert.equal(seatNeedsAction({ status: "closed", kind: "final" }, { voted: false, contributed: false }), false);
   });
 });
 

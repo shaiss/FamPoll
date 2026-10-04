@@ -4,7 +4,7 @@ import { isLinkSeat, isOrganizer, membershipFor, seatsForUser } from "./auth";
 import { storedPersonalLinkToken } from "./nudge";
 import { getDb, schema } from "./db";
 import type { Decision, Event, Member, Option, Round, Vote } from "./db/schema";
-import { effectivePicks, hiddenDefaultFor, seatsInScope, seatsVoted, tally } from "./engine/rounds";
+import { effectivePicks, hiddenDefaultFor, seatNeedsAction, seatsInScope, seatsVoted, tally } from "./engine/rounds";
 import { settleDueRounds } from "./lifecycle";
 
 export type DecisionCard = {
@@ -358,7 +358,7 @@ export async function decisionDataForLinkSeat(decisionId: string, seat: Member) 
 
 export type SeatBallotItem = { decision: Decision; event: Event; round: Round };
 
-/** Open voting rounds in the group that this link seat has not voted in yet. */
+/** Open rounds in the group that still need this link seat (vote or an idea). */
 export async function seatOpenBallots(familyId: string, seatId: string): Promise<SeatBallotItem[]> {
   await settleDueRounds(familyId);
   const db = getDb();
@@ -370,16 +370,20 @@ export async function seatOpenBallots(familyId: string, seatId: string): Promise
   const eventIds = events.map((e) => e.id);
   const decisions = await db.query.decisions.findMany({
     where: and(inArray(schema.decisions.eventId, eventIds), eq(schema.decisions.status, "open")),
-    with: { rounds: { orderBy: [asc(schema.rounds.number)], with: { votes: { columns: { memberId: true } } } } },
+    with: {
+      rounds: { orderBy: [asc(schema.rounds.number)], with: { votes: { columns: { memberId: true } } } },
+      options: { columns: { addedInRoundId: true, addedByMemberId: true } },
+    },
   });
   const eventById = new Map(events.map((e) => [e.id, e]));
   const out: SeatBallotItem[] = [];
   for (const row of decisions) {
-    const { rounds: rs, ...decision } = row;
+    const { rounds: rs, options, ...decision } = row;
     const round = rs[rs.length - 1];
-    if (!round || round.status !== "open" || round.kind === "ideas") continue;
+    if (!round) continue;
     const voted = round.votes.some((v) => v.memberId === seatId);
-    if (voted) continue;
+    const contributed = options.some((o) => o.addedInRoundId === round.id && o.addedByMemberId === seatId);
+    if (!seatNeedsAction(round, { voted, contributed })) continue;
     const event = eventById.get(decision.eventId);
     if (!event) continue;
     out.push({ decision, event: event as Event, round });

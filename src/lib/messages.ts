@@ -458,6 +458,7 @@ export type Messages = {
   errDecIdeaAlreadyListed: string;
   errDecAlreadySettled: string;
   errDecCantVoteFromSeat: string;
+  errDecCantActFromSeat: string;
   errDecNoVoteIdeasRound: string;
   errDecPickOneOrSkip: string;
   errDecRoundJustClosed: string;
@@ -1158,6 +1159,7 @@ const en: Messages = {
   errDecIdeaAlreadyListed: "That idea is already on the list.",
   errDecAlreadySettled: "This decision is already settled.",
   errDecCantVoteFromSeat: "You can't vote from that seat.",
+  errDecCantActFromSeat: "You can't do that from this seat.",
   errDecNoVoteIdeasRound: "Nobody votes during the ideas round.",
   errDecPickOneOrSkip: "Pick at least one, or skip.",
   errDecRoundJustClosed: "That round just closed.",
@@ -1374,7 +1376,7 @@ const en: Messages = {
   seatVotingAs: "Voting as {name}.",
   seatNotYou: "Not you?",
   seatHomeTitle: "Your ballots",
-  seatHomeEmpty: "Nothing needs your vote right now. Check back when someone starts a round.",
+  seatHomeEmpty: "Nothing needs you right now. Check back when someone starts a round.",
   seatClaimTitle: "Vote as {name}",
   seatClaimBody: "This link is just for you. Tap below to open your ballot on this phone.",
   seatClaimButton: "I'm {name}",
@@ -1851,6 +1853,7 @@ const es: Messages = {
   errDecIdeaAlreadyListed: "Esa idea ya está en la lista.",
   errDecAlreadySettled: "Esta decisión ya está resuelta.",
   errDecCantVoteFromSeat: "No puedes votar desde ese lugar.",
+  errDecCantActFromSeat: "No puedes hacer eso desde este lugar.",
   errDecNoVoteIdeasRound: "Nadie vota durante la ronda de ideas.",
   errDecPickOneOrSkip: "Elige al menos una, u omite.",
   errDecRoundJustClosed: "Esa ronda acaba de cerrarse.",
@@ -2067,7 +2070,7 @@ const es: Messages = {
   seatVotingAs: "Votas como {name}.",
   seatNotYou: "¿No eres tú?",
   seatHomeTitle: "Tus votaciones",
-  seatHomeEmpty: "Ahora no hay nada que votar. Vuelve cuando alguien abra una ronda.",
+  seatHomeEmpty: "Ahora no hay nada que hacer. Vuelve cuando alguien abra una ronda.",
   seatClaimTitle: "Votar como {name}",
   seatClaimBody: "Este enlace es solo para ti. Toca abajo para abrir tu papeleta en este teléfono.",
   seatClaimButton: "Soy {name}",
@@ -2544,6 +2547,7 @@ const ptBR: Messages = {
   errDecIdeaAlreadyListed: "Essa ideia já está na lista.",
   errDecAlreadySettled: "Esta decisão já está resolvida.",
   errDecCantVoteFromSeat: "Você não pode votar por esse lugar.",
+  errDecCantActFromSeat: "Você não pode fazer isso por esse lugar.",
   errDecNoVoteIdeasRound: "Ninguém vota durante a rodada de ideias.",
   errDecPickOneOrSkip: "Escolha pelo menos uma, ou pule.",
   errDecRoundJustClosed: "Essa rodada acabou de fechar.",
@@ -2760,7 +2764,7 @@ const ptBR: Messages = {
   seatVotingAs: "Votando como {name}.",
   seatNotYou: "Não é você?",
   seatHomeTitle: "Suas votações",
-  seatHomeEmpty: "Nada precisa do seu voto agora. Volte quando alguém abrir uma rodada.",
+  seatHomeEmpty: "Nada precisa de você agora. Volte quando alguém abrir uma rodada.",
   seatClaimTitle: "Votar como {name}",
   seatClaimBody: "Este link é só para você. Toque abaixo para abrir sua cédula neste celular.",
   seatClaimButton: "Sou {name}",

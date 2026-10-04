@@ -7,7 +7,8 @@ import { z } from "zod";
 import { auth } from "@clerk/nextjs/server";
 import { isLinkSeat, memberBySeatSession, membershipFor, requireUser, seatsForUser } from "../auth";
 import { getDb, schema } from "../db";
-import { ballotsToSkip, closesAtFrom, effectivePicks, isPastDeadline, optionCountRule, optionTitleLimit, planRoundCount, plansFor, rankedBallots, resolveFinal, resolveRankedFinal, roundSequence, tally, type Format, type Plan, type VoteType } from "../engine/rounds";
+import { ballotsToSkip, canAddIdeas, closesAtFrom, effectivePicks, isPastDeadline, optionCountRule, optionTitleLimit, planRoundCount, plansFor, rankedBallots, resolveFinal, resolveRankedFinal, roundSequence, tally, type Format, type Plan, type VoteType } from "../engine/rounds";
+import { decisionPagePath } from "../decision-view";
 import { fail } from "../flash";
 import { newId } from "../ids";
 import { applyOutcome, closeRoundAndAdvance, lockOpenRound, logActivity, maybeCloseEarly, openRound, settleDueRounds } from "../lifecycle";
@@ -107,6 +108,8 @@ function revalidateDecision(decisionId: string, eventId: string) {
   revalidatePath(`/app/decisions/${decisionId}`);
   revalidatePath(`/app/events/${eventId}`);
   revalidatePath("/app");
+  revalidatePath(`/seat/decisions/${decisionId}`);
+  revalidatePath("/seat");
 }
 
 export async function createDecision(formData: FormData) {
@@ -250,11 +253,32 @@ export async function duplicateDecision(formData: FormData) {
   redirect(`/app/decisions/${newDecisionId}`);
 }
 
+/** Signed-in member of this group, or the cookie link seat for this group. */
+async function resolveDecisionActor(familyId: string, fallbackBack: string) {
+  const t = await getMessages();
+  const { userId } = await auth();
+  if (userId) {
+    const membership = await membershipFor(userId, familyId);
+    if (membership) {
+      return { mode: "user" as const, user: await requireUser(), member: membership.member, family: membership.family };
+    }
+  }
+  const link = await memberBySeatSession();
+  if (link && link.familyId === familyId && isLinkSeat(link)) {
+    return { mode: "seat" as const, member: link, family: link.family };
+  }
+  fail(fallbackBack, t.errDecCantActFromSeat);
+}
+
 export async function addOption(formData: FormData) {
   const decisionId = z.string().parse(formData.get("decisionId"));
-  const back = `/app/decisions/${decisionId}`;
-  const { member, decision } = await loadDecisionAndMembership(decisionId);
+  const found = await getDb().query.decisions.findFirst({ where: eq(schema.decisions.id, decisionId), with: { event: true } });
+  if (!found) throw new Error("Decision not found.");
+  const actor = await resolveDecisionActor(found.event.familyId, `/app/decisions/${decisionId}`);
+  const member = actor.member;
+  const decision = found;
   const t = await getMessages();
+  const back = decisionPagePath(actor.mode, decisionId);
   let title = optionTitleFrom(formData, decision.format);
   let startsOn: string | null = null;
   let endsOn: string | null = null;
@@ -277,15 +301,16 @@ export async function addOption(formData: FormData) {
     const open = await tx.query.rounds.findFirst({ where: and(eq(schema.rounds.decisionId, decision.id), eq(schema.rounds.status, "open")) });
     const round = open ? await lockOpenRound(tx, open.id) : null;
     if (!round) return void (problem = t.errDecNoRoundOpenNow);
-    // Anyone may add while the first round is open (a quick vote's only round, or an
-    // opening ideas/shortlist round). Later shortlist and final rounds are curated.
-    const firstRound = round.number === 1;
-    if (!firstRound && round.kind === "final") return void (problem = t.errDecNoAddDuringFinal);
-    if (!firstRound && round.kind === "shortlist" && !organizer) return void (problem = t.errDecOnlyOrganizerAddShortlist);
-    if (!decision.anyoneCanAddOptions && !organizer) return void (problem = t.errDecOrganizerCollectingIdeas);
+    if (!canAddIdeas({ open: round, voteType: decision.voteType, anyoneCanAddOptions: decision.anyoneCanAddOptions, organizer })) {
+      const firstRound = round.number === 1;
+      if (!firstRound && round.kind === "final") return void (problem = t.errDecNoAddDuringFinal);
+      if (!firstRound && round.kind === "shortlist" && !organizer) return void (problem = t.errDecOnlyOrganizerAddShortlist);
+      if (!decision.anyoneCanAddOptions && !organizer) return void (problem = t.errDecOrganizerCollectingIdeas);
+      return void (problem = t.errDecNoRoundOpenNow);
+    }
     const existing = await tx.query.options.findMany({ where: eq(schema.options.decisionId, decision.id) });
     if (existing.some((o) => o.title.toLowerCase() === title.toLowerCase())) return void (problem = t.errDecIdeaAlreadyListed);
-    // A non-organizer who gets through a curated gate is the anonymous asker; naming them here would unmask them.
+    const firstRound = round.number === 1;
     const gated = (!firstRound && round.kind === "shortlist") || !decision.anyoneCanAddOptions;
     const anonymous = formData.get("anonymous") === "on" || (decision.anonymous && gated && member.role !== "organizer");
     await tx.insert(schema.options).values({ id: newId(), decisionId: decision.id, title, note, startsOn, endsOn, addedByMemberId: member.id, anonymous, addedInRoundId: round.id });
@@ -298,7 +323,7 @@ export async function addOption(formData: FormData) {
     });
   });
   if (problem) fail(back, problem);
-  revalidatePath(back);
+  revalidateDecision(decision.id, decision.eventId);
 }
 
 async function resolveBallotSeat(familyId: string, memberId: string, back: string) {
@@ -332,10 +357,8 @@ export async function castVote(formData: FormData) {
   const decision = await db.query.decisions.findFirst({ where: eq(schema.decisions.id, round.decisionId), with: { event: true } });
   if (!decision) throw new Error("Decision not found.");
   const t = await getMessages();
-  const backApp = `/app/decisions/${decision.id}`;
-  const backSeat = `/seat/decisions/${decision.id}`;
-  const voter = await resolveBallotSeat(decision.event.familyId, memberId, backApp);
-  const back = voter.mode === "seat" ? backSeat : backApp;
+  const voter = await resolveBallotSeat(decision.event.familyId, memberId, decisionPagePath("user", decision.id));
+  const back = decisionPagePath(voter.mode, decision.id);
   const { family } = voter;
   const seat = voter.seat;
   const seats = voter.mode === "user" ? voter.seats : [voter.seat];
@@ -756,13 +779,15 @@ export async function revealVotes(formData: FormData) {
   const db = getDb();
   const round = await db.query.rounds.findFirst({ where: eq(schema.rounds.id, roundId) });
   if (!round) throw new Error("Round not found.");
-  const { user, decision, family } = await loadDecisionAndMembership(round.decisionId);
+  const found = await db.query.decisions.findFirst({ where: eq(schema.decisions.id, round.decisionId), with: { event: true } });
+  if (!found) throw new Error("Decision not found.");
+  const actor = await resolveDecisionActor(found.event.familyId, decisionPagePath("user", found.id));
   const t = await getMessages();
-  const back = `/app/decisions/${decision.id}`;
+  const back = decisionPagePath(actor.mode, found.id);
   if (round.status !== "closed") fail(back, t.errDecShowHandAfterClose);
-  const seats = await seatsForUser(family.id, user.id);
-  if (!seats.some((s) => s.id === memberId)) fail(back, t.errDecNotYourSeat);
+  const ownSeat = actor.mode === "user" ? (await seatsForUser(actor.family.id, actor.user.id)).some((s) => s.id === memberId) : actor.member.id === memberId;
+  if (!ownSeat) fail(back, t.errDecNotYourSeat);
   await db.update(schema.votes).set({ anonymous: false }).where(and(eq(schema.votes.roundId, roundId), eq(schema.votes.memberId, memberId)));
-  revalidateDecision(decision.id, decision.eventId);
+  revalidateDecision(found.id, found.eventId);
   redirect(back);
 }
