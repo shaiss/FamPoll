@@ -121,6 +121,40 @@ export function effectivePicks(nominal: number, optionCount: number): number {
   return Math.max(1, Math.min(nominal, optionCount - 1));
 }
 
+/**
+ * Whether this actor may add an option in the open round. Matches the decision
+ * page: anyone on the first round (when the family allows it), organizers on a
+ * later shortlist, nobody on a later final or an A-or-B vote.
+ */
+export function canAddIdeas(args: {
+  open: { number: number; kind: RoundKind } | null;
+  voteType: VoteType;
+  anyoneCanAddOptions: boolean;
+  organizer: boolean;
+}): boolean {
+  const { open, voteType, anyoneCanAddOptions, organizer } = args;
+  if (!open) return false;
+  if (voteType === "ab") return false;
+  const firstRound = open.number === 1;
+  const laterFinal = !firstRound && open.kind === "final";
+  const laterShortlist = !firstRound && open.kind === "shortlist";
+  if (laterFinal) return false;
+  return laterShortlist ? organizer : anyoneCanAddOptions || organizer;
+}
+
+/**
+ * Whether a link-seat home card should still list this open round as needing
+ * the seat: unvoted ballots, or an ideas round they have not contributed to.
+ */
+export function seatNeedsAction(
+  round: { status: string; kind: RoundKind },
+  already: { voted: boolean; contributed: boolean },
+): boolean {
+  if (round.status !== "open") return false;
+  if (round.kind === "ideas") return !already.contributed;
+  return !already.voted;
+}
+
 export function closesAtFrom(openedAt: Date, roundHours: number): Date {
   return new Date(openedAt.getTime() + Math.max(1, roundHours) * 60 * 60 * 1000);
 }
@@ -339,6 +373,11 @@ export function hasQuorum(distinctVoters: number, eligibleSeats: number): boolea
  */
 export function seatsInScope<T extends { userId: string | null }>(seats: T[], scope: EligibilityScope): T[] {
   return scope === "adults" ? seats.filter((s) => s.userId !== null) : seats;
+}
+
+/** Whether a seat may vote or add ideas on a decision (proxy/link seats are advisory on adults-only). */
+export function seatInScope(seat: { userId: string | null }, scope: EligibilityScope): boolean {
+  return seatsInScope([seat], scope).length > 0;
 }
 
 export type BallotRef = { memberId: string | null; optionId: string | null; castByUserId: string | null };
