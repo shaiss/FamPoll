@@ -375,6 +375,11 @@ export function seatsInScope<T extends { userId: string | null }>(seats: T[], sc
   return scope === "adults" ? seats.filter((s) => s.userId !== null) : seats;
 }
 
+/** Whether a seat may vote or add ideas on a decision (proxy/link seats are advisory on adults-only). */
+export function seatInScope(seat: { userId: string | null }, scope: EligibilityScope): boolean {
+  return seatsInScope([seat], scope).length > 0;
+}
+
 export type BallotRef = { memberId: string | null; optionId: string | null; castByUserId: string | null };
 
 /** The seats that took part in a round. A seat that has since left the family (memberId null) is not one. */

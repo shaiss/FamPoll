@@ -129,4 +129,12 @@ describe("addOption and revealVotes seat cookie", () => {
     const seatPage = readFileSync("src/app/seat/decisions/[id]/page.tsx", "utf8");
     assert.match(seatPage, /memberId=\{seat\.id\}/);
   });
+  it("addOption rejects advisory seats on adults-only decisions like castVote", () => {
+    const add = actionBody(src, "addOption");
+    const cast = actionBody(src, "castVote");
+    assert.match(add, /seatInScope\(member, decision\.eligibilityScope\)/);
+    assert.match(cast, /seatInScope\(seat, decision\.eligibilityScope\)/);
+    const seatPage = readFileSync("src/app/seat/decisions/[id]/page.tsx", "utf8");
+    assert.match(seatPage, /allowAddIdeas && !advisory/);
+  });
 });

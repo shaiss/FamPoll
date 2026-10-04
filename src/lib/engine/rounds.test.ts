@@ -24,6 +24,7 @@ import {
   roundLabel,
   roundSequence,
   roundTrail,
+  seatInScope,
   seatsInScope,
   seatsVoted,
   shouldAutoClose,
@@ -426,6 +427,14 @@ describe("seatsInScope", () => {
     assert.deepEqual(seatsInScope(seats, "all"), seats);
     assert.deepEqual(seatsInScope(seats, "adults"), [{ userId: "u1" }, { userId: "u2" }]);
     assert.deepEqual(seatsInScope([], "adults"), []);
+  });
+});
+
+describe("seatInScope", () => {
+  it("lets account seats vote and add ideas on adults-only; link/proxy seats cannot", () => {
+    assert.equal(seatInScope({ userId: "u1" }, "adults"), true);
+    assert.equal(seatInScope({ userId: null }, "adults"), false);
+    assert.equal(seatInScope({ userId: null }, "all"), true);
   });
 });
 

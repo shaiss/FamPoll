@@ -7,7 +7,7 @@ import { z } from "zod";
 import { auth } from "@clerk/nextjs/server";
 import { isLinkSeat, memberBySeatSession, membershipFor, requireUser, seatsForUser } from "../auth";
 import { getDb, schema } from "../db";
-import { ballotsToSkip, canAddIdeas, closesAtFrom, effectivePicks, isPastDeadline, optionCountRule, optionTitleLimit, planRoundCount, plansFor, rankedBallots, resolveFinal, resolveRankedFinal, roundSequence, tally, type Format, type Plan, type VoteType } from "../engine/rounds";
+import { ballotsToSkip, canAddIdeas, closesAtFrom, effectivePicks, isPastDeadline, optionCountRule, optionTitleLimit, planRoundCount, plansFor, rankedBallots, resolveFinal, resolveRankedFinal, roundSequence, seatInScope, tally, type Format, type Plan, type VoteType } from "../engine/rounds";
 import { ballotActorKind, decisionPagePath } from "../decision-view";
 import { fail } from "../flash";
 import { newId } from "../ids";
@@ -263,6 +263,7 @@ export async function addOption(formData: FormData) {
   const decision = found;
   const t = await getMessages();
   const back = decisionPagePath(actor.mode, decisionId);
+  if (!seatInScope(member, decision.eligibilityScope)) fail(back, t.errDecAdultsOnlySeat);
   let title = optionTitleFrom(formData, decision.format);
   let startsOn: string | null = null;
   let endsOn: string | null = null;
@@ -354,8 +355,7 @@ export async function castVote(formData: FormData) {
 
   if (decision.status !== "open") fail(back, t.errDecAlreadySettled);
   if (decision.event.status !== "planning") fail(back, t.errDecEventClosed);
-  // Adults-only: proxy and link seats without accounts do not cast (link seats are never anonymous but may be non-adult relatives).
-  if (decision.eligibilityScope === "adults" && seat.userId === null) fail(back, t.errDecAdultsOnlySeat);
+  if (!seatInScope(seat, decision.eligibilityScope)) fail(back, t.errDecAdultsOnlySeat);
   if (round.kind === "ideas") fail(back, t.errDecNoVoteIdeasRound);
   if (!skip && optionIds.length === 0) fail(back, t.errDecPickOneOrSkip);
   // A ranked final records the picks in order (rank 1..N) and lifts the pick cap; Set above kept insertion order.

@@ -10,7 +10,7 @@ import { InAppBrowserNotice } from "@/components/in-app-browser-notice";
 import { baseUrl } from "@/lib/url";
 import { isLinkSeat, isOrganizer, requireUser } from "@/lib/auth";
 import type { Vote } from "@/lib/db/schema";
-import { canAddIdeas, effectivePicks, peopleVoted, roundInstruction, roundLabel, roundTrail, tally } from "@/lib/engine/rounds";
+import { canAddIdeas, effectivePicks, peopleVoted, roundInstruction, roundLabel, roundTrail, seatInScope, tally } from "@/lib/engine/rounds";
 import { advancedFromShortlists, voterDisplayName } from "@/lib/decision-view";
 import { readError } from "@/lib/flash";
 import { clipTitle, closesRelative, formatDate } from "@/lib/format";
@@ -232,7 +232,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
         </>
       ) : null}
 
-      {allowAddIdeas ? (
+      {allowAddIdeas && seatInScope(member, decision.eligibilityScope) ? (
         <AddOptionForm decisionId={decision.id} memberId={member.id} format={decision.format} ideasRound={open?.kind === "ideas"} t={t} />
       ) : open?.kind === "ideas" ? (
         <p className="text-xs text-ink-3">{t.decisionorganizerCollectingIdeas}</p>

@@ -138,8 +138,10 @@ export default async function SeatDecisionPage({ params, searchParams }: { param
 
       {open && open.kind === "ideas" ? <IdeasSoFar options={alive} format={decision.format} /> : null}
 
-      {allowAddIdeas ? (
+      {allowAddIdeas && !advisory ? (
         <AddOptionForm decisionId={decision.id} memberId={seat.id} format={decision.format} ideasRound={open?.kind === "ideas"} t={t} />
+      ) : advisory && open?.kind === "ideas" ? (
+        <Card className="p-4 text-sm text-ink-2">{interpolate(t.decisionAdvisorySeat, { name: seat.displayName })}</Card>
       ) : open?.kind === "ideas" ? (
         <p className="text-xs text-ink-3">{t.decisionorganizerCollectingIdeas}</p>
       ) : null}
