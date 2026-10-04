@@ -10,6 +10,7 @@ import { fail } from "../flash";
 import { newId } from "../ids";
 import { logActivity } from "../lifecycle";
 import { clearSeatSessionCookie, setSeatSessionToken } from "../seat";
+import { stampSeatSessionIfLinkCurrent } from "../seat-session";
 import { getMessages } from "@/lib/locale-server";
 import { interpolate } from "@/lib/messages";
 import { retireSeats } from "./family";
@@ -73,18 +74,38 @@ export async function addLinkSeat(formData: FormData) {
   revalidatePath("/app/family");
 }
 
+/**
+ * Organizer only: mint a new `/p/` token and clear `seatSessionToken` so any
+ * device holding the old cookie is signed out. The previous URL then fails
+ * with `errSeatLinkInvalid` on `/p/[token]`.
+ */
 export async function rotatePersonalLink(formData: FormData) {
-  const { family } = await requireOrganizerInGroup(formData);
+  const { family, member: actor } = await requireOrganizerInGroup(formData);
   const memberId = z.string().parse(formData.get("memberId"));
   const t = await getMessages();
   const db = getDb();
   const target = await db.query.members.findFirst({ where: and(eq(schema.members.id, memberId), eq(schema.members.familyId, family.id)) });
   if (!target || !isLinkSeat(target)) fail("/app/family", t.errFamNotLinkSeat);
   const personalLinkToken = newId();
-  await db
-    .update(schema.members)
-    .set({ personalLinkToken, seatSessionToken: null })
-    .where(eq(schema.members.id, memberId));
+  await db.transaction(async (tx) => {
+    await tx
+      .update(schema.members)
+      .set({ personalLinkToken, seatSessionToken: null })
+      .where(eq(schema.members.id, memberId));
+    const event = await tx.query.events.findFirst({
+      where: eq(schema.events.familyId, family.id),
+      orderBy: (e, { desc }) => [desc(e.createdAt)],
+      columns: { id: true },
+    });
+    if (event) {
+      await logActivity(tx, {
+        eventId: event.id,
+        kind: "personal_link_rotated",
+        message: interpolate(t.logPersonalLinkRotated, { organizer: actor.displayName, name: target.displayName }),
+        actorMemberId: actor.id,
+      });
+    }
+  });
   revalidatePath("/app/family");
 }
 
@@ -114,7 +135,12 @@ export async function claimPersonalLink(formData: FormData) {
   });
   if (!seat || !isLinkSeat(seat) || !seat.family.namedSeatsEnabled) fail(back, t.errSeatLinkInvalid);
   const seatSessionToken = newId();
-  await db.update(schema.members).set({ seatSessionToken }).where(eq(schema.members.id, seat.id));
+  const stamped = await stampSeatSessionIfLinkCurrent(db, {
+    memberId: seat.id,
+    presentedToken: token,
+    seatSessionToken,
+  });
+  if (!stamped) fail(back, t.errSeatLinkInvalid);
   const event = await db.query.events.findFirst({
     where: eq(schema.events.familyId, seat.familyId),
     orderBy: (e, { desc }) => [desc(e.createdAt)],

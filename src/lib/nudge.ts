@@ -29,6 +29,36 @@ export function storedPersonalLinkToken(
   return value ? value : null;
 }
 
+type RosterSeatSecrets = {
+  personalLinkToken: string | null;
+  seatSessionToken: string | null;
+  linkSeat: boolean;
+  userId: string | null;
+  managedByUserId: string | null;
+};
+
+/**
+ * Family-roster projection: drop seat cookies always, and keep `/p/` tokens
+ * only for organizers when named link seats are on. Pages must map through
+ * this before rendering so a member's RSC payload never carries another
+ * seat's personal link.
+ */
+export function visibleRosterMember<T extends RosterSeatSecrets>(
+  member: T,
+  opts: { includePersonalLinks: boolean; namedSeatsEnabled: boolean },
+): T {
+  const isLiveLinkSeat = member.linkSeat && member.userId === null && member.managedByUserId === null;
+  return {
+    ...member,
+    seatSessionToken: null,
+    personalLinkToken: storedPersonalLinkToken(member.personalLinkToken, {
+      includePersonalLinks: opts.includePersonalLinks,
+      namedSeatsEnabled: opts.namedSeatsEnabled,
+      isLiveLinkSeat,
+    }),
+  };
+}
+
 /** Map waiters to nudge people. Pass `personalLinkToken` only for live link seats. */
 export function nudgePeople(seats: { displayName: string; personalLinkToken?: string | null }[], base: string): NudgePerson[] {
   return seats.map((s) => {

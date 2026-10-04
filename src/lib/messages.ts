@@ -675,6 +675,8 @@ export type Messages = {
   familyAddLinkSeatPlaceholder: string;
   familyAddLinkSeatButton: string;
   familyPersonalLinkLabel: string;
+  familyPersonalLinkShareTitle: string;
+  familyPersonalLinkShareText: string;
   familyRotatePersonalLink: string;
   familyRevokePersonalLink: string;
   familyroleLinkSeat: string;
@@ -695,6 +697,7 @@ export type Messages = {
   errFamNotLinkSeat: string;
   errSeatLinkInvalid: string;
   logLinkSeatAdded: string;
+  logPersonalLinkRotated: string;
   logSeatClaimed: string;
 
   // batch 5: organizer reminders (B3)
@@ -1370,7 +1373,9 @@ const en: Messages = {
   familyAddLinkSeatPlaceholder: "Nana",
   familyAddLinkSeatButton: "Add seat + link",
   familyPersonalLinkLabel: "Personal voting link",
-  familyRotatePersonalLink: "Rotate link",
+  familyPersonalLinkShareTitle: "{name}'s voting link on {brand}",
+  familyPersonalLinkShareText: "This link is just for {name}.",
+  familyRotatePersonalLink: "Make a new link (old one stops working)",
   familyRevokePersonalLink: "Remove seat",
   familyroleLinkSeat: "votes by link",
   seatVotingAs: "Voting as {name}.",
@@ -1390,6 +1395,7 @@ const en: Messages = {
   errFamNotLinkSeat: "That seat is not a link seat.",
   errSeatLinkInvalid: "That voting link isn’t valid any more. Ask for a fresh one.",
   logLinkSeatAdded: "{organizer} added a link seat for {name}.",
+  logPersonalLinkRotated: "{organizer} made a new voting link for {name}.",
   logSeatClaimed: "{name} opened their voting link.",
 
   decisionRemindLabel: "Email me reminders",
@@ -2064,7 +2070,9 @@ const es: Messages = {
   familyAddLinkSeatPlaceholder: "Abuela",
   familyAddLinkSeatButton: "Añadir lugar + enlace",
   familyPersonalLinkLabel: "Enlace personal de voto",
-  familyRotatePersonalLink: "Rotar enlace",
+  familyPersonalLinkShareTitle: "Enlace de voto de {name} en {brand}",
+  familyPersonalLinkShareText: "Este enlace es solo para {name}.",
+  familyRotatePersonalLink: "Crear un enlace nuevo (el anterior deja de funcionar)",
   familyRevokePersonalLink: "Quitar lugar",
   familyroleLinkSeat: "vota por enlace",
   seatVotingAs: "Votas como {name}.",
@@ -2084,6 +2092,7 @@ const es: Messages = {
   errFamNotLinkSeat: "Ese lugar no es de enlace.",
   errSeatLinkInvalid: "Ese enlace de voto ya no es válido. Pide uno nuevo.",
   logLinkSeatAdded: "{organizer} añadió un lugar con enlace para {name}.",
+  logPersonalLinkRotated: "{organizer} creó un enlace de voto nuevo para {name}.",
   logSeatClaimed: "{name} abrió su enlace de voto.",
 
   decisionRemindLabel: "Enviarme recordatorios",
@@ -2758,7 +2767,9 @@ const ptBR: Messages = {
   familyAddLinkSeatPlaceholder: "Vovó",
   familyAddLinkSeatButton: "Adicionar lugar + link",
   familyPersonalLinkLabel: "Link pessoal de voto",
-  familyRotatePersonalLink: "Gerar novo link",
+  familyPersonalLinkShareTitle: "Link de voto de {name} no {brand}",
+  familyPersonalLinkShareText: "Este link é só para {name}.",
+  familyRotatePersonalLink: "Criar um link novo (o antigo para de funcionar)",
   familyRevokePersonalLink: "Remover lugar",
   familyroleLinkSeat: "vota por link",
   seatVotingAs: "Votando como {name}.",
@@ -2778,6 +2789,7 @@ const ptBR: Messages = {
   errFamNotLinkSeat: "Esse lugar não é de link.",
   errSeatLinkInvalid: "Esse link de voto não é mais válido. Peça um novo.",
   logLinkSeatAdded: "{organizer} adicionou um lugar com link para {name}.",
+  logPersonalLinkRotated: "{organizer} criou um novo link de voto para {name}.",
   logSeatClaimed: "{name} abriu o link de voto.",
 
   decisionRemindLabel: "Enviar lembretes para mim",
