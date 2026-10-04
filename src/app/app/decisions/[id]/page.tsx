@@ -7,12 +7,12 @@ import { hasMailer } from "@/lib/env";
 import { CopyText } from "@/components/copy-text";
 import { InAppBrowserNotice } from "@/components/in-app-browser-notice";
 import { baseUrl } from "@/lib/url";
-import { isLinkSeat, requireUser } from "@/lib/auth";
+import { isLinkSeat, isOrganizer, requireUser } from "@/lib/auth";
 import type { Vote } from "@/lib/db/schema";
 import { formatLabel, roundKindLabel, voteTypeLabel, effectivePicks, isTiebreak, peopleVoted, roundInstruction, roundLabel, roundSequence, roundTrail, tally, type Format, type RoundKind } from "@/lib/engine/rounds";
 import { readError } from "@/lib/flash";
 import { clipTitle, closesRelative, formatDate } from "@/lib/format";
-import { nudgePeople, pasteNudgeLines } from "@/lib/nudge";
+import { nudgePeople, pasteNudgeLines, storedPersonalLinkToken } from "@/lib/nudge";
 import { decisionData, type OptionView, type RoundView } from "@/lib/queries";
 import { getLocale, getMessages } from "@/lib/locale-server";
 import { interpolate } from "@/lib/messages";
@@ -247,7 +247,11 @@ export default async function DecisionPage({ params, searchParams }: { params: P
   const waitingOn = waitingSeats.map((m) => m.displayName);
   const waitingVoters = waitingSeats.map((m) => ({
     displayName: m.displayName,
-    personalLinkToken: data.family.namedSeatsEnabled && isLinkSeat(m) ? m.personalLinkToken : null,
+    personalLinkToken: storedPersonalLinkToken(m.personalLinkToken, {
+      includePersonalLinks: isOrganizer(member),
+      namedSeatsEnabled: data.family.namedSeatsEnabled,
+      isLiveLinkSeat: isLinkSeat(m),
+    }),
   }));
   const tiedOptions = tied
     ? (() => {

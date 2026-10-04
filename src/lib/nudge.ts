@@ -15,6 +15,20 @@ export function personalVoteUrl(base: string, token: string): string {
   return `${base.replace(/\/$/, "")}/p/${encodeURIComponent(token)}`;
 }
 
+/**
+ * Stored personal-link token for Path A copy. Never invents a token.
+ * `includePersonalLinks` is for family organizers (and organizer-only reminder
+ * email). Member-facing pages must pass false so `/p/` never reaches CopyText.
+ */
+export function storedPersonalLinkToken(
+  token: string | null | undefined,
+  opts: { includePersonalLinks: boolean; namedSeatsEnabled: boolean; isLiveLinkSeat: boolean },
+): string | null {
+  if (!opts.includePersonalLinks || !opts.namedSeatsEnabled || !opts.isLiveLinkSeat) return null;
+  const value = token?.trim();
+  return value ? value : null;
+}
+
 /** Map waiters to nudge people. Pass `personalLinkToken` only for live link seats. */
 export function nudgePeople(seats: { displayName: string; personalLinkToken?: string | null }[], base: string): NudgePerson[] {
   return seats.map((s) => {

@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lte, ne } from "drizzle-orm";
 import { cache } from "react";
-import { isLinkSeat, membershipFor, seatsForUser } from "./auth";
+import { isLinkSeat, isOrganizer, membershipFor, seatsForUser } from "./auth";
+import { storedPersonalLinkToken } from "./nudge";
 import { getDb, schema } from "./db";
 import type { Decision, Event, Member, Option, Round, Vote } from "./db/schema";
 import { effectivePicks, hiddenDefaultFor, seatsInScope, seatsVoted, tally } from "./engine/rounds";
@@ -40,7 +41,7 @@ export type NeedsVote = {
   picks: number;
   /** Every roster seat still to act, by name — for the "still waiting on …" nudge the organizer pastes into the chat. */
   waitingNames: string[];
-  /** Stored personal-link tokens for pending link seats (null for signed-in / proxy seats). */
+  /** Pending waiters for Path A copy. Tokens only when the viewer is a family organizer. */
   waitingVoters: { displayName: string; personalLinkToken: string | null }[];
 };
 
@@ -141,6 +142,7 @@ export async function homeData(familyId: string, userId: string) {
     db.query.families.findFirst({ where: eq(schema.families.id, familyId), columns: { namedSeatsEnabled: true } }),
   ]);
   const namedSeatsEnabled = familyRow?.namedSeatsEnabled === true;
+  const includePersonalLinks = seats.some((s) => s.userId === userId && isOrganizer(s));
   const cards = await decisionCards(events.map((e) => e.id));
   const memberName = new Map(members.map((m) => [m.id, m.displayName]));
 
@@ -192,7 +194,11 @@ export async function homeData(familyId: string, userId: string) {
       const waitingNames = waiting.map((m) => m.displayName);
       const waitingVoters = waiting.map((m) => ({
         displayName: m.displayName,
-        personalLinkToken: namedSeatsEnabled && isLinkSeat(m) ? m.personalLinkToken : null,
+        personalLinkToken: storedPersonalLinkToken(m.personalLinkToken, {
+          includePersonalLinks,
+          namedSeatsEnabled,
+          isLiveLinkSeat: isLinkSeat(m),
+        }),
       }));
       if (pendingSeats.length > 0) {
         needsVote.push({
@@ -453,7 +459,12 @@ export async function roundsDueForReminder(now: Date, windowHours = 24): Promise
     const pending = seatsInScope(members, decision.eligibilityScope).filter((m) => !voted.has(m.id));
     const pendingVoters = pending.map((m) => ({
       displayName: m.displayName,
-      personalLinkToken: namedSeatsEnabled && isLinkSeat(m) ? m.personalLinkToken : null,
+      // Reminder email is organizer-only; keep stored /p/ tokens for live link seats.
+      personalLinkToken: storedPersonalLinkToken(m.personalLinkToken, {
+        includePersonalLinks: true,
+        namedSeatsEnabled,
+        isLiveLinkSeat: isLinkSeat(m),
+      }),
     }));
     const pendingNames = pendingVoters.map((p) => p.displayName);
     const organizers = orgRows.filter((o): o is { email: string; name: string } => Boolean(o.email));
